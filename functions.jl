@@ -18,41 +18,38 @@ using SparseArrays
 #------------------------------------------------------------------------------#
 function para(; λ::Real = 0.10,         # history rased probability
                 β::Real = 0.96,         # discount factor
-                ξ::Real = 0.30,         # garnishment rate
+                ξ::Real = 0.25,         # garnishment rate
                 σ::Real = 3,            # CRRA coefficient
                 r::Real = 0.01,         # risk-free rate
                 ρ_p::Real = 0.90,       # AR(1) of persistent shock
                 σ_p::Real = 0.15,       # s.d. of persistent shock
                 σ_t::Real = 0.30,       # s.d. of temporary shock
-                γ_1::Real = 1.00,       # good preference shock
-                γ_2::Real = 0.00,       # bad preference shock
-                Γ_γ_2::Real = 0.15,     # bad preference prob.
-                γ_size::Integer = 2,    # no. of preference shock
                 p_size::Integer = 3,    # no. of persistent shock
                 t_size::Integer = 3,    # no. of temporary shock
+                e_size::Integer = 3,    # no. of expenditure shock
                 a_min::Real = -1,       # min of asset holding
                 a_max::Real = 20,       # max of asset holding
                 a_scale::Integer = 3)   # scale of asset holding
 
-      # persistent transition matrix
+      # persistent shock
       Mp = rouwenhorst(p_size, ρ_p, σ_p)
       Pp = Mp.p
       p_grid = collect(Mp.state_values) .+ 1.0
 
-      # temporary transition matrix
+      # temporary shock
       Mt = rouwenhorst(t_size, 0.0, σ_t)
       Pt = Mt.p
       t_grid = collect(Mt.state_values) .+ 1.0
 
-      # preference transition matrix
-      Pγ = [1-Γ_γ_2 Γ_γ_2; 1-Γ_γ_2 Γ_γ_2]
-      γ_grid = [γ_1; γ_2]
+      # expenditure schock
+      e_grid = [0, minimum(p_grid.*t_grid)*0.4, minimum(p_grid.*t_grid)*0.9]
+      Pe = repeat([0.7 0.2 0.1],e_size,1)
 
       # idiosyncratic transition matrix conditional
-      Px = kron(Pt, kron(Pp, Pγ))
-      x_grid = gridmake(γ_grid, p_grid, t_grid)
-      x_ind = gridmake(1:γ_size, 1:p_size, 1:t_size)
-      x_size = γ_size*p_size*t_size
+      Px = kron(Pe, kron(Pt, Pp))
+      x_grid = gridmake(p_grid, t_grid, e_grid)
+      x_ind = gridmake(1:p_size, 1:t_size, 1:e_size)
+      x_size = p_size*t_size*e_size
 
       # asset holding grid
       a_size = (a_max-a_min)*a_scale + 1
@@ -62,15 +59,15 @@ function para(; λ::Real = 0.10,         # history rased probability
       ind_a_zero = findall(a_grid .== 0)[1]
 
       # define the size of positive asset
-      a_size_pos = size(a_grid[ind_a_zero:end],1)
-      a_size_neg = a_size - a_size_pos
+      a_size_neg = ind_a_zero
+      a_size_pos = a_size - a_size_neg
 
       # define the negative or positive asset holding grid
       a_grid_neg = a_grid[1:a_size_neg]
-      a_grid_pos = a_grid[ind_a_zero:end]
+      a_grid_pos = a_grid[(ind_a_zero+1):end]
 
       # return values
-      return (λ = λ, β = β, ξ = ξ, σ = σ, r = r, a_grid = a_grid, ind_a_zero = ind_a_zero, a_size = a_size, a_size_pos = a_size_pos, a_size_neg = a_size_neg, a_grid_neg = a_grid_neg, a_grid_pos = a_grid_pos, Pp = Pp, p_grid = p_grid, p_size = p_size, Pt = Pt, t_grid = t_grid, t_size = t_size, Pγ = Pγ, γ_grid = γ_grid, γ_size = γ_size, Px = Px, x_grid = x_grid, x_size = x_size, x_ind = x_ind)
+      return (λ = λ, β = β, ξ = ξ, σ = σ, r = r, a_grid = a_grid, ind_a_zero = ind_a_zero, a_size = a_size, a_size_pos = a_size_pos, a_size_neg = a_size_neg, a_grid_neg = a_grid_neg, a_grid_pos = a_grid_pos, Pp = Pp, p_grid = p_grid, p_size = p_size, Pt = Pt, t_grid = t_grid, t_size = t_size, Pe = Pe, e_grid = e_grid, e_size = e_size, Px = Px, x_grid = x_grid, x_size = x_size, x_ind = x_ind)
 end
 
 mutable struct mut_vars
@@ -99,13 +96,13 @@ function vars(parameters::NamedTuple)
 
     # define value functions
     # V_bad = zeros(a_size_pos, x_size)
-    V_bad = u.(repeat(transpose(x_grid[:,2].*x_grid[:,3]),a_size_pos,1) .+ repeat(a_grid_pos*r,1,x_size),σ)
+    V_bad = u.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size_pos,1).+repeat(a_grid_pos*r,1,x_size),σ)
 
     # V_good_default = zeros(a_size, x_size)
-    V_good_default = u.(repeat(transpose((1-ξ)*x_grid[:,2].*x_grid[:,3]),a_size,1),σ)
+    V_good_default = u.(repeat(transpose((1-ξ)*x_grid[:,1].*x_grid[:,2]),a_size,1),σ)
 
     # V_good_repay = zeros(a_size, x_size)
-    V_good_repay = u.(repeat(transpose(x_grid[:,2].*x_grid[:,3]),a_size,1) .+ cat(repeat([0],a_size_neg,x_size),repeat(a_grid_pos*r,1,x_size),dims=1),σ)
+    V_good_repay = u.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size,1).+cat(repeat(a_grid_neg*r,1,x_size),repeat(a_grid_pos*r,1,x_size),dims=1),σ)
 
     # V_good = zeros(a_size, x_size)
     V_good = zeros(a_size, x_size)
@@ -138,33 +135,7 @@ function vars(parameters::NamedTuple)
 
     # define pricing function and default probability
     q = ones(a_size, x_size)
-    # q[1:a_size_neg,:] .= 1 / (1 + r)
-
-    # update pricing function and default probability
-    for x_i in 1:x_size
-        for ap_i in 1:a_size_neg
-
-            # initialize the expected revenue
-            revenue_expect = 0.0
-
-            for xp_i in 1:x_size
-
-                # unpack shocks in the next period
-                γp, pp, tp = x_grid[xp_i,:]
-
-                # choose to default
-                if V_good_default[ap_i,xp_i] > V_good_repay[ap_i,xp_i]
-                    revenue_expect += Px[x_i,xp_i]*ξ*pp*tp
-                # choose to repay
-                else
-                    revenue_expect += Px[x_i,xp_i]*(-a_grid[ap_i])
-                end
-            end
-
-            q_update = revenue_expect / ( (1+r)*(-a_grid[ap_i]) )
-            q[ap_i,x_i] = q_update < 1 ? q_update : 1.0
-        end
-    end
+    q[1:a_size_neg,:] .= 1 / (1 + r)
 
     # define stationary distribution
     μ = zeros(a_size, x_size, 2)
@@ -174,20 +145,6 @@ function vars(parameters::NamedTuple)
     variables = mut_vars(V_bad, V_good, V_good_default, V_good_repay, policy_a_bad, policy_a_good, policy_a_good_default, policy_a_good_repay, policy_matrix_a_bad, policy_matrix_a_good_default, policy_matrix_a_good_repay, transition_matrix, q, μ, L, D)
 
     return variables
-end
-
-function u(c::Real, σ::Real)
-    if σ == 1
-        util = log(c)
-    else
-        util = (c^(1-σ)) / (1-σ)
-    end
-    return util
-end
-
-function du(c::Real, σ::Real)
-    mar_util = c^(-σ)
-    return mar_util
 end
 
 function RHS_bad(ap::Real, a_i::Integer, x_i::Integer, r::Real,

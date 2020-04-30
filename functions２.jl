@@ -1,9 +1,13 @@
 function u(c::Real, σ::Real)
     # compute utility
-    if σ == 1
-        return log(c)
+    if c > 0
+        if σ == 1
+            return log(c)
+        else
+            return 1 / ((1-σ)*c^(σ-1))
+        end
     else
-        return (c^(1-σ)) / (1-σ)
+        println("non-positive consumption!")
     end
 end
 

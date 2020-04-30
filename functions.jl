@@ -92,17 +92,17 @@ end
 function vars(parameters::NamedTuple)
 
     # unpack parameters
-    @unpack λ, β, ξ, σ, r, a_grid, ind_a_zero, a_size, a_size_pos, a_size_neg, a_grid_neg, a_grid_pos, Px, x_grid, x_size, x_ind = parameters
+    @unpack β, ξ, σ, r, a_grid, a_size, a_size_pos, a_size_neg, a_grid_neg, a_grid_pos, x_grid, x_size = parameters
 
     # define value functions
     # V_bad = zeros(a_size_pos, x_size)
-    V_bad = u.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size_pos,1).+repeat(a_grid_pos*r,1,x_size),σ)
+    V_bad = u.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size_pos,1).+repeat(a_grid_pos*r,1,x_size),σ) ./ (1-β)
 
     # V_good_default = zeros(a_size, x_size)
-    V_good_default = u.(repeat(transpose((1-ξ)*x_grid[:,1].*x_grid[:,2]),a_size,1),σ)
+    V_good_default = u.(repeat(transpose((1-ξ)*x_grid[:,1].*x_grid[:,2]),a_size,1),σ) ./ (1-β)
 
     # V_good_repay = zeros(a_size, x_size)
-    V_good_repay = u.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size,1).+cat(repeat(a_grid_neg*r,1,x_size),repeat(a_grid_pos*r,1,x_size),dims=1),σ)
+    V_good_repay = u.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size,1).+cat(repeat(a_grid_neg*r,1,x_size),repeat(a_grid_pos*r,1,x_size),dims=1),σ) ./ (1-β)
 
     # V_good = zeros(a_size, x_size)
     V_good = zeros(a_size, x_size)

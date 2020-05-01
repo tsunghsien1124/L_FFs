@@ -139,8 +139,8 @@ function vars(parameters::NamedTuple)
 
     # define stationary distribution
     μ = zeros(a_size, x_size, 2)
-    μ[:,:,1] .= 1 / ( (a_size_pos+a_size) * x_size )
-    μ[ind_a_zero:end,:,2] .= 1 / ( (a_size_pos+a_size) * x_size )
+    μ[:,:,1] .= 1 / ( (a_size_pos+a_size+1) * x_size )
+    μ[a_size_neg:end,:,2] .= 1 / ( (a_size_pos+a_size+1) * x_size )
 
     variables = mut_vars(V_bad, V_good, V_good_default, V_good_repay, policy_a_bad, policy_a_good, policy_a_good_default, policy_a_good_repay, policy_matrix_a_bad, policy_matrix_a_good_default, policy_matrix_a_good_repay, transition_matrix, q, μ, L, D)
 

@@ -2,9 +2,9 @@ function para(; λ::Real = 0.10,         # history rased probability
                 β::Real = 0.96,         # discount factor
                 ξ::Real = 0.25,         # garnishment rate
                 σ::Real = 3,            # CRRA coefficient
-                r::Real = 0.01,         # risk-free rate
+                r::Real = 0.03,         # risk-free rate
                 ρ_p::Real = 0.90,       # AR(1) of persistent shock
-                σ_p::Real = 0.15,       # s.d. of persistent shock
+                σ_p::Real = 0.20,       # s.d. of persistent shock
                 σ_t::Real = 0.30,       # s.d. of temporary shock
                 p_size::Integer = 3,    # no. of persistent shock
                 t_size::Integer = 3,    # no. of temporary shock
@@ -430,20 +430,21 @@ function banks!(variables::mut_vars, parameters::NamedTuple)
     @unpack ξ, r, a_grid, a_size_neg, Px, x_grid, x_size = parameters
 
     # update pricing function and default probability
-    for x_i in 1:x_size, ap_i in 1:a_size_neg
-
-        # compute the expected revenue and the associated bond price
-        revenue_expect = 0.0
-        for xp_i in 1:x_size
-            pp, tp, ep = x_grid[xp_i,:]
-            if variables.V_good_default[ap_i,xp_i] > variables.V_good_repay[ap_i,xp_i]
-                revenue_expect += Px[x_i,xp_i]*ξ*pp*tp
-            else
-                revenue_expect += Px[x_i,xp_i]*(-a_grid[ap_i])
+    for x_i in 1:x_size
+        for ap_i in 1:a_size_neg
+            # compute the expected revenue and the associated bond price
+            revenue_expect = 0
+            for xp_i in 1:x_size
+                pp, tp, ep = x_grid[xp_i,:]
+                if variables.V_good_default[ap_i,xp_i] > variables.V_good_repay[ap_i,xp_i]
+                    revenue_expect += Px[x_i,xp_i]*ξ*pp*tp
+                else
+                    revenue_expect += Px[x_i,xp_i]*(-a_grid[ap_i])
+                end
             end
+            q_update = revenue_expect / ( (1+r)*(-a_grid[ap_i]) )
+            print(q_update)
+            variables.q[ap_i,x_i] = q_update < (1/(1+r)) ? q_update : 1/(1+r)
         end
-
-        q_update = revenue_expect / ( (1+r)*(-a_grid[ap_i]) )
-        variables.q[ap_i,x_i] = q_update < 1/(1+r) ? q_update : 1/(1+r)
     end
 end

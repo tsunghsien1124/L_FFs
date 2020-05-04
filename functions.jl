@@ -11,7 +11,8 @@ function para(; λ::Real = 0.10,         # history rased probability
                 e_size::Integer = 3,    # no. of expenditure shock
                 a_min::Real = -1,       # min of asset holding
                 a_max::Real = 20,       # max of asset holding
-                a_scale::Integer = 3)   # scale of asset holding
+                a_scale::Integer = 8,   # scale of the grid asset holding
+                a_degree::Integer = 3)  # degree of the grid asset holding
 
       # persistent shock
       Mp = rouwenhorst(p_size, ρ_p, σ_p)
@@ -35,10 +36,12 @@ function para(; λ::Real = 0.10,         # history rased probability
 
       # asset holding grid
       a_size = (a_max-a_min)*a_scale + 1
-      a_grid = collect(range(a_min, stop = a_max, length = a_size))
+      # a_grid = collect(range(a_min, stop = a_max, length = a_size))
+      a_grid = ((range(0, stop = a_size-1, length = a_size)/(a_size-1)).^a_degree)*(a_max-a_min) .+ a_min
 
       # find the index where a = 0
-      ind_a_zero = findall(a_grid .== 0)[1]
+      ind_a_zero = findall(a_grid .>= 0)[1]
+      a_grid[ind_a_zero] = 0
 
       # define the size of positive asset
       a_size_neg = ind_a_zero - 1
@@ -78,13 +81,13 @@ function vars(parameters::NamedTuple)
 
     # define value functions
     # V_bad = zeros(a_size_pos, x_size)
-    V_bad = u_func.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size_pos,1).+repeat(a_grid_pos*r,1,x_size),σ) ./ (1-β)
+    V_bad = u_func.(repeat(transpose(x_grid[:,1] .* x_grid[:,2] .- x_grid[:,3]),a_size_pos,1) .+ repeat(a_grid_pos*r,1,x_size), σ) ./ (1-β)
 
     # V_good_default = zeros(a_size, x_size)
     V_good_default = u_func.(repeat(transpose((1-ξ)*x_grid[:,1].*x_grid[:,2]),a_size,1),σ) ./ (1-β)
 
     # V_good_repay = zeros(a_size, x_size)
-    V_good_repay = u_func.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size,1).+cat(repeat(a_grid_neg*r,1,x_size),repeat(a_grid_pos*r,1,x_size),dims=1),σ) ./ (1-β)
+    V_good_repay = u_func.(repeat(transpose(x_grid[:,1] .* x_grid[:,2] .- x_grid[:,3]),a_size,1).+cat(repeat(a_grid_neg*r,1,x_size),repeat(a_grid_pos*r,1,x_size),dims=1), σ) ./ (1-β)
 
     # V_good = zeros(a_size, x_size)
     V_good = zeros(a_size, x_size)
@@ -224,14 +227,11 @@ function CoH_B_func(ap_i::Integer, V_good_p_pos::Array{Float64,2}, V_bad_p::Arra
     return inv_du_func(dV_hat_func(ap_i, λ*V_good_p_pos+(1-λ)*V_bad_p, a_grid_pos, β, Px_i),σ) + a_grid_pos[ap_i]
 end
 
-function sols_G_func(rbl_ind::Integer, ncr_l_good::Integer, ncr_u_good::Integer, V_good_p::Array{Float64,2}, a_grid::Array{Float64,1}, q_i::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, σ::Real, r::Real, earnings::Real)
+function sols_G_func(ncr_l_good::Integer, ncr_u_good::Integer, V_good_p_rbl::Array{Float64,2}, a_grid_rbl::Array{Float64,1}, q_i_rbl::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, σ::Real, r::Real, earnings::Real)
     # (1) create a matrix of local solutions for good credit history with repayment (bounded below by the risky borrowing limit), including (a) next-period asset holdings, (b) cash on hands, (c) associated value functions, (d) associated current asset holdings, and (e) identifier of a global solution
 
-    # define the variables whose indices are above the risky borrowing limit
-    a_grid_rbl = a_grid[rbl_ind:end]
+    # comnpute the size of grids above the risky borrowing limit
     a_size_rbl = length(a_grid_rbl)
-    V_good_p_rbl = V_good_p[rbl_ind:end,:]
-    q_i_rbl = q_i[rbl_ind:end]
 
     # construct the matrix storing all possible local solutions
     local_sols_G = zeros(a_size_rbl,5)
@@ -242,14 +242,14 @@ function sols_G_func(rbl_ind::Integer, ncr_l_good::Integer, ncr_u_good::Integer,
     # (2) identify global solutions by introduing an additional discretized VFI maximization step for the points in the non-cave region
 
     # define the variables whose indices are within the non-concave region
-    a_grid_ncr = a_grid[ncr_l_good:ncr_u_good]
+    a_grid_ncr = a_grid_rbl[ncr_l_good:ncr_u_good]
     a_size_ncr = length(a_grid_ncr)
-    V_good_p_ncr = V_good_p[ncr_l_good:ncr_u_good,:]
-    q_i_ncr = q_i[ncr_l_good:ncr_u_good]
+    V_good_p_ncr = V_good_p_rbl[ncr_l_good:ncr_u_good,:]
+    q_i_ncr = q_i_rbl[ncr_l_good:ncr_u_good]
 
     # construct the matrix storing global solutions
     for ap_i in 1:a_size_rbl
-        if (ap_i+rbl_ind-1)<ncr_l_good || (ap_i+rbl_ind-1)>ncr_u_good
+        if ap_i < ncr_l_good || ap_i > ncr_u_good
             if local_sols_G[ap_i,2] - earnings >= 0
                 local_sols_G[ap_i,4] = (local_sols_G[ap_i,2] - earnings)/(1+r)
                 local_sols_G[ap_i,5] = 1
@@ -259,7 +259,7 @@ function sols_G_func(rbl_ind::Integer, ncr_l_good::Integer, ncr_u_good::Integer,
             end
         else
             temp_vec = u_func.(local_sols_G[ap_i,2] .- q_i_ncr .* a_grid_ncr, σ) .+ V_hat_func.(1:a_size_ncr, Ref(V_good_p_ncr), β, Ref(Px_i))
-            if ap_i == findall(temp_vec .== maximum(temp_vec))[1]
+            if (ap_i - ncr_l_good + 1) == findall(temp_vec .== maximum(temp_vec))[1]
                 if local_sols_G[ap_i,2] - earnings >= 0
                     local_sols_G[ap_i,4] = (local_sols_G[ap_i,2] - earnings)/(1+r)
                     local_sols_G[ap_i,5] = 1
@@ -295,12 +295,12 @@ function sols_B_func(ncr_l_bad::Integer, ncr_u_bad::Integer, V_good_p_pos::Array
 
     # construct the matrix storing global solutions
     for ap_i in 1:length(a_grid_pos)
-        if ap_i<ncr_l_bad || ap_i>ncr_u_bad
+        if ap_i < ncr_l_bad || ap_i > ncr_u_bad
             local_sols_B[ap_i,4] = (local_sols_B[ap_i,2] - earnings)/(1+r)
             local_sols_B[ap_i,5] = 1
         else
             temp_vec = u_func.(local_sols_B[ap_i,2] .- a_grid_pos_ncr, σ) .+ V_hat_func.(1:a_size_pos_ncr, Ref(λ*V_good_p_pos_ncr+(1-λ)*V_bad_p_ncr), β, Ref(Px_i))
-            if ap_i == findall(temp_vec .== maximum(temp_vec))[1]
+            if (ap_i - ncr_l_bad + 1) == findall(temp_vec .== maximum(temp_vec))[1]
                 local_sols_B[ap_i,4] = (local_sols_B[ap_i,2] - earnings)/(1+r)
                 local_sols_B[ap_i,5] = 1
             end
@@ -384,17 +384,17 @@ function households!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, it
             # compute the risky borrowing limit
             rbl, rbl_ind = rbl_func(q_i, a_grid_neg)
 
-            # compute the non-concave region
-            ncr_l_good, ncr_u_good = ncr_func(V_good_p, a_grid, β, Px_i)
+            # define the variables whose indices are above the risky borrowing limit
+            a_grid_rbl = a_grid[rbl_ind:end]
+            a_size_rbl = length(a_grid_rbl)
+            V_good_p_rbl = V_good_p[rbl_ind:end,:]
+            q_i_rbl = q_i[rbl_ind:end]
 
-            # check if the risky borrowing limit is lower than the lower bound of the non-concave region
-            if rbl_ind > ncr_l_good
-                println("WARNING: risky borrowing limit is greater than the lower bound of non-concave region")
-                break
-            end
+            # compute the non-concave region
+            ncr_l_good, ncr_u_good = ncr_func(V_good_p_rbl, a_grid_rbl, β, Px_i)
 
             # compute global solutions
-            global_sols_G = sols_G_func(rbl_ind, ncr_l_good, ncr_u_good, V_good_p, a_grid, q_i, β, Px_i, σ, r, earnings)
+            global_sols_G = sols_G_func(ncr_l_good, ncr_u_good, V_good_p_rbl, a_grid_rbl, q_i_rbl, β, Px_i, σ, r, earnings)
 
             #-----------------------------------#
             # update value and policy functions #
@@ -420,5 +420,30 @@ function households!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, it
 
         # update the iteration number
         iter += 1
+    end
+end
+
+function banks!(variables::mut_vars, parameters::NamedTuple)
+    # update the price schedule
+
+    # unpack parameters
+    @unpack ξ, r, a_grid, a_size_neg, Px, x_grid, x_size = parameters
+
+    # update pricing function and default probability
+    for x_i in 1:x_size, ap_i in 1:a_size_neg
+
+        # compute the expected revenue and the associated bond price
+        revenue_expect = 0.0
+        for xp_i in 1:x_size
+            pp, tp, ep = x_grid[xp_i,:]
+            if variables.V_good_default[ap_i,xp_i] > variables.V_good_repay[ap_i,xp_i]
+                revenue_expect += Px[x_i,xp_i]*ξ*pp*tp
+            else
+                revenue_expect += Px[x_i,xp_i]*(-a_grid[ap_i])
+            end
+        end
+
+        q_update = revenue_expect / ( (1+r)*(-a_grid[ap_i]) )
+        variables.q[ap_i,x_i] = q_update < 1/(1+r) ? q_update : 1/(1+r)
     end
 end

@@ -16,3 +16,4 @@ parameters = para()
 variables = vars(parameters)
 
 households!(variables, parameters)
+banks!(variables, parameters)

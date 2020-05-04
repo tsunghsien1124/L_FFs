@@ -59,12 +59,12 @@ function para(; λ::Real = 0.10,         # history rased probability
       ind_a_zero = findall(a_grid .== 0)[1]
 
       # define the size of positive asset
-      a_size_neg = ind_a_zero
+      a_size_neg = ind_a_zero - 1
       a_size_pos = a_size - a_size_neg
 
       # define the negative or positive asset holding grid
       a_grid_neg = a_grid[1:a_size_neg]
-      a_grid_pos = a_grid[(ind_a_zero+1):end]
+      a_grid_pos = a_grid[ind_a_zero:end]
 
       # return values
       return (λ = λ, β = β, ξ = ξ, σ = σ, r = r, a_grid = a_grid, ind_a_zero = ind_a_zero, a_size = a_size, a_size_pos = a_size_pos, a_size_neg = a_size_neg, a_grid_neg = a_grid_neg, a_grid_pos = a_grid_pos, Pp = Pp, p_grid = p_grid, p_size = p_size, Pt = Pt, t_grid = t_grid, t_size = t_size, Pe = Pe, e_grid = e_grid, e_size = e_size, Px = Px, x_grid = x_grid, x_size = x_size, x_ind = x_ind)
@@ -117,7 +117,7 @@ function vars(parameters::NamedTuple)
     # define policy functions
     policy_a_bad = zeros(a_size_pos, x_size)
     policy_a_good = zeros(a_size, x_size)
-    policy_a_good_default = zeros(a_size, x_size)
+    policy_a_good_default = repeat([ind_a_zero], a_size, x_size)
     policy_a_good_repay = zeros(a_size, x_size)
 
     # define policy matrices

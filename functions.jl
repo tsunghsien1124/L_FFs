@@ -74,17 +74,17 @@ end
 function vars(parameters::NamedTuple)
 
     # unpack parameters
-    @unpack β, ξ, σ, r, a_grid, a_size, a_size_pos, a_size_neg, a_grid_neg, a_grid_pos, x_grid, x_size = parameters
+    @unpack β, ξ, σ, r, a_grid, a_size, a_size_pos, a_size_neg, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size = parameters
 
     # define value functions
     # V_bad = zeros(a_size_pos, x_size)
-    V_bad = u.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size_pos,1).+repeat(a_grid_pos*r,1,x_size),σ) ./ (1-β)
+    V_bad = u_func.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size_pos,1).+repeat(a_grid_pos*r,1,x_size),σ) ./ (1-β)
 
     # V_good_default = zeros(a_size, x_size)
-    V_good_default = u.(repeat(transpose((1-ξ)*x_grid[:,1].*x_grid[:,2]),a_size,1),σ) ./ (1-β)
+    V_good_default = u_func.(repeat(transpose((1-ξ)*x_grid[:,1].*x_grid[:,2]),a_size,1),σ) ./ (1-β)
 
     # V_good_repay = zeros(a_size, x_size)
-    V_good_repay = u.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size,1).+cat(repeat(a_grid_neg*r,1,x_size),repeat(a_grid_pos*r,1,x_size),dims=1),σ) ./ (1-β)
+    V_good_repay = u_func.(repeat(transpose(x_grid[:,1].*x_grid[:,2].-x_grid[:,3]),a_size,1).+cat(repeat(a_grid_neg*r,1,x_size),repeat(a_grid_pos*r,1,x_size),dims=1),σ) ./ (1-β)
 
     # V_good = zeros(a_size, x_size)
     V_good = zeros(a_size, x_size)
@@ -138,7 +138,7 @@ function u_func(c::Real, σ::Real)
             return 1 / ((1-σ)*c^(σ-1))
         end
     else
-        println("WARNING: non-positive consumption")
+        # println("WARNING: non-positive consumption")
         return -Inf
     end
 end
@@ -148,7 +148,7 @@ function du_func(c::Real, σ::Real)
     if c > 0
         return c^(-σ)
     else
-        println("non-positive consumption!")
+        # println("WARNING: non-positive consumption!")
     end
 end
 
@@ -160,8 +160,9 @@ end
 function rbl_func(q_i::Array{Float64,1}, a_grid_neg::Array{Float64,1})
     # compute the risky borrowing limit for curren type (x_i)
     a_size_neg = length(a_grid_neg)
-    qa_func = LinearInterpolation(a_grid_neg, q_i[1:a_size_neg] .* a_grid_neg)
-    results = optimize(qa_func, a_grid_neg[1], 0)
+    q_func = LinearInterpolation(a_grid_neg, q_i[1:a_size_neg], extrapolation_bc = Line())
+    obj_rbl(ap) = ap*q_func(ap)
+    results = optimize(obj_rbl, a_grid_neg[1], 0)
     rbl = results.minimizer
     rbl_ind = minimum(findall(a_grid_neg .>= rbl))
     return rbl, rbl_ind
@@ -177,7 +178,7 @@ function dV_hat_func(ap_i::Integer, V_p::Array{Float64,2}, a_grid::Array{Float64
     if ap_i < size(V_p,1)
         return (V_hat_func(ap_i+1,V_p,β,Px_i) - V_hat_func(ap_i,V_p,β,Px_i)) / (a_grid[ap_i+1] - a_grid[ap_i])
     else
-        return (V_hat_func(ap_i,V,β,Px_i) - V_hat_func(ap_i-1,V,β,Px_i)) / (a_grid[ap_i] - a_grid[ap_i-1])
+        return (V_hat_func(ap_i,V_p,β,Px_i) - V_hat_func(ap_i-1,V_p,β,Px_i)) / (a_grid[ap_i] - a_grid[ap_i-1])
     end
 end
 
@@ -187,7 +188,7 @@ function ncr_func(V_p::Array{Float64,2}, a_grid::Array{Float64,1}, β::Real, Px_
     ncr_l, ncr_u = 1, a_size
 
     # (1) find the lower bound
-    dV_hat_vec = dV_hat_func.(1:a_size, V_p, a_grid, β, Px_i)
+    dV_hat_vec = dV_hat_func.(1:a_size, Ref(V_p), Ref(a_grid), β, Ref(Px_i))
     V_max, i_max = dV_hat_vec[1], 1
     while i_max < a_size
         if V_max > maximum(dV_hat_vec[(i_max+1):end])
@@ -213,17 +214,17 @@ function ncr_func(V_p::Array{Float64,2}, a_grid::Array{Float64,1}, β::Real, Px_
     return ncr_l, ncr_u
 end
 
-function CoH_G_func(ap_i::Integer, V_good_p::Array{Float64,2}, a_grid::Array{Float64,1}, q_i::Array{Float64,1}, β::Real, Px_i::Array{Float64,1})
+function CoH_G_func(ap_i::Integer, V_good_p::Array{Float64,2}, a_grid::Array{Float64,1}, q_i::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, σ::Real)
     # compute the cash on hands for the case of asset holding in the next period (ap_i), current type (x_i), and good credit history with repayment. Note that cash on hands for the case of good credit history with defaulting is trivially determined so it can be ignored
-    return inv_du_func(dV_hat_func(ap_i, V_good_p, a_grid, β, Px_i)/q_i[ap_i]) + q_i[ap_i]*a_grid[ap_i]
+    return inv_du_func(dV_hat_func(ap_i, V_good_p, a_grid, β, Px_i)/q_i[ap_i], σ) + q_i[ap_i]*a_grid[ap_i]
 end
 
-function CoH_B_func(ap_i::Integer, V_good_p_pos::Array{Float64,2}, V_bad_p::Array{Float64,2}, a_grid_pos::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, λ::Real)
+function CoH_B_func(ap_i::Integer, V_good_p_pos::Array{Float64,2}, V_bad_p::Array{Float64,2}, a_grid_pos::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, λ::Real, σ::Real)
     # compute the cash on hands for asset holding in the next period (ap_i), current type (x_i), and bad credit hostory. Note that ap must be positive (saving only)
-    return inv_du_func(dV_hat_func(ap_i, λ*V_good_p_pos+(1-λ)*V_bad_p, a_grid_pos, β, Px_i)) + a_grid_pos[ap_i]
+    return inv_du_func(dV_hat_func(ap_i, λ*V_good_p_pos+(1-λ)*V_bad_p, a_grid_pos, β, Px_i),σ) + a_grid_pos[ap_i]
 end
 
-function sols_G_func(rbl_ind::Integer, ncr_l_good::Integer, ncr_u_good::Integer, V_good_p::Array{Float64,2}, a_grid::Array{Float64,1}, q_i::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, r::Real, earnings::Real)
+function sols_G_func(rbl_ind::Integer, ncr_l_good::Integer, ncr_u_good::Integer, V_good_p::Array{Float64,2}, a_grid::Array{Float64,1}, q_i::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, σ::Real, r::Real, earnings::Real)
     # (1) create a matrix of local solutions for good credit history with repayment (bounded below by the risky borrowing limit), including (a) next-period asset holdings, (b) cash on hands, (c) associated value functions, (d) associated current asset holdings, and (e) identifier of a global solution
 
     # define the variables whose indices are above the risky borrowing limit
@@ -235,8 +236,8 @@ function sols_G_func(rbl_ind::Integer, ncr_l_good::Integer, ncr_u_good::Integer,
     # construct the matrix storing all possible local solutions
     local_sols_G = zeros(a_size_rbl,5)
     local_sols_G[:,1] = a_grid_rbl
-    local_sols_G[:,2] = CoH_G_func.(1:a_size_rbl, V_good_p_rbl, a_grid_rbl, q_i_rbl, β, Px_i)
-    local_sols_G[:,3] = u.(local_sols_G[:,2] .- q_i_rbl .* local_sols_G[:,1]) .+ V_hat_func.(1:a_size_rbl, V_good_p_rbl, β, Px_i)
+    local_sols_G[:,2] = CoH_G_func.(1:a_size_rbl, Ref(V_good_p_rbl), Ref(a_grid_rbl), Ref(q_i_rbl), β, Ref(Px_i), σ)
+    local_sols_G[:,3] = u_func.(local_sols_G[:,2] .- q_i_rbl .* local_sols_G[:,1], σ) .+ V_hat_func.(1:a_size_rbl, Ref(V_good_p_rbl), β, Ref(Px_i))
 
     # (2) identify global solutions by introduing an additional discretized VFI maximization step for the points in the non-cave region
 
@@ -257,7 +258,7 @@ function sols_G_func(rbl_ind::Integer, ncr_l_good::Integer, ncr_u_good::Integer,
                 local_sols_G[ap_i,5] = 1
             end
         else
-            temp_vec = u.(local_sols_G[ap_i,2] .- q_i_ncr .* a_grid_ncr) .+ V_hat_func.(1:a_size_ncr, V_good_p_ncr, β, Px_i)
+            temp_vec = u_func.(local_sols_G[ap_i,2] .- q_i_ncr .* a_grid_ncr, σ) .+ V_hat_func.(1:a_size_ncr, Ref(V_good_p_ncr), β, Ref(Px_i))
             if ap_i == findall(temp_vec .== maximum(temp_vec))[1]
                 if local_sols_G[ap_i,2] - earnings >= 0
                     local_sols_G[ap_i,4] = (local_sols_G[ap_i,2] - earnings)/(1+r)
@@ -274,15 +275,15 @@ function sols_G_func(rbl_ind::Integer, ncr_l_good::Integer, ncr_u_good::Integer,
     return local_sols_G[local_sols_G[:,5] .== 1.0, 1:4]
 end
 
-function sols_B_func(ncr_l_bad::Integer, ncr_u_bad::Integer, V_good_p_pos::Array{Float64,2}, V_bad_p::Array{Float64,2}, a_grid_pos::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, λ::Real, r::Real, earnings::Real)
+function sols_B_func(ncr_l_bad::Integer, ncr_u_bad::Integer, V_good_p_pos::Array{Float64,2}, V_bad_p::Array{Float64,2}, a_grid_pos::Array{Float64,1}, β::Real, Px_i::Array{Float64,1}, λ::Real, σ::Real, r::Real, earnings::Real)
     # (1) create a matrix of local solutions for bad credit history, including (a) next-period asset holdings, (b) cash on hands, (c) associated value functions, (d) associated current asset holdings, and (e) identifier of a global solution
 
     # construct the matrix storing all possible local solutions
     a_size_pos = length(a_grid_pos)
     local_sols_B = zeros(a_size_pos,5)
     local_sols_B[:,1] = a_grid_pos
-    local_sols_B[:,2] = CoH_B_func.(1:a_size_pos, V_good_p_pos, V_bad_p, a_grid_pos, β, Px_i, λ)
-    local_sols_B[:,3] = u.(local_sols_B[:,2] .- local_sols_B[:,1]) .+ V_hat_func.(1:a_size_pos, λ*V_good_p_pos+(1-λ)*V_bad_p, β, Px_i)
+    local_sols_B[:,2] = CoH_B_func.(1:a_size_pos, Ref(V_good_p_pos), Ref(V_bad_p), Ref(a_grid_pos), β, Ref(Px_i), λ, σ)
+    local_sols_B[:,3] = u_func.(local_sols_B[:,2] .- local_sols_B[:,1],σ) .+ V_hat_func.(1:a_size_pos, Ref(λ*V_good_p_pos+(1-λ)*V_bad_p), β, Ref(Px_i))
 
     # (2) identify global solutions by introduing an additional discretized VFI maximization step for the points in the non-cave region
 
@@ -298,7 +299,7 @@ function sols_B_func(ncr_l_bad::Integer, ncr_u_bad::Integer, V_good_p_pos::Array
             local_sols_B[ap_i,4] = (local_sols_B[ap_i,2] - earnings)/(1+r)
             local_sols_B[ap_i,5] = 1
         else
-            temp_vec = u.(local_sols_B[ap_i,2] .- a_grid_pos_ncr) .+ V_hat_func.(1:a_size_pos_ncr, λ*V_good_p_pos_ncr+(1-λ)*V_bad_p_ncr, β, Px_i)
+            temp_vec = u_func.(local_sols_B[ap_i,2] .- a_grid_pos_ncr, σ) .+ V_hat_func.(1:a_size_pos_ncr, Ref(λ*V_good_p_pos_ncr+(1-λ)*V_bad_p_ncr), β, Ref(Px_i))
             if ap_i == findall(temp_vec .== maximum(temp_vec))[1]
                 local_sols_B[ap_i,4] = (local_sols_B[ap_i,2] - earnings)/(1+r)
                 local_sols_B[ap_i,5] = 1
@@ -310,7 +311,7 @@ function sols_B_func(ncr_l_bad::Integer, ncr_u_bad::Integer, V_good_p_pos::Array
     return local_sols_B[local_sols_B[:,5] .== 1.0, 1:4]
 end
 
-function update_G_func!(V_good_repay::Array{Float64,2}, policy_good_repay::Array{Float64,2}, global_sols_G::Array{Float64,2}, a_grid::Array{Float64,1})
+function update_G_func!(x_i::Integer, V_good_repay::Array{Float64,2}, policy_a_good_repay::Array{Float64,2}, global_sols_G::Array{Float64,2}, a_grid::Array{Float64,1})
     # update the value and policy functions for the current type (x_i) of good credit history with full repayment (a_i)
     for a_i in 1:length(a_grid)
         # (1) value function
@@ -319,20 +320,20 @@ function update_G_func!(V_good_repay::Array{Float64,2}, policy_good_repay::Array
 
         # (2) policy function
         a_G_func = LinearInterpolation(global_sols_G[:,4], global_sols_G[:,1], extrapolation_bc = Line())
-        policy_good_repay[a_i,x_i] = a_G_func(a_grid[a_i])
+        policy_a_good_repay[a_i,x_i] = a_G_func(a_grid[a_i])
     end
 end
 
-function update_B_func!(V_bad::Array{Float64,2}, policy_bad::Array{Float64,2}, global_sols_B::Array{Float64,2}, a_grid_pos::Array{Float64,1})
+function update_B_func!(x_i::Integer, V_bad::Array{Float64,2}, policy_a_bad::Array{Float64,2}, global_sols_B::Array{Float64,2}, a_grid_pos::Array{Float64,1})
     # update the value and policy functions for the current type (x_i) of bad credit history with savings (a_i)
     for a_i in 1:length(a_grid_pos)
         # (1) value function
         V_B_func = LinearInterpolation(global_sols_B[:,4], global_sols_B[:,3], extrapolation_bc = Line())
-        V_bad[a_i,x_i] = V_G_func(a_grid_pos[a_i])
+        V_bad[a_i,x_i] = V_B_func(a_grid_pos[a_i])
 
         # (2) policy function
         a_B_func = LinearInterpolation(global_sols_B[:,4], global_sols_B[:,1], extrapolation_bc = Line())
-        policy_bad[a_i,x_i] = a_G_func(a_grid_pos[a_i])
+        policy_a_bad[a_i,x_i] = a_B_func(a_grid_pos[a_i])
     end
 end
 
@@ -340,12 +341,12 @@ function households!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, it
     # solve the household's maximization problem to obtain the converged value functions via the modified EGM by Fella (2014, JEDC), given price schedules
 
     # unpack parameters
-    @unpack a_grid, a_grid_neg, a_grid_pos, x_grid, β, Px, λ, ξ, r= parameters
+    @unpack a_grid, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size, β, Px, λ, σ, ξ, r = parameters
 
     # initialize the iteration number and criterion
     iter = 0
     crit = Inf
-    prog = ProgressThresh(tol_h, "Solving household's maximization: ")
+    prog = ProgressThresh(tol, "Solving household's maximization: ")
 
     # initialize the next-period value functions
     V_good_p = similar(variables.V_good)
@@ -376,7 +377,7 @@ function households!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, it
             ncr_l_bad, ncr_u_bad = ncr_func(λ*V_good_p_pos+(1-λ)*V_bad_p, a_grid_pos, β, Px_i)
 
             # compute global solutions
-            global_sols_B = sols_B_func(ncr_l_bad, ncr_u_bad, V_good_p_pos, V_bad_p, a_grid_pos, β, Px_i, λ, r, earnings)
+            global_sols_B = sols_B_func(ncr_l_bad, ncr_u_bad, V_good_p_pos, V_bad_p, a_grid_pos, β, Px_i, λ, σ, r, earnings)
 
             # (2) good credit history
 
@@ -387,25 +388,25 @@ function households!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, it
             ncr_l_good, ncr_u_good = ncr_func(V_good_p, a_grid, β, Px_i)
 
             # check if the risky borrowing limit is lower than the lower bound of the non-concave region
-            if rbl_ind > ncr_l
+            if rbl_ind > ncr_l_good
                 println("WARNING: risky borrowing limit is greater than the lower bound of non-concave region")
                 break
             end
 
             # compute global solutions
-            global_sols_G = sols_G_func(rbl_ind, ncr_l_good, ncr_u_good, V_good_p, a_grid, q_i, β, Px_i, r, earnings)
+            global_sols_G = sols_G_func(rbl_ind, ncr_l_good, ncr_u_good, V_good_p, a_grid, q_i, β, Px_i, σ, r, earnings)
 
             #-----------------------------------#
             # update value and policy functions #
             #-----------------------------------#
             # (1) bad credit history
-            update_B_func!(variables.V_bad, variables.policy_bad, global_sols_B, a_grid_pos)
+            update_B_func!(x_i, variables.V_bad, variables.policy_a_bad, global_sols_B, a_grid_pos)
 
             # (2) good credit history with repayment
-            update_G_func!(variables.V_good_repay, variables.policy_good_repay, global_sols_G, 1:a_size, a_grid)
+            update_G_func!(x_i, variables.V_good_repay, variables.policy_a_good_repay, global_sols_G, a_grid)
 
             # (3) good credit history with defaulting
-            variables.V_good_default[:,x_i] .= u(p*t*(1-ξ)) + V_hat_func(1, V_bad_p, β, Px_i)
+            variables.V_good_default[:,x_i] .= u_func(p*t*(1-ξ), σ) + V_hat_func(1, V_bad_p, β, Px_i)
 
             # (4) good credit history
             variables.V_good[:,x_i] = max.(variables.V_good_repay[:,x_i], variables.V_good_default[:,x_i])

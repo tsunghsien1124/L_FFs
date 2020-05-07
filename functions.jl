@@ -10,7 +10,7 @@ function para(; λ::Real = 0.10,         # history rased probability
                 t_size::Integer = 3,    # no. of temporary shock
                 e_size::Integer = 3,    # no. of expenditure shock
                 a_min::Real = -1,       # min of asset holding
-                a_max::Real = 20,       # max of asset holding
+                a_max::Real = 10,       # max of asset holding
                 a_scale::Integer = 8,   # scale of the grid asset holding
                 a_degree::Integer = 3)  # degree of the grid asset holding
 
@@ -443,7 +443,6 @@ function banks!(variables::mut_vars, parameters::NamedTuple)
                 end
             end
             q_update = revenue_expect / ( (1+r)*(-a_grid[ap_i]) )
-            print(q_update)
             variables.q[ap_i,x_i] = q_update < (1/(1+r)) ? q_update : 1/(1+r)
         end
     end

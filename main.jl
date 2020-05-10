@@ -10,7 +10,7 @@ using Optim
 using Interpolations
 using SparseArrays
 
-include("functions.jl")
+include("functions_preference.jl")
 
 parameters = para()
 variables = vars(parameters)

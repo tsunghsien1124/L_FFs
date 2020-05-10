@@ -4,35 +4,28 @@ function para(; λ::Real = 0.10,         # history rased probability
                 σ::Real = 3,            # CRRA coefficient
                 r_f::Real = 0.03,       # risk-free rate
                 ρ_p::Real = 0.90,       # AR(1) of persistent shock
-                σ_p::Real = 0.20,       # s.d. of persistent shock
-                σ_t::Real = 0.30,       # s.d. of temporary shock
-                p_size::Integer = 3,    # no. of persistent shock
-                t_size::Integer = 3,    # no. of temporary shock
-                e_size::Integer = 3,    # no. of expenditure shock
+                σ_p::Real = 0.15,       # s.d. of persistent shock
+                p_size::Integer = 5,    # no. of persistent shock
+                ν_size::Integer = 2,    # no. of preference shock
                 a_min::Real = -1,       # min of asset holding
-                a_max::Real = 10,       # max of asset holding
-                a_scale::Integer = 8,   # scale of the grid asset holding
-                a_degree::Integer = 3)  # degree of the grid asset holding
+                a_max::Real = 5,        # max of asset holding
+                a_scale::Integer = 10,  # scale of the grid asset holding
+                a_degree::Integer = 1)  # degree of the grid asset holding
 
       # persistent shock
       Mp = rouwenhorst(p_size, ρ_p, σ_p)
       Pp = Mp.p
       p_grid = collect(Mp.state_values) .+ 1.0
 
-      # temporary shock
-      Mt = rouwenhorst(t_size, 0.0, σ_t)
-      Pt = Mt.p
-      t_grid = collect(Mt.state_values) .+ 1.0
-
       # expenditure schock
-      e_grid = [0, minimum(p_grid.*t_grid)*0.4, minimum(p_grid.*t_grid)*0.9]
-      Pe = repeat([0.7 0.2 0.1],e_size,1)
+      ν_grid = [0.8, 1]
+      Pν = repeat([0.05 0.95],ν_size,1)
 
       # idiosyncratic transition matrix conditional
-      Px = kron(Pe, kron(Pt, Pp))
-      x_grid = gridmake(p_grid, t_grid, e_grid)
-      x_ind = gridmake(1:p_size, 1:t_size, 1:e_size)
-      x_size = p_size*t_size*e_size
+      Px = kron(Pν, Pp)
+      x_grid = gridmake(p_grid, ν_grid)
+      x_ind = gridmake(1:p_size, 1:ν_size)
+      x_size = p_size*ν_size
 
       # asset holding grid
       a_size = (a_max-a_min)*a_scale + 1
@@ -70,26 +63,28 @@ mutable struct mut_vars
     transition_matrix::SparseMatrixCSC{Float64,Int64}
     q::Array{Float64,2}
     μ::Array{Float64,3}
-    L::Real
+    QB::Real
     D::Real
 end
 
 function vars(parameters::NamedTuple)
 
     # unpack parameters
-    @unpack β, ξ, σ, r, a_grid, a_size, a_size_pos, a_size_neg, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size = parameters
+    @unpack β, ξ, σ, r_f, a_grid, a_size, a_size_pos, a_size_neg, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size, p_size, ν_grid = parameters
 
     # define value functions
-    # V_bad = zeros(a_size_pos, x_size)
-    V_bad = u_func.(repeat(transpose(x_grid[:,1] .* x_grid[:,2] .- x_grid[:,3]),a_size_pos,1) .+ repeat(a_grid_pos*r,1,x_size), σ) ./ (1-β)
+    V_bad = zeros(a_size_pos, x_size)
+    V_bad[:,1:p_size] = u_func.(repeat(transpose(x_grid[1:p_size,1]),a_size_pos,1) .+ repeat(a_grid_pos*r_f,1,p_size), σ) ./ (1-β*ν_grid[1])
+    V_bad[:,(p_size+1):end] = u_func.(repeat(transpose(x_grid[(p_size+1):end,1]),a_size_pos,1) .+ repeat(a_grid_pos*r_f,1,p_size), σ) ./ (1-β*ν_grid[2])
 
-    # V_good_default = zeros(a_size, x_size)
-    V_good_default = u_func.(repeat(transpose((1-ξ)*x_grid[:,1].*x_grid[:,2]),a_size,1),σ) ./ (1-β)
+    V_good_default = zeros(a_size, x_size)
+    V_good_default[:,1:p_size] = u_func.(repeat(transpose(x_grid[1:p_size,1]*(1-ξ)),a_size,1),σ) ./ (1-β*ν_grid[1])
+    V_good_default[:,(p_size+1):end] = u_func.(repeat(transpose(x_grid[(p_size+1):end,1]*(1-ξ)),a_size,1),σ) ./ (1-β*ν_grid[2])
 
-    # V_good_repay = zeros(a_size, x_size)
-    V_good_repay = u_func.(repeat(transpose(x_grid[:,1] .* x_grid[:,2] .- x_grid[:,3]),a_size,1).+cat(repeat(a_grid_neg*r,1,x_size),repeat(a_grid_pos*r,1,x_size),dims=1), σ) ./ (1-β)
+    V_good_repay = zeros(a_size, x_size)
+    V_good_repay[:,1:p_size] = u_func.(repeat(transpose(x_grid[1:p_size,1]),a_size,1) .+ cat(repeat(a_grid_neg*r_f,1,p_size),repeat(a_grid_pos*r_f,1,p_size),dims=1), σ) ./ (1-β*ν_grid[1])
+    V_good_repay[:,(p_size+1):end] = u_func.(repeat(transpose(x_grid[(p_size+1):end,1]),a_size,1) .+ cat(repeat(a_grid_neg*r_f,1,p_size),repeat(a_grid_pos*r_f,1,p_size),dims=1), σ) ./ (1-β*ν_grid[2])
 
-    # V_good = zeros(a_size, x_size)
     V_good = zeros(a_size, x_size)
     for x_i in 1:x_size, a_i in 1:a_size
         if V_good_default[a_i,x_i] >= V_good_repay[a_i,x_i]
@@ -115,19 +110,19 @@ function vars(parameters::NamedTuple)
     transition_matrix = spzeros(G_size, G_size)
 
     # initialize aggregate objects
-    L = 0.0
+    QB = 0.0
     D = 0.0
 
     # define pricing function and default probability
     q = ones(a_size, x_size)
-    q[1:a_size_neg,:] .= 1 / (1 + r)
+    q[1:a_size_neg,:] .= 1 / (1 + r_f)
 
     # define stationary distribution
     μ = zeros(a_size, x_size, 2)
     μ[:,:,1] .= 1 / ( (a_size_pos+a_size+1) * x_size )
     μ[a_size_neg:end,:,2] .= 1 / ( (a_size_pos+a_size+1) * x_size )
 
-    variables = mut_vars(V_bad, V_good, V_good_default, V_good_repay, policy_a_bad, policy_a_good, policy_a_good_default, policy_a_good_repay, policy_matrix_a_bad, policy_matrix_a_good_default, policy_matrix_a_good_repay, transition_matrix, q, μ, L, D)
+    variables = mut_vars(V_bad, V_good, V_good_default, V_good_repay, policy_a_bad, policy_a_good, policy_a_good_default, policy_a_good_repay, policy_matrix_a_bad, policy_matrix_a_good_default, policy_matrix_a_good_repay, transition_matrix, q, μ, QB, D)
 
     return variables
 end
@@ -337,11 +332,11 @@ function update_B_func!(x_i::Integer, V_bad::Array{Float64,2}, policy_a_bad::Arr
     end
 end
 
-function households!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, iter_max = 100)
+function households!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, iter_max = 10000)
     # solve the household's maximization problem to obtain the converged value functions via the modified EGM by Fella (2014, JEDC), given price schedules
 
     # unpack parameters
-    @unpack a_grid, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size, β, Px, λ, σ, ξ, r = parameters
+    @unpack a_grid, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size, β, Px, λ, σ, ξ, r_f = parameters
 
     # initialize the iteration number and criterion
     iter = 0
@@ -362,8 +357,7 @@ function households!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, it
         for x_i in 1:x_size
 
             # unpack or construct the individual states and variables
-            p, t, e = x_grid[x_i,:]
-            earnings = p*t - e
+            p_i, ν_i = x_grid[x_i,:]
             q_i = variables.q[:,x_i]
             Px_i = Px[x_i,:]
 

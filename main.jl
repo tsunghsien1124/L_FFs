@@ -9,11 +9,12 @@ using Plots
 using Optim
 using Interpolations
 using SparseArrays
+using Roots
 
 include("functions_preference.jl")
+# include("functions_expenditure.jl")
 
 parameters = para()
 variables = vars(parameters)
 
-households!(variables, parameters)
-banks!(variables, parameters)
+solution!(variables, parameters)

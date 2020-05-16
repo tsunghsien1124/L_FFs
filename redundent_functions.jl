@@ -210,3 +210,167 @@ function sols_func(β::Real, σ::Real, r_f::Real, earnings::Real, Px_i::Array{Fl
     # return results
     return global_sols, V, policy_a
 end
+
+function u_func(c::Real, σ::Real)
+    # compute utility.
+    if c > 0
+        return σ == 1 ? log(c) : 1 / ((1-σ)*c^(σ-1))
+    else
+        # println("WARNING: non-positive consumption")
+        return -Inf
+    end
+end
+
+function du_func(c::Real, σ::Real)
+    # compute
+    return c > 0 ? 1/(c^σ) : println("WARNING: non-positive consumption!")
+end
+
+function inv_du_func(du::Real, σ::Real)
+    # compute the inverse of marginal utility.
+    return 1/(du^(1/σ))
+    # return du > 0 ? 1/(du^(1/σ)) : println("WARNING: non-positive derivative of value function!")
+end
+
+function dV_hat_func(β::Real, Px_i::Array{Float64,1}, V_p::Array{Float64,2}, a_grid::Array{Float64,1})
+    # compute first-order derivative of the discounted expected value function with respect to asset holding in the next period for current type (x_i) by forward finite difference
+    a_size = length(a_grid)
+    V_size = size(V_p, 1)
+    if a_size == V_size
+        V_hat = V_hat_func(β, Px_i, V_p)
+        dV_hat = zeros(a_size,1)
+        for ap_ind in 1:a_size
+            dV_hat[ap_ind] = ap_ind < a_size ? (V_hat[ap_ind+1] - V_hat[ap_ind]) / (a_grid[ap_ind+1] - a_grid[ap_ind]) : dV_hat[ap_ind-1]
+        end
+        return dV_hat
+    else
+        println("WARNING: size mismatch! V_size = $V_size but a_size = $a_size")
+        return nothing
+    end
+end
+
+function sols_func(β::Real, σ::Real, r_f::Real, earnings::Real, Px_i::Array{Float64,1}, V_p::Array{Float64,2}, a_grid::Array{Float64,1}, q_i::Array{Float64,1}; check_rbl::Integer = 0)
+    # (1) return global solutions including (a) next-period asset holdings, (b) loan price, (c) cash on hands, (d) associated value functions, (e) associated current asset holdings.
+
+    # contrcut variables above zero asset holding
+    ind_a_zero = findall(a_grid .== 0)[1]
+    a_grid_pos = a_grid[ind_a_zero:end]
+    a_size_pos = length(a_grid_pos)
+    V_p_pos = V_p[ind_a_zero:end,:]
+    q_i_pos = q_i[ind_a_zero:end]
+    V_hat_pos = V_hat_func(β, Px_i, V_p_pos)
+
+    # construct the matrix containg all possible "positive" local solutions
+    local_sols = zeros(a_size_pos, 7)
+    local_sols[:,1] = a_grid_pos
+    local_sols[:,2] = q_i_pos
+    local_sols[:,3] = V_hat_pos
+    local_sols[:,4] = CoH_func(σ, V_hat_pos, q_i_pos, a_grid_pos)
+    local_sols[:,5] = u_func.(local_sols[:,4] .- local_sols[:,2] .* local_sols[:,1], σ) .+ local_sols[:,3]
+
+    # compute the non-concave region
+    ncr_l, ncr_u = ncr_func(derivative_func(a_grid_pos, V_hat_pos))
+
+    # define the variables whose indices are within the non-concave region
+    a_grid_pos_ncr = a_grid_pos[ncr_l:ncr_u]
+    q_i_pos_ncr = q_i_pos[ncr_l:ncr_u]
+    V_hat_pos_ncr = V_hat_pos[ncr_l:ncr_u]
+
+    # mark global pairs and compute associated current asset position
+    for ap_ind in 1:a_size_pos
+        a_temp = local_sols[ap_ind,4] - earnings
+        if ap_ind < ncr_l || ap_ind > ncr_u
+            local_sols[ap_ind,6] = a_temp / (1+r_f*(a_temp>=0))
+            local_sols[ap_ind,7] = 1
+        else
+            V_temp = u_func.(local_sols[ap_ind,4] .- q_i_pos_ncr .* a_grid_pos_ncr, σ) .+ V_hat_pos_ncr
+            ind_max_V_temp = findall(V_temp .== maximum(V_temp))[1]
+            if (ap_ind - ncr_l + 1) == ind_max_V_temp
+                local_sols[ap_ind,6] = a_temp / (1+r_f*(a_temp>=0))
+                local_sols[ap_ind,7] = 1
+            end
+        end
+    end
+
+    # export "positive" global solutions
+    global_sols = local_sols[local_sols[:,7] .== 1.0, 1:6]
+
+    # if holding zero asset holding is NOT included, make it included!
+    if global_sols[1,1] != a_grid_pos[1]
+        # locate the first point in the global solutions
+        ind_a1 = findall(a_grid_pos .== global_sols[1,1])[1]
+        # define the objective function as in equation (21) in Fella's paper
+        obj(x) = u_func(x-q_i_pos[1]*a_grid_pos[1], σ) + V_hat_pos[1] - u_func(x-q_i_pos[ind_a1]*a_grid_pos[ind_a1], σ) - V_hat_pos[ind_a1]
+        C1 = find_zero(obj, (q_i_pos[1]*a_grid_pos[1], global_sols[1,4]))
+        a1 = (C1-earnings) / (1+r_f*(C1-earnings>0))
+        V1 = u_func(C1-q_i_pos[1]*a_grid_pos[1], σ) + V_hat_pos[1]
+        # expand the original global pairs
+        global_sols = cat([a_grid_pos[1] q_i_pos[1] V_hat_pos[1] C1 V1 a1], global_sols, dims = 1)
+    end
+
+    # (2) update value and policy functions.
+    if check_rbl == 0
+        # construct containers
+        V = zeros(a_size_pos)
+        policy_a = zeros(a_size_pos)
+
+        # define interpolated functions
+        V_func = LinearInterpolation(global_sols[:,6], global_sols[:,5], extrapolation_bc = Line())
+        a_func = LinearInterpolation(global_sols[:,6], global_sols[:,1], extrapolation_bc = Line())
+
+        # extrapolate value and policy functions
+        for a_ind in 1:a_size_pos
+            if a_grid_pos[a_ind] >= global_sols[1,6]
+                V[a_ind] = V_func(a_grid_pos[a_ind])
+                policy_a[a_ind] = a_func(a_grid_pos[a_ind])
+            else
+                # compute the value as in equation (20) in Fella's paper
+                V[a_ind] = u_func(earnings+(1+r_f*(a_grid_pos[a_ind]>=0))*a_grid_pos[a_ind]-q_i_pos[1]*a_grid_pos[1], σ) + V_hat_pos[1]
+                policy_a[a_ind] = a_grid_pos[1]
+            end
+        end
+    else
+        # compute the risky borrowing limit and define associated variables
+        rbl, rbl_ind, a_grid_rbl, q_i_rbl, V_p_rbl = rbl_func(V_p, q_i, a_grid)
+        # rbl, rbl_ind, a_grid_rbl, q_i_rbl, V_p_rbl = a_grid[1], 1, a_grid, q_i, V_p
+
+        # construct containers
+        a_size = length(a_grid)
+        a_size_rbl = length(a_grid_rbl)
+        a_size_rbl_pos = a_size_rbl-a_size_pos
+        V_hat_rbl = V_hat_func(β, Px_i, V_p_rbl)
+        V = zeros(a_size)
+        policy_a = zeros(a_size)
+
+        # construct the matrix containg all possible "negative" local solutions
+        global_sols_rbl = zeros(a_size_rbl_pos, 6)
+        global_sols_rbl[:,1] = a_grid_rbl[1:a_size_rbl_pos]
+        global_sols_rbl[:,2] = q_i_rbl[1:a_size_rbl_pos]
+        global_sols_rbl[:,3] = V_hat_rbl[1:a_size_rbl_pos]
+
+        # define interpolated functions above a' = 0
+        V_func = LinearInterpolation(global_sols[:,6], global_sols[:,5], extrapolation_bc = Line())
+        a_func = LinearInterpolation(global_sols[:,6], global_sols[:,1], extrapolation_bc = Line())
+
+        # define interpolated functions below a' = 0
+        qa_rbl_func = LinearInterpolation(global_sols_rbl[:,1], (global_sols_rbl[:,2].*global_sols_rbl[:,1]), extrapolation_bc = Line())
+        V_hat_rbl_func = LinearInterpolation(global_sols_rbl[:,1], global_sols_rbl[:,3], extrapolation_bc = Line())
+
+        # extrapolate value and policy functions
+        for a_ind in 1:a_size
+            if a_grid[a_ind] >= global_sols[1,6]
+                V[a_ind] = V_func(a_grid[a_ind])
+                policy_a[a_ind] = a_func(a_grid[a_ind])
+            else
+                # compute the value as in equation (20) in Jang and Lee's paper
+                obj_rbl(x) = - u_func(earnings + (1+r_f*(a_grid[a_ind]>=0))*a_grid[a_ind] - qa_rbl_func(x), σ) - V_hat_rbl_func(x)
+                results = optimize(obj_rbl, rbl, 0)
+                V[a_ind] = -results.minimum
+                policy_a[a_ind] = results.minimizer
+            end
+        end
+    end
+
+    # return results
+    return global_sols, V, policy_a
+end

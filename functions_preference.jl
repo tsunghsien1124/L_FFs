@@ -5,7 +5,7 @@ function para(; λ::Real = 0.10,         # history rased probability
                 r_f::Real = 0.03,       # risk-free rate
                 ρ_p::Real = 0.90,       # AR(1) of persistent shock
                 σ_p::Real = 0.05,       # s.d. of persistent shock
-                p_size::Integer = 15,    # no. of persistent shock
+                p_size::Integer = 5,    # no. of persistent shock
                 ν_size::Integer = 2,    # no. of preference shock
                 a_min::Real = -1,       # min of asset holding
                 a_max::Real = 10,       # max of asset holding
@@ -75,6 +75,7 @@ mutable struct mut_vars
     local_sols_good::Array{Float64,3}
     transition_matrix::SparseMatrixCSC{Float64,Int64}
     q::Array{Float64,2}
+    dq::Array{Float64,2}
     μ::Array{Float64,3}
     QB::Real
     D::Real
@@ -86,19 +87,25 @@ function vars(parameters::NamedTuple)
     # unpack parameters
     @unpack β, ξ, σ, r_f, a_grid, a_size, a_size_pos, a_size_neg, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size, p_grid, p_size, ν_grid = parameters
 
-    # define pricing function and default probability
+    # define pricing function
     q_mode = 1
     if q_mode == 0
         q = ones(a_size, x_size)
-        q[1:a_size_neg,:] .= 1/(1+r_f)
+        q[1:ind_a_zero,:] .= 1/(1+r_f)
     else
         q = ones(a_size, x_size)
         for x_ind in 1:x_size
-            p, ν = x_grid[x_ind,:]
-            for a_ind in 1:a_size_neg
-                q[a_ind,x_ind] = (p/p_grid[end]) * ((a_grid[1]-a_grid[a_ind])/a_grid[1]) / (1 + r_f)
+            p_i, ν_i = x_grid[x_ind,:]
+            for a_ind in 1:ind_a_zero
+                q[a_ind,x_ind] = (p_i/p_grid[end]) * ((a_grid[1]-a_grid[a_ind])/a_grid[1]) / (1 + r_f)
             end
         end
+    end
+
+    # define derivative of pricing function
+    dq = zeros(a_size, x_size)
+    for x_ind in 1:x_size
+        dq[:,x_ind] = derivative_func(a_grid, q[:,x_ind])
     end
 
     # define value functions
@@ -145,7 +152,7 @@ function vars(parameters::NamedTuple)
     μ[a_size_neg:end,:,2] .= 1 / ( (a_size_pos+a_size+1) * x_size )
 
     # return outputs
-    variables = mut_vars(V_bad, V_good, V_good_default, V_good_repay, policy_a_bad, policy_a_good, policy_a_good_default, policy_a_good_repay, policy_matrix_a_bad, policy_matrix_a_good, policy_matrix_a_good_default, policy_matrix_a_good_repay, local_sols_bad, local_sols_good, transition_matrix, q, μ, QB, D)
+    variables = mut_vars(V_bad, V_good, V_good_default, V_good_repay, policy_a_bad, policy_a_good, policy_a_good_default, policy_a_good_repay, policy_matrix_a_bad, policy_matrix_a_good, policy_matrix_a_good_default, policy_matrix_a_good_repay, local_sols_bad, local_sols_good, transition_matrix, q, dq, μ, QB, D)
     return variables
 end
 
@@ -311,7 +318,7 @@ function sols_func(β::Real, σ::Real, r_f::Real, earnings::Real, Px_i::Array{Fl
     V_hat_rbl = V_hat_func(β, Px_i, V_p_rbl)
 
     # construct the matrix containg all possible "positive" local solutions
-    variables.local_sols_bad = zeros(a_size_rbl, 7)
+    local_sols = zeros(a_size_rbl, 7)
     local_sols[:,1] = a_grid_rbl
     local_sols[:,2] = q_i_rbl
     local_sols[:,3] = V_hat_rbl

@@ -374,3 +374,72 @@ function sols_func(β::Real, σ::Real, r_f::Real, earnings::Real, Px_i::Array{Fl
     # return results
     return global_sols, V, policy_a
 end
+
+function rbl_func(V_p::Array{Float64,2}, q_i::Array{Float64,1}, a_grid::Array{Float64,1}; method::Integer = 0)
+    #--------------------------------#
+    # compute risky borrowing limit. #
+    #--------------------------------#
+
+    # (0) check derivative with discretized points (method = 0)
+    if method == 0
+        dqa = derivative_func(a_grid, q_i .* a_grid)
+        dqa_check = Inf
+        dqa_iter = length(a_grid)
+        while dqa_check > 0
+            dqa_check = dqa[dqa_iter]
+            dqa_check = dqa[dqa_iter] <= 0 ? break : dqa_iter -= 1
+        end
+        rbl = a_grid[dqa_iter+1]
+        rbl_ind = dqa_iter+1
+        a_grid_rbl = a_grid[(dqa_iter+1):end]
+        q_i_rbl = q_i[(dqa_iter+1):end]
+        V_p_rbl = V_p[(dqa_iter+1):end,:]
+
+    # (1) check derivative with interpolation (method = 1)
+    elseif method ==  1 # something wrong neede to be corrected
+        q_func = LinearInterpolation(a_grid, q_i, extrapolation_bc = Line())
+        dqa_func = LinearInterpolation(a_grid, derivative_func(a_grid, q_i .* a_grid), extrapolation_bc = Line())
+        obj_rbl_1(ap) = dqa_func(ap)
+        rbl = find_zero(obj_rbl_1, 0)
+        rbl_ind = minimum(findall(a_grid .>= rbl))
+        a_grid_rbl = cat(rbl, a_grid[rbl_ind:end], dims = 1)
+        q_i_rbl = cat(q_func(rbl), q_i[rbl_ind:end], dims = 1)
+        x_size = size(V_p,2)
+        V_rbl = zeros(1,x_size)
+        for x_ind in 1:x_size
+            V_func = LinearInterpolation(a_grid, V_p[:,x_ind], extrapolation_bc = Line())
+            V_rbl[1,x_ind] = V_func(rbl)
+        end
+        V_p_rbl = cat(V_rbl, V_p[rbl_ind:end,:], dims = 1)
+
+    # (2) check size with discretized points (method = 2)
+    elseif method ==  2
+        qa = q_i .* a_grid
+        ind_rbl = findall(qa .== minimum(qa))[1]
+        rbl = a_grid[ind_rbl]
+        rbl_ind = ind_rbl
+        a_grid_rbl = a_grid[ind_rbl:end]
+        q_i_rbl = q_i[ind_rbl:end]
+        V_p_rbl = V_p[ind_rbl:end,:]
+
+    # (3) check size with interpolation (method = 3)
+    else
+        q_func = LinearInterpolation(a_grid, q_i, extrapolation_bc = Line())
+        obj_rbl_3(ap) = ap*q_func(ap)
+        results = optimize(obj_rbl_3, a_grid[1], 0)
+        rbl = results.minimizer
+        rbl_ind = minimum(findall(a_grid .>= rbl))
+        a_grid_rbl = cat(rbl, a_grid[rbl_ind:end], dims = 1)
+        q_i_rbl = cat(q_func(rbl), q_i[rbl_ind:end], dims = 1)
+        x_size = size(V_p,2)
+        V_rbl = zeros(1,x_size)
+        for x_ind in 1:x_size
+            V_func = LinearInterpolation(a_grid, V_p[:,x_ind], extrapolation_bc = Line())
+            V_rbl[1,x_ind] = V_func(rbl)
+        end
+        V_p_rbl = cat(V_rbl, V_p[rbl_ind:end,:], dims = 1)
+    end
+
+    # return results
+    return rbl, rbl_ind, a_grid_rbl, q_i_rbl, V_p_rbl
+end

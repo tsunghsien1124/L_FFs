@@ -5,7 +5,7 @@ function para(; λ::Real = 0.10,         # history rased probability
                 r_f::Real = 0.03,       # risk-free rate
                 ρ_p::Real = 0.95,       # AR(1) of persistent shock
                 σ_p::Real = 0.05,       # s.d. of persistent shock
-                p_size::Integer = 7,    # no. of persistent shock
+                p_size::Integer = 5,    # no. of persistent shock
                 ν_size::Integer = 2,    # no. of preference shock
                 a_min::Real = -1,       # min of asset holding
                 a_max::Real = 10,       # max of asset holding
@@ -17,10 +17,10 @@ function para(; λ::Real = 0.10,         # history rased probability
     # persistent shock
     Mp = tauchen(p_size, ρ_p, σ_p)
     Pp = Mp.p
-    p_grid = collect(Mp.state_values) .+ 1.0
+    p_grid = exp.(collect(Mp.state_values))
 
     # preference schock
-    ν_grid = [0.7, 1]
+    ν_grid = [0.8, 1]
     Pν = repeat([0.10 0.90], ν_size, 1)
 
     # idiosyncratic transition matrix
@@ -60,8 +60,7 @@ mutable struct mut_vars
     V_bad::Array{Float64,2}
     policy_a_good::Array{Float64,3}
     policy_a_bad::Array{Float64,2}
-    global_sols_good::Array{Float64,3}
-    global_sols_bad::Array{Float64,3}
+    A::Array{Float64,1}
 end
 
 function vars(parameters::NamedTuple)
@@ -107,12 +106,8 @@ function vars(parameters::NamedTuple)
     policy_a_good = zeros(a_size, x_size, 3)
     policy_a_bad = zeros(a_size_pos, x_size)
 
-    # define local solutions
-    global_sols_good = zeros(a_size_pos, 7, x_size)
-    global_sols_bad = zeros(a_size_pos, 7, x_size)
-
     # return outputs
-    variables = mut_vars(q, V_good, V_bad, policy_a_good, policy_a_bad, global_sols_good, global_sols_bad)
+    variables = mut_vars(q, V_good, V_bad, policy_a_good, policy_a_bad)
     return variables
 end
 
@@ -177,22 +172,54 @@ function derivative_func(x::Array{Float64,1}, y; method::Integer = 0)
     end
 end
 
-function rbl_func(V_p::Array{Float64,2}, q_i::Array{Float64,2}, a_grid::Array{Float64,1})
+function rbl_func(V_p::Array{Float64,2}, q_i::Array{Float64,2}, a_grid::Array{Float64,1}; method::Integer = 0)
     #--------------------------------#
     # compute risky borrowing limit. #
     #--------------------------------#
-    Dqa_check = Inf
-    Dqa_iter = length(a_grid)
-    while Dqa_check > 0
-        Dqa_check = q_i[Dqa_iter, 4]
-        Dqa_check = q_i[Dqa_iter, 4] <= 0 ? break : Dqa_iter -= 1
+
+    # (0) check derivative with discretized points (method = 0)
+    if method == 0
+        Dqa_check = Inf
+        Dqa_iter = length(a_grid)
+        while Dqa_check > 0
+            Dqa_check = q_i[Dqa_iter, 4]
+            Dqa_check = q_i[Dqa_iter, 4] <= 0 ? break : Dqa_iter -= 1
+        end
+        rbl_ind = Dqa_iter + 1
+        rbl = a_grid[rbl_ind]
+        V_p_rbl = V_p[rbl_ind:end,:]
+        q_i_rbl = q_i[rbl_ind:end,:]
+        a_grid_rbl = a_grid[rbl_ind:end]
+        a_size_rbl = length(a_grid_rbl)
+
+    # (1) check size with discretized points (method = 1)
+    elseif method ==  1
+        rbl_ind = findall(q_i[:,3] .== minimum(q_i[:,3]))[1]
+        rbl = a_grid[rbl_ind]
+        V_p_rbl = V_p[rbl_ind:end,:]
+        q_i_rbl = q_i[rbl_ind:end,:]
+        a_grid_rbl = a_grid[rbl_ind:end]
+        a_size_rbl = length(a_grid_rbl)
+
+    # (2) check size with interpolation (method = 2)
+    else
+        q_func = LinearInterpolation(a_grid, q_i[:,1], extrapolation_bc = Line())
+        qa_func = LinearInterpolation(a_grid, q_i[:,3], extrapolation_bc = Line())
+        obj_rbl_qaitp(ap) = qa_func(ap)
+        results = optimize(obj_rbl_qaitp, a_grid[1], 0)
+        rbl = results.minimizer
+        rbl_ind = minimum(findall(a_grid .>= rbl))
+        V_rbl = zeros(1,size(V_p,2))
+        for x_ind in 1:size(V_p,2)
+            V_func = LinearInterpolation(a_grid, V_p[:,x_ind], extrapolation_bc = Line())
+            V_rbl[1,x_ind] = V_func(rbl)
+        end
+        V_p_rbl = cat(V_rbl, V_p[rbl_ind:end,:], dims = 1)
+        q_i_rbl = cat([q_func(rbl) 0 qa_func(rbl) 0], q_i[rbl_ind:end,:], dims = 1)
+        a_grid_rbl = cat(rbl, a_grid[rbl_ind:end], dims = 1)
+        a_size_rbl = length(a_grid_rbl)
     end
-    rbl_ind = Dqa_iter + 1
-    rbl = a_grid[rbl_ind]
-    V_p_rbl = V_p[rbl_ind:end,:]
-    q_i_rbl = q_i[rbl_ind:end,:]
-    a_grid_rbl = a_grid[rbl_ind:end]
-    a_size_rbl = length(a_grid_rbl)
+
     return rbl_ind, rbl, V_p_rbl, q_i_rbl, a_grid_rbl, a_size_rbl
 end
 
@@ -308,7 +335,7 @@ function sols_func(β::Real, Px_i::Array{Float64,1}, V_p::Array{Float64,2}, a_gr
         obj_C_0(x) = u_func(x-q_i_pos[1,3], σ) + V_hat_pos[1] - u_func(x-q_i_pos[ind_a_one,3], σ) - V_hat_pos[ind_a_one]
         C_0 = find_zero(obj_C_0, (q_i_pos[1,3], global_sols[1,5]))
         a_0 = (C_0-earnings) / (1+r_f*(C_0-earnings>0))
-        V_0 = u_func(C1-q_i_pos[1,3], σ) + V_hat_pos[1]
+        V_0 = u_func(C_0-q_i_pos[1,3], σ) + V_hat_pos[1]
         # expand the original global pairs
         global_sols = cat([a_grid_pos[1] q_i_pos[1,1] q_i_pos[1,3] V_hat_pos[1] C_0 V_0 a_0], global_sols, dims = 1)
     end
@@ -360,7 +387,7 @@ function sols_func(β::Real, Px_i::Array{Float64,1}, V_p::Array{Float64,2}, a_gr
     end
 
     # return results
-    return global_sols, V, policy_a
+    return V, policy_a
 end
 
 function price!(variables::mut_vars, parameters::NamedTuple)
@@ -435,11 +462,11 @@ function solution!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, iter
             # println("x_ind = $x_ind, bad")
             V_good_p_pos = V_good_p[ind_a_zero:end,:]
             q_i_pos = q_i[ind_a_zero:end,:]
-            global_sols_bad, variables.V_bad[:,x_ind], variables.policy_a_bad[:,x_ind] = sols_func(β_adj, Px_i, λ*V_good_p_pos .+ (1-λ)*V_bad_p, a_grid_pos, q_i_pos, σ, r_f, earnings)
+            variables.V_bad[:,x_ind], variables.policy_a_bad[:,x_ind] = sols_func(β_adj, Px_i, λ*V_good_p_pos .+ (1-λ)*V_bad_p, a_grid_pos, q_i_pos, σ, r_f, earnings)
 
             # (2) good credit history with repayment
             # println("x_ind = $x_ind, good")
-            global_sols_good, variables.V_good[:,x_ind,2], variables.policy_a_good[:,x_ind,2] = sols_func(β_adj, Px_i, V_good_p, a_grid, q_i, σ, r_f, earnings; check_rbl = 1)
+            variables.V_good[:,x_ind,2], variables.policy_a_good[:,x_ind,2] = sols_func(β_adj, Px_i, V_good_p, a_grid, q_i, σ, r_f, earnings; check_rbl = 1)
 
             # (3) good credit history with defaulting
             V_hat_bad = V_hat_func(β_adj, Px_i, V_bad_p)

@@ -13,6 +13,7 @@ using SparseArrays
 using Roots
 using LaTeXStrings
 using Dierckx
+using UnicodePlots
 
 include("functions_preference.jl")
 # include("functions_expenditure.jl")

@@ -1,21 +1,21 @@
 function para(; λ::Real = 0.10,         # history rased probability
                 β::Real = 0.96,         # discount factor
-                ξ::Real = 0.25,         # garnishment rate
+                ξ::Real = 0.30,         # garnishment rate
                 σ::Real = 2,            # CRRA coefficient
-                r_f::Real = 0.03,       # risk-free rate
+                r_f::Real = 0.035,       # risk-free rate
                 ρ_p::Real = 0.95,       # AR(1) of persistent shock
-                σ_p::Real = 0.05,       # s.d. of persistent shock
-                p_size::Integer = 5,    # no. of persistent shock
+                σ_p::Real = 0.10,       # s.d. of persistent shock
+                p_size::Integer = 5,   # no. of persistent shock
                 ν_size::Integer = 2,    # no. of preference shock
                 a_min::Real = -1,       # min of asset holding
-                a_max::Real = 10,       # max of asset holding
+                a_max::Real = 60,       # max of asset holding
                 a_size::Integer = 100)  # number of the grid asset holding
     #------------------------------------------------------#
     # contruct an immutable object containg all paramters. #
     #------------------------------------------------------#
 
     # persistent shock
-    Mp = tauchen(p_size, ρ_p, σ_p)
+    Mp = rouwenhorst(p_size, ρ_p, σ_p)
     Pp = Mp.p
     p_grid = exp.(collect(Mp.state_values))
 
@@ -60,7 +60,12 @@ mutable struct mut_vars
     V_bad::Array{Float64,2}
     policy_a_good::Array{Float64,3}
     policy_a_bad::Array{Float64,2}
+    policy_a_good_repay_matrix::SparseMatrixCSC{Float64,Int64}
+    policy_a_good_default_matrix::SparseMatrixCSC{Float64,Int64}
+    policy_a_bad_matrix::SparseMatrixCSC{Float64,Int64}
     A::Array{Float64,1}
+    μ::Array{Float64,1}
+    Pμ::SparseMatrixCSC{Float64,Int64}
 end
 
 function vars(parameters::NamedTuple)
@@ -106,8 +111,23 @@ function vars(parameters::NamedTuple)
     policy_a_good = zeros(a_size, x_size, 3)
     policy_a_bad = zeros(a_size_pos, x_size)
 
+    # define policy matrices
+    policy_a_good_repay_matrix = spzeros(x_size*a_size, a_size)
+    policy_a_good_default_matrix = spzeros(x_size*a_size, a_size_pos)
+    policy_a_bad_matrix = spzeros(x_size*a_size_pos, a_size_pos)
+
+    # define aggregate objects
+    A = zeros(3)
+
+    # define the type distribution and its transition matrix
+    μ_size_good = x_size*a_size
+    μ_size_bad = x_size*a_size_pos
+    μ_size = μ_size_good + μ_size_bad
+    μ = zeros(μ_size)
+    Pμ = spzeros(μ_size, μ_size)
+
     # return outputs
-    variables = mut_vars(q, V_good, V_bad, policy_a_good, policy_a_bad)
+    variables = mut_vars(q, V_good, V_bad, policy_a_good, policy_a_bad, policy_a_good_repay_matrix, policy_a_good_default_matrix, policy_a_bad_matrix, A, μ, Pμ)
     return variables
 end
 
@@ -390,12 +410,104 @@ function sols_func(β::Real, Px_i::Array{Float64,1}, V_p::Array{Float64,2}, a_gr
     return V, policy_a
 end
 
+function convex_func(ap::Array{Float64,1}, a_grid::Array{Float64,1}; matrix_display::Integer = 0)
+    #------------------------------#
+    # find the convex combination. #
+    #------------------------------#
+    ap_size = length(ap)
+    if ap_size == 1
+        ap_i = ap[1]
+        ind_lower = maximum(findall(a_grid .<= ap_i))
+        ind_upper = minimum(findall(a_grid .>= ap_i))
+        if ind_lower == ind_upper
+            coef_lower = 1.0
+            coef_upper = 1.0
+        else
+            coef_lower = (a_grid[ind_upper]-ap_i) / (a_grid[ind_upper]-a_grid[ind_lower])
+            coef_upper = (ap_i-a_grid[ind_lower]) / (a_grid[ind_upper]-a_grid[ind_lower])
+        end
+        if matrix_display == 0
+            return (ind_lower, ind_upper, coef_lower, coef_upper)
+        else
+            a_size = length(a_grid)
+            matrix_results = spzeros(1,a_size)
+            matrix_results[1,ind_lower] = coef_lower
+            matrix_results[1,ind_upper] = coef_upper
+            return matrix_results
+        end
+    else
+        results = zeros(ap_size,4)
+        for ap_ind in 1:ap_size
+            ap_i = ap[ap_ind]
+            ind_lower = maximum(findall(a_grid .<= ap_i))
+            ind_upper = minimum(findall(a_grid .>= ap_i))
+            if ind_lower == ind_upper
+                coef_lower = 1.0
+                coef_upper = 1.0
+            else
+                coef_lower = (a_grid[ind_upper]-ap_i) / (a_grid[ind_upper]-a_grid[ind_lower])
+                coef_upper = (ap_i-a_grid[ind_lower]) / (a_grid[ind_upper]-a_grid[ind_lower])
+            end
+            results[ap_ind,:] = [ind_lower, ind_upper, coef_lower, coef_upper]
+        end
+        if matrix_display == 0
+            return results
+        else
+            a_size = length(a_grid)
+            matrix_results = spzeros(ap_size,a_size)
+            for ap_ind in 1:ap_size
+                matrix_results[ap_ind,convert(Int,results[ap_ind,1])] = results[ap_ind,3]
+                matrix_results[ap_ind,convert(Int,results[ap_ind,2])] = results[ap_ind,4]
+            end
+            return matrix_results
+        end
+    end
+end
+
+function policy_matrix_func(policy_a::Array{Float64,2}, a_grid::Array{Float64,1}; V_good::Array{Float64,3} = zeros(1,1,1))
+    #---------------------------------------------------------#
+    # construct the matrix representaion of policy functions. #
+    #---------------------------------------------------------#
+    a_size = length(a_grid)
+    ind_a_zero = findall(a_grid .>= 0)[1]
+    a_grid_pos = a_grid[ind_a_zero:end]
+    a_size_pos = length(a_grid_pos)
+    a_policy_size, x_size = size(policy_a)
+    if a_size == a_policy_size
+        policy_a_repay_matrix = spzeros(x_size*a_size, a_size)
+        policy_a_default_matrix = spzeros(x_size*a_size, a_size_pos)
+        for x_ind in 1:x_size
+            ind_repay = V_good[:,x_ind,2] .> V_good[:,x_ind,3]
+            ind_default = V_good[:,x_ind,3] .>= V_good[:,x_ind,2]
+            results_repay = convex_func(policy_a[:,x_ind], a_grid; matrix_display = 1)
+            results_repay[ind_default,:] .= 0
+            results_repay = dropzeros(results_repay)
+            results_default = convex_func(policy_a[:,x_ind], a_grid; matrix_display = 1)
+            results_default[ind_repay,:] .= 0
+            results_default = dropzeros(results_default)
+            ind_r1 = 1 + a_size*(x_ind-1)
+            ind_r2 = a_size*x_ind
+            policy_a_repay_matrix[ind_r1:ind_r2,:] = results_repay
+            policy_a_default_matrix[ind_r1:ind_r2,:] = results_default[:,ind_a_zero:end]
+        end
+        return policy_a_repay_matrix, policy_a_default_matrix
+    else
+        policy_a_matrix = spzeros(x_size*a_size_pos, a_size_pos)
+        for x_ind in 1:x_size
+            ind_r1 = 1 + a_size_pos*(x_ind-1)
+            ind_r2 = a_size_pos*x_ind
+            policy_a_matrix[ind_r1:ind_r2,:] = convex_func(policy_a[:,x_ind], a_grid_pos; matrix_display = 1)
+        end
+        return policy_a_matrix
+    end
+end
+
 function price!(variables::mut_vars, parameters::NamedTuple)
     #-------------------------------------------------------#
     # update the price schedule and associated derivatives. #
     #-------------------------------------------------------#
     @unpack ξ, r_f, a_grid, a_grid_neg, a_size_neg, ind_a_zero, Px, x_grid, x_size = parameters
-    α = 0.15    # parameter controling update speed
+    α = 1    # parameter controling update speed
     for x_ind in 1:x_size
         for ap_ind in 1:a_size_neg
             revenue = 0
@@ -419,6 +531,66 @@ function price!(variables::mut_vars, parameters::NamedTuple)
     variables.q[:,:,2] = derivative_func(a_grid, variables.q[:,:,1])
     variables.q[:,:,3] = variables.q[:,:,1] .* repeat(a_grid, 1, x_size)
     variables.q[:,:,4] = derivative_func(a_grid, variables.q[:,:,3])
+end
+
+function LoM_func!(variables::mut_vars, parameters::NamedTuple)
+    #---------------------------------------------------------------------#
+    # compute the cross-sectional distribution and its transition matrix. #
+    #---------------------------------------------------------------------#
+    @unpack a_size, a_size_pos, ind_a_zero, x_size, Px, λ = parameters
+    μ_size_good = x_size*a_size
+    μ_size_bad = x_size*a_size_pos
+    μ_size = μ_size_good + μ_size_bad
+    variables.μ = spzeros(μ_size)
+    variables.Pμ = spzeros(μ_size, μ_size)
+    for x_ind in 1:x_size
+        # good credit history
+        ind_r1_good = 1 + (x_ind-1)*a_size
+        ind_r2_good = x_ind*a_size
+        variables.Pμ[ind_r1_good:ind_r2_good,1:x_size*a_size] = kron(transpose(Px[x_ind,:]),variables.policy_a_good_repay_matrix[ind_r1_good:ind_r2_good,:])
+        variables.Pμ[ind_r1_good:ind_r2_good,(x_size*a_size+1):end] = kron(transpose(Px[x_ind,:]),variables.policy_a_good_default_matrix[ind_r1_good:ind_r2_good,:])
+        # bad credit history
+        ind_r1_bad = 1 + (x_ind-1)*a_size_pos
+        ind_r2_bad = x_ind*a_size_pos
+        ind_r1_bad_Pμ = ind_r1_bad + x_size*a_size
+        ind_r2_bad_Pμ = ind_r2_bad + x_size*a_size
+        for xp_ind in 1:x_size
+            ind_c1_bad_Pμ = ind_a_zero + (xp_ind-1)*a_size
+            ind_c2_bad_Pμ = xp_ind*a_size
+            variables.Pμ[ind_r1_bad_Pμ:ind_r2_bad_Pμ,ind_c1_bad_Pμ:ind_c2_bad_Pμ] = λ*kron(transpose(Px[x_ind,xp_ind]),variables.policy_a_bad_matrix[ind_r1_bad:ind_r2_bad,:])
+        end
+        variables.Pμ[ind_r1_bad_Pμ:ind_r2_bad_Pμ,(x_size*a_size+1):end] = (1-λ)*kron(transpose(Px[x_ind,:]),variables.policy_a_bad_matrix[ind_r1_bad:ind_r2_bad,:])
+    end
+    MC = MarkovChain(variables.Pμ)
+    SD = stationary_distributions(MC)
+    variables.μ = SD[1]
+end
+
+function aggregate_func!(variables::mut_vars, parameters::NamedTuple)
+    #------------------------------#
+    # compute aggregate variables. #
+    #------------------------------#
+    @unpack a_grid, a_size, a_size_pos, ind_a_zero, x_size = parameters
+    variables.A .= 0.0
+    for x_ind in 1:x_size
+        qap_good_itp = Spline1D(a_grid, variables.q[:,x_ind,1].*a_grid; k = 3, bc = "extrapolate")
+        for a_ind in 1:a_size
+            μ_ind_good = (x_ind-1)*a_size + a_ind
+            ap_good = variables.policy_a_good[a_ind,x_ind,1]
+            if ap_good < 0
+                variables.A[1] += -qap_good_itp(ap_good)*variables.μ[μ_ind_good]
+            else
+                variables.A[2] += qap_good_itp(ap_good)*variables.μ[μ_ind_good]
+            end
+            if a_ind >= ind_a_zero
+                a_ind_bad = a_ind - ind_a_zero + 1
+                μ_ind_bad = (x_ind-1)*a_size_pos + a_ind_bad + x_size*a_size
+                ap_bad = variables.policy_a_bad[a_ind_bad,x_ind,1]
+                variables.A[2] += ap_bad*variables.μ[μ_ind_bad]
+            end
+        end
+    end
+    variables.A[3] = variables.A[1] - variables.A[2]
 end
 
 function solution!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, iter_max = 10000)
@@ -489,4 +661,14 @@ function solution!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, iter
         # update the iteration number
         iter += 1
     end
+
+    # update policy matrices
+    variables.policy_a_good_repay_matrix, variables.policy_a_good_default_matrix = policy_matrix_func(variables.policy_a_good[:,:,1], parameters.a_grid; V_good = variables.V_good)
+    variables.policy_a_bad_matrix = policy_matrix_func(variables.policy_a_bad, parameters.a_grid)
+
+    # update the cross-sectional distribution
+    LoM_func!(variables, parameters)
+
+    # compute aggregate variables
+    aggregate_func!(variables, parameters)
 end

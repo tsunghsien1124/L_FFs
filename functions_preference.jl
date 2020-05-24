@@ -2,14 +2,18 @@ function para(; λ::Real = 0.10,         # history rased probability
                 β::Real = 0.96,         # discount factor
                 ξ::Real = 0.30,         # garnishment rate
                 σ::Real = 2,            # CRRA coefficient
-                r_f::Real = 0.0325,       # risk-free rate
+                L::Real = 10,           # targeted leverage ratio
+                r_bf::Real = 0.01,      # targeted excess return
+                r_f::Real = 0.03,     # risk-free rate
                 ρ_p::Real = 0.95,       # AR(1) of persistent shock
                 σ_p::Real = 0.10,       # s.d. of persistent shock
-                p_size::Integer = 5,   # no. of persistent shock
+                p_size::Integer = 7,    # no. of persistent shock
                 ν_size::Integer = 2,    # no. of preference shock
+                ν::Real = 0.7,          # level of patience
+                pν::Real = 0.2,         # probability of patience
                 a_min::Real = -1,       # min of asset holding
-                a_max::Real = 60,       # max of asset holding
-                a_size::Integer = 100)  # number of the grid asset holding
+                a_max::Real = 80,       # max of asset holding
+                a_size::Integer = 200)  # number of the grid asset holding
     #------------------------------------------------------#
     # contruct an immutable object containg all paramters. #
     #------------------------------------------------------#
@@ -20,8 +24,8 @@ function para(; λ::Real = 0.10,         # history rased probability
     p_grid = exp.(collect(Mp.state_values))
 
     # preference schock
-    ν_grid = [0.8, 1]
-    Pν = repeat([0.10 0.90], ν_size, 1)
+    ν_grid = [ν, 1]
+    Pν = repeat([pν 0.80], ν_size, 1)
 
     # idiosyncratic transition matrix
     Px = kron(Pν, Pp)
@@ -51,7 +55,7 @@ function para(; λ::Real = 0.10,         # history rased probability
     end
 
     # return values
-    return (λ = λ, β = β, ξ = ξ, σ = σ, r_f = r_f, a_grid = a_grid, ind_a_zero = ind_a_zero, a_size = a_size, a_size_pos = a_size_pos, a_size_neg = a_size_neg, a_grid_neg = a_grid_neg, a_grid_pos = a_grid_pos, Pp = Pp, p_grid = p_grid, p_size = p_size, Pν = Pν, ν_grid = ν_grid, ν_size = ν_size, Px = Px, x_grid = x_grid, x_size = x_size, x_ind = x_ind)
+    return (λ = λ, β = β, ξ = ξ, σ = σ, L = L, r_bf = r_bf, r_f = r_f, a_grid = a_grid, ind_a_zero = ind_a_zero, a_size = a_size, a_size_pos = a_size_pos, a_size_neg = a_size_neg, a_grid_neg = a_grid_neg, a_grid_pos = a_grid_pos, Pp = Pp, p_grid = p_grid, p_size = p_size, Pν = Pν, ν_grid = ν_grid, ν_size = ν_size, Px = Px, x_grid = x_grid, x_size = x_size, x_ind = x_ind)
 end
 
 mutable struct mut_vars
@@ -117,7 +121,7 @@ function vars(parameters::NamedTuple)
     policy_a_bad_matrix = spzeros(x_size*a_size_pos, a_size_pos)
 
     # define aggregate objects
-    A = zeros(3)
+    A = zeros(4)
 
     # define the type distribution and its transition matrix
     μ_size_good = x_size*a_size
@@ -506,7 +510,7 @@ function price!(variables::mut_vars, parameters::NamedTuple)
     #-------------------------------------------------------#
     # update the price schedule and associated derivatives. #
     #-------------------------------------------------------#
-    @unpack ξ, r_f, a_grid, a_grid_neg, a_size_neg, ind_a_zero, Px, x_grid, x_size = parameters
+    @unpack ξ, r_bf, r_f, a_grid, a_grid_neg, a_size_neg, ind_a_zero, Px, x_grid, x_size = parameters
     α = 1    # parameter controling update speed
     for x_ind in 1:x_size
         for ap_ind in 1:a_size_neg
@@ -521,7 +525,7 @@ function price!(variables::mut_vars, parameters::NamedTuple)
                         revenue += Px[x_ind,xp_ind]*(-a_grid_neg[ap_ind])
                     end
                 end
-                q_update = α*(revenue / ((1+r_f)*(-a_grid_neg[ap_ind]))) + (1-α)*variables.q[ap_ind,x_ind,1]
+                q_update = α*(revenue / ((1+r_f+r_bf)*(-a_grid_neg[ap_ind]))) + (1-α)*variables.q[ap_ind,x_ind,1]
                 variables.q[ap_ind,x_ind,1] = q_update < (1/(1+r_f)) ? q_update : 1/(1+r_f)
             else
                 variables.q[ap_ind,x_ind,1] = 1/(1+r_f)
@@ -570,7 +574,7 @@ function aggregate_func!(variables::mut_vars, parameters::NamedTuple)
     #------------------------------#
     # compute aggregate variables. #
     #------------------------------#
-    @unpack a_grid, a_size, a_size_pos, ind_a_zero, x_size = parameters
+    @unpack L, a_grid, a_size, a_size_pos, ind_a_zero, x_size = parameters
     variables.A .= 0.0
     for x_ind in 1:x_size
         qap_good_itp = Spline1D(a_grid, variables.q[:,x_ind,1].*a_grid; k = 3, bc = "extrapolate")
@@ -591,9 +595,10 @@ function aggregate_func!(variables::mut_vars, parameters::NamedTuple)
         end
     end
     variables.A[3] = variables.A[1] - variables.A[2]
+    variables.A[4] = variables.A[1] / variables.A[3]
 end
 
-function solution!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, iter_max = 10000)
+function solve!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, iter_max = 10000)
     # solve the household's maximization problem to obtain the converged value functions via the modified EGM by Fella (2014, JEDC), given price schedules
 
     # unpack parameters
@@ -671,4 +676,7 @@ function solution!(variables::mut_vars, parameters::NamedTuple; tol = 1E-8, iter
 
     # compute aggregate variables
     aggregate_func!(variables, parameters)
+    println("The lower state of preference shokc is $(parameters.ν_grid[1])")
+    println("Targeted leverage ratio is $(parameters.L) and the implied leverage ratio is $(variables.A[4])")
+    return parameters.L - variables.A[4]
 end

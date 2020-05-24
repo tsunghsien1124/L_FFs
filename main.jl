@@ -18,10 +18,13 @@ using UnicodePlots
 include("functions_preference.jl")
 # include("functions_expenditure.jl")
 
-parameters = para()
+parameters = para(; ν = 0.8905320225561055)
 variables = vars(parameters)
+solve!(variables, parameters)
 
-solution!(variables, parameters)
+para_targeted(x) = para(; ν = x)
+solve_targeted(x) = solve!(vars(para_targeted(x)), para_targeted(x))
+fzero(solve_targeted, (0.8905320225561053, 0.8905320225561055))
 
 # Chekcing Plots, seriestype=:scatter
 # (1) bond price (q)
@@ -46,12 +49,12 @@ plot(a_grid_spline, q_spline, lw = 2,
      label = label_latex,
      legend = :bottomright, legendfont = font(10), theme = theme(:wong))
 
-plot(a_grid_spline, qa_spline, lw = 2,
-     xlabel = "\$a'\$", ylabel = "\$q(a',s)a'\$",
-     xlims = (-1,0), ylims = (-0.6,0),
-     xticks = -1:0.2:0, yticks = -0.6:0.1:0,
+plot(a_grid_spline, -qa_spline, lw = 2,
+     xlabel = "\$a'\$", ylabel = "\$|q(a',s)a'|\$",
+     xlims = (-1,0), ylims = (0,0.8),
+     xticks = -1:0.2:0, yticks = 0:0.2:0.8,
      label = label_latex,
-     legend = :bottomright, legendfont = font(10), theme = theme(:wong))
+     legend = :topright, legendfont = font(10), theme = theme(:wong))
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg,1:parameters.p_size,1])
 plot(parameters.a_grid, variables.q[:,1:parameters.p_size,1])

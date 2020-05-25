@@ -14,17 +14,53 @@ using Roots
 using LaTeXStrings
 using Dierckx
 using UnicodePlots
+using MAT
+using Distributions
+using StatsPlots
+using KernelDensity
 
-include("functions_preference.jl")
 # include("functions_expenditure.jl")
+include("functions_preference.jl")
 
-parameters = para(; ν = 0.8905320225561055)
-variables = vars(parameters)
-solve!(variables, parameters)
+# find steady state by calibrating the lower state of preference shock
+# para_targeted_ν(x) = para_func(; ν = x)
+# solve_targeted_ν(x) = solve_func!(vars_func(para_targeted_ν(x)), para_targeted_ν(x))
+# fzero(solve_targeted_ν, (0.9130, 0.9131))
+# parameters = para_func(; ν = 0.9130231957950928, L = 10.000000000000481)
+# variables = vars_func(parameters)
+# solve_func!(variables, parameters)
 
-para_targeted(x) = para(; ν = x)
-solve_targeted(x) = solve!(vars(para_targeted(x)), para_targeted(x))
-fzero(solve_targeted, (0.8905320225561053, 0.8905320225561055))
+para_targeted_r_f_FA(x) = para_func(; r_f = x)
+solve_targeted_r_f_FA(x) = solve_func!(vars_func(para_targeted_r_f_FA(x)), para_targeted_r_f_FA(x))
+r_f_FA = fzero(solve_targeted_r_f_FA, 0.02757599032412028)
+
+parameters_FA = para_func(; r_f = r_f_FA)
+variables_FA = vars_func(parameters_FA)
+solve_func!(variables_FA, parameters_FA)
+
+para_targeted_r_f_NFA(x) = para_func(; r_f = x, L = 1E+100, r_bf = 0)
+solve_targeted_r_f_NFA(x) = solve_func!(vars_func(para_targeted_r_f_NFA(x)), para_targeted_r_f_NFA(x))
+r_f_NFA = fzero(solve_targeted_r_f_NFA, 0.03032759589206313)
+
+parameters_NFA = para_func(; r_f = r_f_NFA, L = 1E+100, r_bf = 0)
+variables_NFA = vars_func(parameters_NFA)
+solve_func!(variables_NFA, parameters_NFA)
+
+# parameters_no_FA = para_func(; ν = 0.9130231957950928, r_bf = 0)
+# variables_no_FA = vars_func(parameters_no_FA)
+# solve_func!(variables_no_FA, parameters_no_FA)
+
+# T = 200
+# vars_matlab = matread("MIT_z_N.mat")
+# z_guess = vars_matlab["z"][:,1]
+# N_guess = vars_matlab["N"][:,1].*variables.A[3]
+# T = 20
+# z_guess = ones(T)
+# N_guess = ones(T) .* variables.A[3]
+# variables_MIT = vars_MIT_func(z_guess, N_guess, variables, parameters; T = T)
+# solve_MIT_func!(variables_MIT, variables, parameters; T = T)
+
+
 
 # Chekcing Plots, seriestype=:scatter
 # (1) bond price (q)

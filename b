@@ -4,6 +4,6 @@
 \begin{document}
 \[
 \color[rgb]{0.000,0.000,0.000} {
-p=1.2286}
+p=2.1912}
 \]
 \end{document}

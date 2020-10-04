@@ -3,6 +3,7 @@ function para_func(; λ_H::Real = 0.10,       # history rased probability
                      β::Real = 0.96,         # discount factor
                      ξ::Real = 0.30,         # garnishment rate
                      σ::Real = 2,            # CRRA coefficient
+                     z::Real = 1,            # aggregate uncertainty
                      L::Real = 10,           # targeted leverage ratio
                      r_bf::Real = 0.01,      # targeted excess return
                      r_f::Real = 0.03,       # risk-free rate
@@ -13,8 +14,8 @@ function para_func(; λ_H::Real = 0.10,       # history rased probability
                      ν::Real = 0.70,         # level of patience
                      pν::Real = 0.05,        # probability of patience
                      a_min::Real = -1,       # min of asset holding
-                     a_max::Real = 50,       # max of asset holding
-                     a_size::Integer = 200)  # number of the grid asset holding
+                     a_max::Real = 100,       # max of asset holding
+                     a_size::Integer = 120)  # number of the grid asset holding
     #------------------------------------------------------#
     # contruct an immutable object containg all paramters. #
     #------------------------------------------------------#
@@ -59,7 +60,7 @@ function para_func(; λ_H::Real = 0.10,       # history rased probability
     ω, θ = solve_ss_func_no_r_bf(β, λ_B, L, r_bf, r_f)
 
     # return values
-    return (λ_H = λ_H, λ_B = λ_B, β = β, ξ = ξ, σ = σ, L = L, r_bf = r_bf, r_f = r_f, ω = ω, θ = θ, a_grid = a_grid, ind_a_zero = ind_a_zero, a_size = a_size, a_size_pos = a_size_pos, a_size_neg = a_size_neg, a_grid_neg = a_grid_neg, a_grid_pos = a_grid_pos, Pp = Pp, p_grid = p_grid, p_size = p_size, Pν = Pν, ν_grid = ν_grid, ν_size = ν_size, Px = Px, x_grid = x_grid, x_size = x_size, x_ind = x_ind)
+    return (λ_H = λ_H, λ_B = λ_B, β = β, ξ = ξ, σ = σ, z = z, L = L, r_bf = r_bf, r_f = r_f, ω = ω, θ = θ, a_grid = a_grid, ind_a_zero = ind_a_zero, a_size = a_size, a_size_pos = a_size_pos, a_size_neg = a_size_neg, a_grid_neg = a_grid_neg, a_grid_pos = a_grid_pos, Pp = Pp, p_grid = p_grid, p_size = p_size, Pν = Pν, ν_grid = ν_grid, ν_size = ν_size, Px = Px, x_grid = x_grid, x_size = x_size, x_ind = x_ind)
 end
 
 function solve_ss_func_no_r_bf(β::Real, λ_B::Real, L::Real, r_bf::Real, r_f::Real)
@@ -644,7 +645,7 @@ function price_func!(variables::mut_vars, parameters::NamedTuple)
     #-------------------------------------------------------#
     # update the price schedule and associated derivatives. #
     #-------------------------------------------------------#
-    @unpack ξ, r_bf, r_f, a_grid, a_grid_neg, a_size_neg, ind_a_zero, Px, x_grid, x_size = parameters
+    @unpack ξ, r_bf, r_f, a_grid, a_grid_neg, a_size_neg, ind_a_zero, Px, x_grid, x_size, z = parameters
     α = 1    # parameter controling update speed
     for x_ind in 1:x_size
         for ap_ind in 1:a_size_neg
@@ -652,7 +653,7 @@ function price_func!(variables::mut_vars, parameters::NamedTuple)
             if ap_ind != ind_a_zero
                 for xp_ind in 1:x_size
                     pp_i, νp_i = x_grid[xp_ind,:]
-                    earnings = pp_i
+                    earnings = z*pp_i
                     if variables.V_good[ap_ind,xp_ind,3] >= variables.V_good[ap_ind,xp_ind,2]
                         revenue += Px[x_ind,xp_ind]*ξ*earnings
                     else
@@ -832,7 +833,7 @@ function solve_func!(variables::mut_vars, parameters::NamedTuple; tol = 1E-12, i
     # solve the household's maximization problem to obtain the converged value functions via the modified EGM by Fella (2014, JEDC), given price schedules
 
     # unpack parameters
-    @unpack a_grid, a_size, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size, β, Px, λ_H, σ, ξ, r_f = parameters
+    @unpack a_grid, a_size, a_grid_neg, a_grid_pos, ind_a_zero, x_grid, x_size, β, Px, λ_H, σ, ξ, r_f, z = parameters
 
     # initialize the iteration number and criterion
     iter = 0
@@ -859,7 +860,7 @@ function solve_func!(variables::mut_vars, parameters::NamedTuple; tol = 1E-12, i
             q_i = variables.q[:,x_ind,:]
 
             # define two handy variables
-            earnings = p_i
+            earnings = z*p_i
             β_adj = ν_i*β
 
             #-------------------------------------------------------------#
@@ -911,7 +912,7 @@ function solve_func!(variables::mut_vars, parameters::NamedTuple; tol = 1E-12, i
     # println("The risk-free rate is $(parameters.r_f)")
     # println("Targeted leverage ratio is $(parameters.L) and the implied leverage ratio is $(variables.A[4])")
     ED = variables.A[1] - (parameters.L/(parameters.L-1))*variables.A[2]
-    # println("Excess demand is $ED")
+    println("Excess demand is $ED")
     return ED
 end
 

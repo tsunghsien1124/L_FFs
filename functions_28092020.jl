@@ -1,5 +1,5 @@
 include("FLOWMath.jl")
-using Main.FLOWMath: Akima
+using Main.FLOWMath: Akima, akima, interp2d
 using LinearAlgebra
 using ProgressMeter
 using Parameters
@@ -109,7 +109,7 @@ mutable struct mut_var
     policy_a::Array{Float64,3}
     policy_a_matrix::Array{Float64,4}
     policy_d::Array{Float64,3}
-    policy_d_matrix::Array{Float64,4}
+    policy_d_matrix::Array{Float64,3}
     μ::Array{Float64,3}
     μ_Γ::SparseMatrixCSC{Float64,Int64}
     aggregate_var::Array{Float64,1}
@@ -143,7 +143,7 @@ function var_func(
         policy_a = zeros(a_size, e_size, ν_size)
         policy_a_matrix = zeros(a_size_μ, a_size_μ, e_size, ν_size)
         policy_d = zeros(a_size, e_size, ν_size)
-        policy_d_matrix = zeros(a_size_μ, a_size_μ, e_size, ν_size)
+        policy_d_matrix = zeros(a_size_μ, e_size, ν_size)
 
         # define the type distribution and its transition matrix
         μ_size = x_size*a_size_μ
@@ -165,7 +165,7 @@ function var_func(
         policy_a = zeros(a_size, e_size, ν_size)
         policy_a_matrix = zeros(a_size_μ, a_size_μ, e_size, ν_size)
         policy_d = zeros(a_size, e_size, ν_size)
-        policy_d_matrix = zeros(a_size_μ, a_size_μ, e_size, ν_size)
+        policy_d_matrix = zeros(a_size_μ, e_size, ν_size)
 
         # define the type distribution and its transition matrix
         μ_size = x_size*a_size_μ
@@ -286,9 +286,9 @@ function price_func!(
 
         # impatient household
         V_diff_1 = variables.V_repay[a_p_i,:,1] .- variables.V_default[a_p_i,:,1]
-        if all(V_diff_1 .> 0)
+        if all(V_diff_1 .> 0.0)
             e_p_thres_1 = -Inf
-        elseif all(V_diff_1 .< 0)
+        elseif all(V_diff_1 .< 0.0)
             e_p_thres_1 = Inf
         else
             # e_p_lower_1 = e_grid[searchsortedlast(V_diff_1, 0.0)]
@@ -302,9 +302,9 @@ function price_func!(
 
         # patient household
         V_diff_2 = variables.V_repay[a_p_i,:,2] .- variables.V_default[a_p_i,:,2]
-        if all(V_diff_2 .> 0)
+        if all(V_diff_2 .> 0.0)
             e_p_thres_2 = -Inf
-        elseif all(V_diff_2 .< 0)
+        elseif all(V_diff_2 .< 0.0)
             e_p_thres_2 = Inf
         else
             # e_p_lower_2 = e_grid[searchsortedlast(V_diff_2, 0.0)]
@@ -417,9 +417,11 @@ function policy_matrix_func!(
                 else
                     variables.policy_a_matrix[a_i,ind_lower_a_p,e_i,ν_i] = 1.0
                 end
+                variables.policy_d_matrix[a_i,e_i,ν_i] = 0.0
             # default
             else
                 variables.policy_a_matrix[a_i,a_ind_zero_μ,e_i,ν_i] = 1.0
+                variables.policy_d_matrix[a_i,e_i,ν_i] = 1.0
             end
         end
     end
@@ -549,14 +551,14 @@ function solve_func!(
     parameters::NamedTuple;
     tol_h = 1E-8,
     tol_μ = 1E-10,
-    iter_max = 1E+5
+    iter_max = 500
     )
 
     # solve the household's problem (including price schemes)
     household_func!(variables, parameters; tol = tol_h, iter_max = iter_max)
 
     # represent policy functions in matrices
-    # policy_matrix_func!(variables, parameters)
+    policy_matrix_func!(variables, parameters)
 
     # update the cross-sectional distribution
     density_func!(variables, parameters; tol = tol_μ, iter_max = iter_max)
@@ -631,6 +633,7 @@ solve_targeted(x) = solve_func!(var_func(para_targeted(x)), para_targeted(x))
 λ_optimal = find_zero(solve_targeted, (0.04987767453057565, 0.05), Bisection())
 =#
 
+#=
 λ_optimal = 0.04988090645870582
 parameters = para_func(; λ = λ_optimal)
 variables = var_func(parameters)
@@ -650,6 +653,125 @@ Nss = variables.aggregate_var[3]
 Λss = parameters.Λ
 
 @save "optimal_values.bson" Vss V_repayss V_defautlss qss μss Lss Dss Nss αss λss Λss
+=#
+
+#=========================================================#
+# Comparison between with and without financial frictions #
+#=========================================================#
+#=
+λ_optimal = 0.04988090645870582
+parameters_FF = para_func(; λ = λ_optimal, e_σ = 0.10)
+variables_FF = var_func(parameters_FF)
+solve_func!(variables_FF, parameters_FF)
+
+parameters_NFF = para_func(; λ = 0.0, θ = 0.0, e_σ = 0.10)
+variables_NFF = var_func(parameters_NFF)
+solve_func!(variables_NFF, parameters_NFF)
+
+results_compare_FF = zeros(6,3)
+results_compare_FF[1:4,1] = variables_NFF.aggregate_var
+results_compare_FF[5,1] = 0.0
+results_compare_FF[6,1] = sum(variables_NFF.μ.*variables_NFF.policy_d_matrix)*100
+results_compare_FF[1:3,2] = variables_FF.aggregate_var[1:3]
+results_compare_FF[4,2] = variables_FF.aggregate_var[1]/variables_FF.aggregate_var[3]
+results_compare_FF[5,2] = parameters_FF.r_ld
+results_compare_FF[6,2] = sum(variables_FF.μ.*variables_FF.policy_d_matrix)*100
+results_compare_FF[:,3] = ((results_compare_FF[:,2] .- results_compare_FF[:,1])./results_compare_FF[:,1])*100
+=#
+#=
+PD_FF = parameters_FF.ν_p*variables_FF.prob_default[1:parameters_FF.a_ind_zero,:,1] + (1-parameters_FF.ν_p)*variables_FF.prob_default[1:parameters_FF.a_ind_zero,:,2]
+PD_NFF = parameters_NFF.ν_p*variables_NFF.prob_default[1:parameters_NFF.a_ind_zero,:,1] + (1-parameters_NFF.ν_p)*variables_NFF.prob_default[1:parameters_NFF.a_ind_zero,:,2]
+
+step = 10^(-2)
+e_itp_FF = parameters_FF.e_grid[1]:step:parameters_FF.e_grid[end]
+a_p_itp_FF = parameters_FF.a_grid_neg[1]:step:parameters_FF.a_grid_neg[end]
+PD_FF_itp = interp2d(akima, parameters_FF.a_grid_neg, parameters_FF.e_grid, PD_FF, a_p_itp_FF, e_itp_FF)
+
+plot_PD_FF = plot(e_itp_FF, a_p_itp_FF, PD_FF_itp,
+                  st = :heatmap, clim = (0,1), color = :dense,
+                  xlabel = "\$p\$", ylabel = "\$a'\$",
+                  colorbar_title = "\$P(d'=1)\$")
+
+e_itp_NFF = parameters_NFF.e_grid[1]:step:parameters_NFF.e_grid[end]
+a_p_itp_NFF = parameters_NFF.a_grid_neg[1]:step:parameters_NFF.a_grid_neg[end]
+PD_NFF_itp = interp2d(akima, parameters_NFF.a_grid_neg, parameters_NFF.e_grid, PD_NFF, a_p_itp_NFF, e_itp_NFF)
+
+plot_PD_NFF = plot(e_itp_NFF, a_p_itp_NFF, PD_NFF_itp,
+                   st = :heatmap, clim = (0,1), color = :dense,
+                   xlabel = "\$p\$", ylabel = "\$a'\$",
+                   colorbar_title = "\$P(d'=1)\$")
+
+plot(plot_PD_FF, plot_PD_NFF, layout = (2,1))
+savefig("plot_PD_FF.pdf")
+=#
+
+#========================================#
+# Comparison of time-varying uncertainty #
+#========================================#
+#=
+parameters = para_func()
+para_targeted(x) = para_func(; λ = x, e_σ = 0.10*1.02)
+solve_targeted(x) = solve_func!(var_func(para_targeted(x)), para_targeted(x))
+λ_lower, λ_upper = 0, 1-(parameters.β_B*parameters.ψ_B*(1+parameters.r_d))^(1/2)
+# λ_optimal_u = find_zero(solve_targeted, (λ_lower, λ_upper), Bisection())
+λ_optimal_u = find_zero(solve_targeted, (0.026556104511, 0.026556104541), Bisection())
+=#
+
+#=
+λ_optimal_u = 0.026556104511
+parameters_FF_u = para_func(; λ = λ_optimal_u, e_σ = 0.10*1.02)
+variables_FF_u = var_func(parameters_FF_u)
+solve_func!(variables_FF_u, parameters_FF_u)
+
+results_compare_u = zeros(6,3)
+results_compare_u[1:3,1] = variables_FF.aggregate_var[1:3]
+results_compare_u[4,1] = variables_FF.aggregate_var[1] / variables_FF.aggregate_var[3]
+results_compare_u[5,1] = parameters_FF.r_ld
+results_compare_u[6,1] = sum(variables_FF.μ.*variables_FF.policy_d_matrix)*100
+
+results_compare_u[1:3,2] = variables_FF_u.aggregate_var[1:3]
+results_compare_u[4,2] = variables_FF_u.aggregate_var[1]/variables_FF_u.aggregate_var[3]
+results_compare_u[5,2] = parameters_FF_u.r_ld
+results_compare_u[6,2] = sum(variables_FF_u.μ.*variables_FF_u.policy_d_matrix)*100
+
+results_compare_u[:,3] = ((results_compare_u[:,2] .- results_compare_u[:,1])./results_compare_u[:,1])*100
+=#
+
+#=
+#=======================================#
+# Comparison of time-varying preference #
+#=======================================#
+parameters = para_func()
+para_targeted(x) = para_func(; λ = x, ν_p = 0.10*1.02)
+solve_targeted(x) = solve_func!(var_func(para_targeted(x)), para_targeted(x))
+λ_lower, λ_upper = 0, 1-(parameters.β_B*parameters.ψ_B*(1+parameters.r_d))^(1/2)
+# λ_optimal_u = find_zero(solve_targeted, (λ_lower, λ_upper), Bisection())
+λ_optimal_ν = find_zero(solve_targeted, (0.04988090645870582, 0.06), Bisection())
+
+λ_optimal_ν = 0.05916473242601564
+parameters_FF_ν = para_func(; λ = λ_optimal_ν, ν_p = 0.10*1.02)
+variables_FF_ν = var_func(parameters_FF_ν)
+solve_func!(variables_FF_ν, parameters_FF_ν)
+
+results_compare_ν = zeros(6,3)
+results_compare_ν[1:3,1] = variables_FF.aggregate_var[1:3]
+results_compare_ν[4,1] = variables_FF.aggregate_var[1] / variables_FF.aggregate_var[3]
+results_compare_ν[5,1] = parameters_FF.r_ld
+results_compare_ν[6,1] = sum(variables_FF.μ.*variables_FF.policy_d_matrix)*100
+
+results_compare_ν[1:3,2] = variables_FF_ν.aggregate_var[1:3]
+results_compare_ν[4,2] = variables_FF_ν.aggregate_var[1]/variables_FF_ν.aggregate_var[3]
+results_compare_ν[5,2] = parameters_FF_ν.r_ld
+results_compare_ν[6,2] = sum(variables_FF_ν.μ.*variables_FF_ν.policy_d_matrix)*100
+
+results_compare_ν[:,3] = ((results_compare_ν[:,2] .- results_compare_ν[:,1])./results_compare_ν[:,1])*100
+=#
+
+#=
+parameters_NFF_u = para_func(; λ = 0.0, θ = 0.0, e_σ = 0.10*1.02)
+variables_NFF_u = var_func(parameters_NFF_u)
+solve_func!(variables_NFF_u, parameters_NFF_u)
+=#
 
 #=
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,:,1], seriestype=:scatter, legend=:bottomright)

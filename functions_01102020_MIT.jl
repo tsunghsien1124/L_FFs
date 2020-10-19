@@ -76,14 +76,12 @@ function para_func(;
     μ_ind = gridmake(1:a_size_μ, 1:e_size, 1:ν_size)
 
     # solve the steady state of ω and θ to match targeted parameters
-    # λ = 1 - β_H*ψ_B*(1+r_d) - 10^(-4)
-    # λ = 1.0 - (β_B*ψ_B*(1+r_d))^(1/2)
+    # load equilibrium objects
     α = (β_B*(1.0-ψ_B)*(1.0+r_d)) / ((1.0-λ)-β_B*ψ_B*(1.0+r_d))
     Λ = β_B*(1.0-ψ_B+ψ_B*α)
     r_ld = λ*θ/Λ
     LR = α/θ
     AD = LR/(LR-1)
-    # ω = ((1.0-ψ_B)^(-1.0)) * (((1.0+r_d+r_ld)*LR-(1.0+r_d))^(-1.0) - ψ_B)
     ω = ((r_ld*(α/θ)+(1+r_d))^(-1)-(1-ψ_B))/ψ_B
 
     # return values
@@ -116,6 +114,14 @@ function para_func_MIT(
         z_path[T_ind] = ρ_z*z_path[T_ind-1]
     end
 
+    # time-varying volatility
+    e_σ_z = zeros(T_size)
+    for T_ind in 1:T_size
+        e_σ_z[T_ind] = e_σ
+        # e_σ_z[T_ind] = e_σ*(1.0 + abs(z_path[T_ind])^(1/10))
+        # e_σ_z[T_ind] = e_σ*(1.0 + abs(z_path[T_ind])*20)
+    end
+
     # Tauchen method of fixed grids
     function tauchen_Γ_func(
         size::Integer,
@@ -145,12 +151,12 @@ function para_func_MIT(
     # time-varying uncertainty
     e_Γ_z = zeros(e_size,e_size,T_size)
     for T_ind in 1:T_size
-        # e_Γ_z[:,:,T_ind] = tauchen_Γ_func(e_size,e_grid,e_ρ,(1-z_path[T_ind])*e_σ)
-        e_Γ_z[:,:,T_ind] = tauchen_Γ_func(e_size,e_grid,e_ρ,e_σ)
+        # e_Γ_z[:,:,T_ind] = tauchen_Γ_func(e_size, e_grid, e_ρ, e_σ_z[T_ind])
+        e_Γ_z[:,:,T_ind] = tauchen_Γ_func(e_size, e_grid, e_ρ, e_σ)
     end
 
     # return values
-    return (T_size = T_size, z_path = z_path, e_Γ_z = e_Γ_z)
+    return (T_size = T_size, z_path = z_path, e_σ_z = e_σ_z, e_Γ_z = e_Γ_z)
 end
 
 mutable struct mut_var_MIT
@@ -215,15 +221,16 @@ function var_func_MIT(
 
     # load initial guess
     # @load "initial_guess.bson" LN_guess
-    # LN_guess = ones(T_size) .* (Lss/Nss)
+    LN_guess = ones(T_size) .* (Lss/Nss)
     # LN_guess = (1.0 .- z_path.^5)*(Lss/Nss)
-    LN_guess = (1.0 .+ (-z_path).^(1/2.0))*(Lss/Nss)
+    # LN_guess = (1.0 .+ (-z_path).^(1/2.0))*(Lss/Nss)
 
     # define aggregate objects
     aggregate_var = zeros(5, T_size)
     aggregate_var[1,end] = Lss
     aggregate_var[2,end] = Dss
     aggregate_var[3,end] = Nss
+    aggregate_var[3,1] = 0.99*Nss
     aggregate_var[4,end] = Lss/Dss
     aggregate_var[5,:] = LN_guess
 
@@ -248,10 +255,12 @@ function updating_prics_MIT!(
     # load equilibrium objects
     @load "optimal_values.bson" Vss V_repayss V_defautlss qss μss Lss Dss Nss αss λss Λss
 
+    # α, Λ, λ, r_ld
     variables.prices[1,:] = θ*variables.LN_guess
+    # variables.prices[1,:] .= (β_B*(1.0-ψ_B)*(1.0+r_d)) / ((1.0-λss)-β_B*ψ_B*(1.0+r_d))
     variables.prices[2,:] = β_B*(1.0 .- ψ_B .+ ψ_B*variables.prices[1,:])
-    variables.prices[3,:] = [(1.0 .- ((variables.prices[2,2:end]*(1+r_d))./variables.prices[1,1:(end-1)])); λss]
-    variables.prices[4,:] = θ*(variables.prices[3,:]./[variables.prices[2,2:end]; Λss])
+    variables.prices[3,:] = [(1.0 .- ((variables.prices[2,2:end]*(1+r_d)) ./ variables.prices[1,1:(end-1)])); λss]
+    variables.prices[4,:] = θ*(variables.prices[3,:] ./ [variables.prices[2,2:end]; Λss])
 end
 
 function u_func(c::Real, σ::Real)
@@ -278,11 +287,12 @@ function value_price_func_MIT!(
     @unpack e_size, e_grid, e_ρ, e_σ = parameters
     @unpack ν_p, ν_Γ, ν_size = parameters
 
-    @unpack T_size, z_path, e_Γ_z = parameters_MIT
+    @unpack T_size, z_path, e_σ_z, e_Γ_z = parameters_MIT
 
     @showprogress 1 "Solving household's problem backward..." for T_ind in (T_size-1):(-1):1
 
         z = z_path[T_ind]
+        e_σ = e_σ_z[T_ind]
         e_Γ = e_Γ_z[:,:,T_ind]
         V_p = variables.V[:,:,:,(T_ind+1)]
 
@@ -296,19 +306,20 @@ function value_price_func_MIT!(
             V_hat_itp = Akima(a_grid, V_hat)
 
             variables.V_default[:,e_i,ν_i,T_ind] .= u_func((1-ξ)*exp(z+e), σ) + V_hat[a_ind_zero]
+            # variables.V_default[:,e_i,ν_i,T_ind] .= u_func((1-ξ)*exp(e), σ) + V_hat[a_ind_zero]
 
-            q = variables.q[:,e_i,ν_i,(T_ind+1)]
+            q = (variables.q[:,e_i,ν_i,(T_ind+1)] .* (1.0+r_d+variables.prices[4,(T_ind+1)])) ./ (1.0+r_d+variables.prices[4,T_ind])
+            # q = variables.q[:,e_i,ν_i,(T_ind+1)]
             qa = q .* a_grid
             qa_itp = Akima(a_grid, qa)
 
             for a_i in 1:a_size
                 a = a_grid[a_i]
-                CoH = exp(z+e) + (1+r_d*(a>0))*a
+                CoH = exp(z+e) + (1.0+r_d*(a>0.0))*a
+                # CoH = exp(e) + (1+r_d*(a>0))*a
 
                 # identify the optimal regions with discrete gridpoints
                 V_all = u_func.(CoH .- qa, σ) .+ V_hat
-                # V_max = maximum(V_all)
-                # V_max_ind = findall(V_all .== V_max)[1]
                 V_max_ind = argmax(V_all)
 
                 # solve it with interpolation method
@@ -347,10 +358,10 @@ function value_price_func_MIT!(
         Threads.@threads for a_p_i in 1:a_size_neg_nozero
 
             # impatient household
-            V_diff_1 = variables.V_repay[a_p_i,:,1,T_ind+1] .- variables.V_default[a_p_i,:,1,T_ind+1]
-            if all(V_diff_1 .> 0)
+            V_diff_1 = variables.V_repay[a_p_i,:,1,T_ind] .- variables.V_default[a_p_i,:,1,T_ind]
+            if all(V_diff_1 .> 0.0)
                 e_p_thres_1 = -Inf
-            elseif all(V_diff_1 .< 0)
+            elseif all(V_diff_1 .< 0.0)
                 e_p_thres_1 = Inf
             else
                 e_p_lower_1 = e_grid[findall(V_diff_1 .<= 0.0)[end]]
@@ -361,10 +372,10 @@ function value_price_func_MIT!(
             end
 
             # patient household
-            V_diff_2 = variables.V_repay[a_p_i,:,2,T_ind+1] .- variables.V_default[a_p_i,:,2,T_ind+1]
-            if all(V_diff_2 .> 0)
+            V_diff_2 = variables.V_repay[a_p_i,:,2,T_ind] .- variables.V_default[a_p_i,:,2,T_ind]
+            if all(V_diff_2 .> 0.0)
                 e_p_thres_2 = -Inf
-            elseif all(V_diff_2 .< 0)
+            elseif all(V_diff_2 .< 0.0)
                 e_p_thres_2 = Inf
             else
                 e_p_lower_2 = e_grid[findall(V_diff_2 .<= 0.0)[end]]
@@ -378,10 +389,10 @@ function value_price_func_MIT!(
                 e = e_grid[e_i]
                 dist = Normal(0.0,1.0)
 
-                # default_prob_1 = cdf(dist, (e_p_thres_1-e_ρ*e)/((1-z)*e_σ))
-                # default_prob_2 = cdf(dist, (e_p_thres_2-e_ρ*e)/((1-z)*e_σ))
-                default_prob_1 = cdf(dist, (e_p_thres_1-e_ρ*e)/(e_σ))
-                default_prob_2 = cdf(dist, (e_p_thres_2-e_ρ*e)/(e_σ))
+                default_prob_1 = cdf(dist, (e_p_thres_1-e_ρ*e)/e_σ)
+                default_prob_2 = cdf(dist, (e_p_thres_2-e_ρ*e)/e_σ)
+                # default_prob_1 = cdf(dist, (e_p_thres_1-e_ρ*e)/(e_σ))
+                # default_prob_2 = cdf(dist, (e_p_thres_2-e_ρ*e)/(e_σ))
                 repay_prob = ν_p*(1.0-default_prob_1) + (1.0-ν_p)*(1.0-default_prob_2)
                 variables.prob_default[a_p_i,e_i,:,T_ind] .= 1.0 - repay_prob
                 q_update[a_p_i,e_i,:] .= repay_prob / (1.0+r_d+variables.prices[4,T_ind])
@@ -626,7 +637,7 @@ function density_func_MIT!(
     @showprogress 1 "Solving density forward..." for T_ind in 1:(T_size-1)
 
         z = z_path[T_ind]
-        e_Γ = e_Γ_z[:,:,T_ind]
+        e_Γ = e_Γ_z[:,:,(T_ind+1)]
 
         μ_p = similar(variables.μ[:,:,:,T_ind])
         copyto!(μ_p, variables.μ[:,:,:,T_ind])
@@ -717,10 +728,15 @@ function aggregate_func_MIT!(
         variables.aggregate_var[2,T_ind] = sum(variables.μ[(a_ind_zero_μ+1):end,:,:,T_ind+1].*repeat(a_grid_pos_μ[2:end],1,e_size,ν_size))
 
         # net worth
-        D = sum(variables.μ[(a_ind_zero_μ+1):end,:,:,T_ind].*repeat(a_grid_pos_μ[2:end],1,e_size,ν_size))
-        L = -sum(variables.μ[1:(a_ind_zero_μ-1),:,:,T_ind].*repeat(a_grid_neg_μ[1:(end-1)],1,e_size,ν_size))
-        L_default = -sum(variables.μ[1:(a_ind_zero_μ-1),:,:,T_ind].*repeat(a_grid_neg_μ[1:(end-1)],1,e_size,ν_size).*variables.policy_d_matrix[1:(a_ind_zero_μ-1),:,:,T_ind])
-        variables.aggregate_var[3,T_ind] = (1 - ψ_B + ψ_B*ω)*((L-L_default) - (1+r_d)*D)
+        if T_ind == 1
+            @load "optimal_values.bson" Vss V_repayss V_defautlss qss μss Lss Dss Nss αss λss Λss
+            variables.aggregate_var[3,T_ind] = 0.99*Nss
+        else
+            D = sum(variables.μ[(a_ind_zero_μ+1):end,:,:,T_ind] .* repeat(a_grid_pos_μ[2:end],1,e_size,ν_size))
+            L = -sum(variables.μ[1:(a_ind_zero_μ-1),:,:,T_ind] .* repeat(a_grid_neg_μ[1:(end-1)],1,e_size,ν_size))
+            L_default = -sum(variables.μ[1:(a_ind_zero_μ-1),:,:,T_ind] .* repeat(a_grid_neg_μ[1:(end-1)],1,e_size,ν_size) .* variables.policy_d_matrix[1:(a_ind_zero_μ-1),:,:,T_ind])
+            variables.aggregate_var[3,T_ind] = (1 - ψ_B + ψ_B*ω)*((L-L_default) - (1+r_d)*D)
+        end
         # variables.aggregate_var[3,T_ind] = variables.aggregate_var[1,T_ind] - variables.aggregate_var[2,T_ind]
 
         # asset to debt ratio (or loan to deposit ratio)
@@ -784,9 +800,27 @@ function solve_func_MIT!(
 end
 
 @load "optimal_values.bson" Vss V_repayss V_defautlss qss μss Lss Dss Nss αss λss Λss
-
 parameters = para_func(; λ = λss)
-parameters_MIT = para_func_MIT(parameters; σ_z = 0.01)
+parameters_MIT = para_func_MIT(parameters; σ_z = 0.00)
 variables = var_func_MIT(parameters, parameters_MIT)
 
 # solve_func_MIT!(variables, parameters, parameters_MIT)
+
+New_guess = Δ*variables.aggregate_var[5,:] + (1-Δ)*variables.LN_guess;
+plot([variables.LN_guess, variables.aggregate_var[5,:], New_guess],
+     label = ["Initial" "Simulated" "Updated"],
+     legend = :bottomright,
+     lw = 2)
+
+L_per = ((variables.aggregate_var[1,:] .- variables.aggregate_var[1,end]) ./ variables.aggregate_var[1,end])*100
+D_per = ((variables.aggregate_var[2,:] .- variables.aggregate_var[2,end]) ./ variables.aggregate_var[2,end])*100
+N_per = ((variables.aggregate_var[3,:] .- variables.aggregate_var[3,end]) ./ variables.aggregate_var[3,end])*100
+plot([L_per, D_per, N_per],
+     label = ["Loans" "Deposits" "Net Worth"],
+     lw = 2)
+
+N_diff = variables.aggregate_var[1,:] .- variables.aggregate_var[2,:]
+plot([variables.aggregate_var[3,:], N_diff],
+     label = ["true" "difference"],
+     legend = :bottomright,
+     lw = 2)

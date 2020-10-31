@@ -8,11 +8,12 @@ using Plots
 using PrettyTables
 using Roots
 using Optim
-using Calculus
+using Calculus: derivative
 using Distributions
 using SparseArrays
 using BSON: @save, @load
 using UnicodePlots: spy
+using Expectations
 
 function para_func(;
     ψ_B::Real = 0.80,           # bank's survival rate
@@ -450,7 +451,8 @@ function density_func!(
         variables.μ .= 0.0
         μ_temp = zeros(a_size_μ, e_size, ν_size, e_size*ν_size)
 
-        Threads.@threads for x_i in 1:x_size
+        # Threads.@threads
+        for x_i in 1:x_size
 
             e_i, ν_i = x_ind[x_i,:]
 
@@ -633,7 +635,6 @@ solve_targeted(x) = solve_func!(var_func(para_targeted(x)), para_targeted(x))
 λ_optimal = find_zero(solve_targeted, (0.04987767453057565, 0.05), Bisection())
 =#
 
-#=
 λ_optimal = 0.04988090645870582
 parameters = para_func(; λ = λ_optimal)
 variables = var_func(parameters)
@@ -653,7 +654,6 @@ Nss = variables.aggregate_var[3]
 Λss = parameters.Λ
 
 @save "optimal_values.bson" Vss V_repayss V_defautlss qss μss Lss Dss Nss αss λss Λss
-=#
 
 #=========================================================#
 # Comparison between with and without financial frictions #

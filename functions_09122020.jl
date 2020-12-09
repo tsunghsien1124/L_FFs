@@ -4,18 +4,18 @@ function para_func(;
     η::Real = 0.40,             # garnishment rate
     z::Real = 0.00,             # aggregate endowment shock
     r_f::Real = 0.03,           # risk-free saving rate
-    ψ::Real = 4.80,             # upper bound of leverage ratio
+    ψ::Real = 5.00,             # upper bound of leverage ratio
     λ::Real = 0.02,             # multiplier of incentive constraint
     ω::Real = 0.20,             # capital injection rate
     e_ρ::Real = 0.90,           # AR(1) of endowment shock
     e_σ::Real = 0.15,           # s.d. of endowment shock
     e_size::Integer = 9,        # no. of endowment shock
-    ν_s::Real = 0.80,           # scale of patience
-    ν_p::Real = 0.10,           # probability of patience
+    ν_s::Real = 0.75,           # scale of patience
+    ν_p::Real = 0.25,           # probability of patience
     ν_size::Integer = 2,        # no. of preference shock
     a_min::Real = -1.00,        # min of asset holding
     a_max::Real = 50.0,         # max of asset holding
-    a_size_neg::Integer = 401,  # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 101,  # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 21,   # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,      # curvature of the positive asset gridpoints
     μ_scale::Integer = 10       # scale governing the number of grids in computing density
@@ -47,7 +47,7 @@ function para_func(;
     a_ind_zero = findall(iszero,a_grid)[]
 
     # asset holding grid for μ
-    a_size_neg_μ = convert(Int, (a_size_neg-1)*μ_scale+1)
+    a_size_neg_μ = convert(Int, a_size_neg)
     a_grid_neg_μ = collect(range(a_min, 0.0, length = a_size_neg_μ))
     a_size_pos_μ = convert(Int, (a_size_pos-1)*μ_scale+1)
     a_grid_pos_μ = collect(range(0.0, a_max, length = a_size_pos_μ))
@@ -95,7 +95,7 @@ function var_func(
     @unpack a_size, a_size_neg, a_size_μ, e_size, ν_size, r_f, λ = parameters
 
     if load_initial_values == 1
-        @load "07112020_initial_values.bson" V q μ
+        @load "09122020_initial_values.bson" V q μ
 
         # define value functions
         V_nd = zeros(a_size, e_size, ν_size)
@@ -123,7 +123,7 @@ function var_func(
     end
 
     # define aggregate variables
-    aggregate_var = zeros(6)
+    aggregate_var = zeros(8)
 
     # return outputs
     variables = MutableVariables(V, V_nd, V_d,
@@ -474,31 +474,34 @@ function aggregate_func!(
         for a_μ_i in 1:a_size_μ
             a_μ = a_grid_μ[a_μ_i]
 
-            # total loans and deposits
             if policy_a_itp(a_μ) < 0.0
+                # total loans
                 variables.aggregate_var[1] += (1.0-policy_d_itp(a_μ)) * -qa_itp(policy_a_itp(a_μ)) * variables.μ[a_μ_i,e_i,ν_i]
+                # debt-to-earings ratio
+                variables.aggregate_var[2] += (1.0-policy_d_itp(a_μ)) * -qa_itp(policy_a_itp(a_μ)) * variables.μ[a_μ_i,e_i,ν_i] / exp(e_grid[e_i])
             else
-                variables.aggregate_var[2] += (1.0-policy_d_itp(a_μ)) * qa_itp(policy_a_itp(a_μ)) * variables.μ[a_μ_i,e_i,ν_i]
+                # total deposits
+                variables.aggregate_var[3] += (1.0-policy_d_itp(a_μ)) * qa_itp(policy_a_itp(a_μ)) * variables.μ[a_μ_i,e_i,ν_i]
             end
-
-            # share of defaulters
-            variables.aggregate_var[3] += policy_d_itp(a_μ)*variables.μ[a_μ_i,e_i,ν_i]
 
             # net worth
-            # variables.aggregate_var[4] = ω*(1.0+r_f)*(1.0+λ)*variables.aggregate_var[1]
+            variables.aggregate_var[4] = variables.aggregate_var[1] - variables.aggregate_var[3]
             if a_μ < 0.0
-                variables.aggregate_var[4] += ω * (1.0-policy_d_itp(a_μ)) * (-a_μ) * variables.μ[a_μ_i,e_i,ν_i]
+                variables.aggregate_var[5] += (1.0-policy_d_itp(a_μ)) * (-a_μ) * variables.μ[a_μ_i,e_i,ν_i]
+            else
+                variables.aggregate_var[5] -= (1+r_f) * a_μ * variables.μ[a_μ_i,e_i,ν_i]
             end
 
-            # debt to earnings
-            if policy_a_itp(a_μ) < 0.0
-                variables.aggregate_var[6] += (1.0-policy_d_itp(a_μ)) * -qa_itp(policy_a_itp(a_μ)) * variables.μ[a_μ_i,e_i,ν_i] / exp(e_grid[e_i])
-            end
+            # capital injection ratio
+            variables.aggregate_var[6] = variables.aggregate_var[4]/variables.aggregate_var[5]
+
+            # share of defaulters
+            variables.aggregate_var[7] += policy_d_itp(a_μ)*variables.μ[a_μ_i,e_i,ν_i]
         end
     end
 
     # leverage ratio
-    variables.aggregate_var[5] = variables.aggregate_var[1] / variables.aggregate_var[4]
+    variables.aggregate_var[8] = variables.aggregate_var[1] / variables.aggregate_var[4]
 end
 
 function solve_func!(
@@ -518,12 +521,12 @@ function solve_func!(
     # compute aggregate variables
     aggregate_func!(variables, parameters)
 
-    ED = variables.aggregate_var[5] - parameters.ψ
+    ED = variables.aggregate_var[1] - parameters.ψ*variables.aggregate_var[4]
 
-    data_spec = Any[#=1=# "Multiplier"                  parameters.λ;
-                    #=2=# "Leverage Ratio (Demand)"     variables.aggregate_var[5];
-                    #=3=# "Leverage Ratio (Supply)"     parameters.ψ;
-                    #=4=# "Difference"                  ED]
+    data_spec = Any[#=1=# "Multiplier"            parameters.λ;
+                    #=2=# "Total Loans (LHS)"     variables.aggregate_var[1];
+                    #=3=# "Total Loans (RHS)"     parameters.ψ*variables.aggregate_var[4];
+                    #=4=# "Difference"            ED]
 
     pretty_table(data_spec, ["Name", "Value"];
                  alignment=[:l,:r],
@@ -534,7 +537,7 @@ function solve_func!(
     V = variables.V
     q = variables.q
     μ = variables.μ
-    @save "07112020_initial_values.bson" V q μ
+    @save "09122020_initial_values.bson" V q μ
 
     return ED
 end

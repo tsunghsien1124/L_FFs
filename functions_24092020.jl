@@ -118,7 +118,7 @@ end
 
 function var_func(
     parameters::NamedTuple;
-    lond_initial_values::Integer = 1
+    lond_initial_values::Integer = 0
     )
     #------------------------------------------------------------#
     # construct a mutable object containing endogenous variables #

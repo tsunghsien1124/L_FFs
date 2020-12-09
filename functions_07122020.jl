@@ -3,7 +3,7 @@ function para_func(;
     σ::Real = 2.00,             # CRRA coefficient
     η::Real = 0.40,             # garnishment rate
     z::Real = 0.00,             # aggregate endowment shock
-    r_f::Real = 0.03,           # risk-free saving rate
+    r_f::Real = 0.02,           # risk-free saving rate
     ψ::Real = 4.80,             # upper bound of leverage ratio
     λ::Real = 0.02,             # multiplier of incentive constraint
     ω::Real = 0.20,             # capital injection rate
@@ -15,7 +15,7 @@ function para_func(;
     ν_size::Integer = 2,        # no. of preference shock
     a_min::Real = -1.00,        # min of asset holding
     a_max::Real = 50.0,         # max of asset holding
-    a_size_neg::Integer = 401,  # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 101,  # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 21,   # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,      # curvature of the positive asset gridpoints
     μ_scale::Integer = 10       # scale governing the number of grids in computing density
@@ -47,7 +47,7 @@ function para_func(;
     a_ind_zero = findall(iszero,a_grid)[]
 
     # asset holding grid for μ
-    a_size_neg_μ = convert(Int, (a_size_neg-1)*μ_scale+1)
+    a_size_neg_μ = convert(Int, a_size_neg)
     a_grid_neg_μ = collect(range(a_min, 0.0, length = a_size_neg_μ))
     a_size_pos_μ = convert(Int, (a_size_pos-1)*μ_scale+1)
     a_grid_pos_μ = collect(range(0.0, a_max, length = a_size_pos_μ))
@@ -123,7 +123,7 @@ function var_func(
     end
 
     # define aggregate variables
-    aggregate_var = zeros(6)
+    aggregate_var = zeros(5)
 
     # return outputs
     variables = MutableVariables(V, V_nd, V_d,
@@ -176,70 +176,39 @@ function value_func!(
         qa = [q.*a_grid_neg; a_grid_pos[2:end]./(1.0+r_f)]
         qa_itp = Akima(a_grid, qa)
 
-        # Search initial value with discrete gridpoints
-        qa_ind = argmin(qa)
-
-        # set up objective function and its gradient
-        object_rbl(a_p) = qa_itp(a_p[1])
-        function gradient_rbl!(G, a_p)
-            G[1] = derivative(object_rbl, a_p[1])
-        end
-
-        # make sure the initial value is not on the boundaries
-        if a_grid[qa_ind] <= a_grid[1]
-            initial = a_grid[1] + 10^(-6)
-        else
-            initial = a_grid[qa_ind]
-        end
-
-        # find the risky borrowing limit
-        # inner_optimizer = GradientDescent(linesearch = LineSearches.BackTracking())
-        inner_optimizer = GradientDescent()
-        res_rbl = optimize(object_rbl, gradient_rbl!,
-                           [a_grid[1]], [a_grid[a_ind_zero]],
-                           [initial],
-                           Fminbox(inner_optimizer))
-        rbl = Optim.minimizer(res_rbl)[]
-
         Threads.@threads for a_i in 1:a_size
             a = a_grid[a_i]
             CoH = exp(z+e) + a
 
-            if CoH - qa_itp(rbl) >= 0.0
-                # Search initial value with discrete gridpoints
-                V_all = u_func.(CoH .- qa, σ) .+ V_hat
-                V_max_ind = argmax(V_all)
+            # Search initial value with discrete gridpoints
+            V_all = u_func.(CoH .- qa, σ) .+ V_hat
+            V_max_ind = argmax(V_all)
 
-                # set up objective function and its gradient
-                object_nd(a_p) = -(u_func(CoH - qa_itp(a_p[1]), σ) + V_hat_itp(a_p[1]))
-                function gradient_nd!(G, a_p)
-                    G[1] = derivative(object_nd, a_p[1])
-                end
-
-                # make sure the initial value is not on the boundaries
-                if a_grid[V_max_ind] >= CoH
-                    initial = CoH - 10^(-6)
-                elseif a_grid[V_max_ind] <= rbl
-                    initial = rbl + 10^(-6)
-                else
-                    initial = a_grid[V_max_ind]
-                end
-
-                # find the optimal asset holding
-                res_nd = optimize(object_nd, gradient_nd!,
-                                  # [rbl], [CoH],
-                                  [a_grid[1]], [CoH],
-                                  [initial],
-                                  Fminbox(inner_optimizer))
-
-                # record non-defaulting value funtion
-                variables.V_nd[a_i,e_i,ν_i] = -Optim.minimum(res_nd)
-                variables.policy_a[a_i,e_i,ν_i] = Optim.minimizer(res_nd)[]
-            else
-                # record non-defaulting value funtion
-                variables.V_nd[a_i,e_i,ν_i] = u_func(CoH - qa_itp(rbl), σ) + V_hat_itp(rbl)
-                variables.policy_a[a_i,e_i,ν_i] = rbl
+            # set up objective function and its gradient
+            object_nd(a_p) = -(u_func(CoH - qa_itp(a_p[1]), σ) + V_hat_itp(a_p[1]))
+            function gradient_nd!(G, a_p)
+                G[1] = derivative(object_nd, a_p[1])
             end
+
+            # make sure the initial value is not on the boundaries
+            if a_grid[V_max_ind] >= CoH
+                initial = CoH - 10^(-6)
+            elseif a_grid[V_max_ind] <= a_grid[1]
+                initial = a_grid[1] + 10^(-6)
+            else
+                initial = a_grid[V_max_ind]
+            end
+
+            # find the optimal asset holding
+            inner_optimizer = GradientDescent()
+            res_nd = optimize(object_nd, gradient_nd!,
+                              [a_grid[1]], [CoH],
+                              [initial],
+                              Fminbox(inner_optimizer))
+
+            # record non-defaulting value funtion
+            variables.V_nd[a_i,e_i,ν_i] = -Optim.minimum(res_nd)
+            variables.policy_a[a_i,e_i,ν_i] = Optim.minimizer(res_nd)[]
 
             # determine value function
             if variables.V_d[e_i,ν_i] > variables.V_nd[a_i,e_i,ν_i]
@@ -315,13 +284,13 @@ function price_func!(
                 repayment = ν_p*(1.0-default_prob_1) + (1.0-ν_p)*(1.0-default_prob_2)
 
                 # compute garnishment
-                # garnishment_1 = cdf(dist, (e_p_thres_1-(e_ρ*e+e_σ^2))/e_σ)
-                # garnishment_2 = cdf(dist, (e_p_thres_2-(e_ρ*e+e_σ^2))/e_σ)
-                # garnishment = (η/-a_grid_neg[a_p_i])*exp(e_ρ*e + (e_σ^2/2.0))*(ν_p*garnishment_1 + (1.0-ν_p)*garnishment_2)
+                garnishment_1 = cdf(dist, (e_p_thres_1-(e_ρ*e+e_σ^2))/e_σ)
+                garnishment_2 = cdf(dist, (e_p_thres_2-(e_ρ*e+e_σ^2))/e_σ)
+                garnishment = (η/-a_grid_neg[a_p_i])*exp(e_ρ*e + (e_σ^2/2.0))*(ν_p*garnishment_1 + (1.0-ν_p)*garnishment_2)
 
                 # update bond price
-                # q_update[a_p_i,e_i] = clamp(repayment + garnishment, 0.0, 1.0) / ((1.0+r_f)*(1.0+λ))
-                q_update[a_p_i,e_i] = clamp(repayment, 0.0, 1.0) / ((1.0+r_f)*(1.0+λ))
+                q_update[a_p_i,e_i] = clamp(repayment + garnishment, 0.0, 1.0) / ((1.0+r_f)*(1.0+λ))
+                # q_update[a_p_i,e_i] = clamp(repayment, 0.0, 1.0) / ((1.0+r_f)*(1.0+λ))
             end
         end
     end
@@ -453,7 +422,7 @@ function aggregate_func!(
     compute aggregate variables
     """
 
-    @unpack x_size, x_ind, e_size, e_grid, ν_size, a_grid, a_grid_neg, a_grid_pos = parameters
+    @unpack x_size, x_ind, e_size, ν_size, a_grid, a_grid_neg, a_grid_pos = parameters
     @unpack a_grid_μ, a_size_μ, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_size_pos_μ = parameters
     @unpack r_f, λ, ω = parameters
 
@@ -485,15 +454,10 @@ function aggregate_func!(
             variables.aggregate_var[3] += policy_d_itp(a_μ)*variables.μ[a_μ_i,e_i,ν_i]
 
             # net worth
-            # variables.aggregate_var[4] = ω*(1.0+r_f)*(1.0+λ)*variables.aggregate_var[1]
-            if a_μ < 0.0
-                variables.aggregate_var[4] += ω * (1.0-policy_d_itp(a_μ)) * (-a_μ) * variables.μ[a_μ_i,e_i,ν_i]
-            end
-
-            # debt to earnings
-            if policy_a_itp(a_μ) < 0.0
-                variables.aggregate_var[6] += (1.0-policy_d_itp(a_μ)) * -qa_itp(policy_a_itp(a_μ)) * variables.μ[a_μ_i,e_i,ν_i] / exp(e_grid[e_i])
-            end
+            variables.aggregate_var[4] = ω*(1.0+r_f)*(1.0+λ)*variables.aggregate_var[1]
+            # if a_μ < 0.0
+            #     variables.aggregate_var[4] += ω * (1.0-policy_d_itp(a_μ)) * (-a_μ) * variables.μ[a_μ_i,e_i,ν_i]
+            # end
         end
     end
 

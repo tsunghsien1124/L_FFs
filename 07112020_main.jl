@@ -1,13 +1,13 @@
 include("packages.jl")
-include("functions_07112020.jl")
-include("functions_07112020_MIT.jl")
+include("functions_09122020.jl")
+# include("functions_07112020_MIT.jl")
 
 #==============================#
 # solve the steady-state value #
 #==============================#
-λ_optimal = 0.02160039620763443
+λ_optimal = 0.02
 println("Running Julia with $(Threads.nthreads()) threads...")
-parameters = para_func(; λ = λ_optimal)
+parameters = para_func(; a_min = -1.00, η = 0.40, λ = λ_optimal)
 variables = var_func(parameters)
 solve_func!(variables, parameters)
 
@@ -43,16 +43,15 @@ pretty_table(data_spec, ["Name", "Value"];
 # plot(parameters.a_grid_neg, variables.policy_d[1:parameters.a_size_neg,:,1])
 # plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg,:,1])
 
-#=
 parameters = para_func()
 para_targeted(x) = para_func(; λ = x)
 solve_targeted(x) = solve_func!(var_func(para_targeted(x)), para_targeted(x))
-λ_optimal = find_zero(solve_targeted, (0.021600396208, 0.021600396287), Bisection())
-=#
+λ_optimal = find_zero(solve_targeted, (0.01, 0.02), Bisection())
 
 #=================================#
 # solve the model with MIT shocks #
 #=================================#
+#=
 parameters_MIT = para_func_MIT(parameters; ρ_z = 0.00, σ_z = 0.01, T_size = 80, time_varying_volatility = 0)
 variables_MIT = var_func_MIT(λ_optimal, variables, parameters, parameters_MIT)
 solve_func_MIT!(variables_MIT, parameters, parameters_MIT)
@@ -62,3 +61,16 @@ plot([variables_MIT.λ_guess, variables_MIT.aggregate_var[6,:], New_guess],
      label = ["Initial" "Simulated" "Updated"],
      legend = :bottomright,
      lw = 2)
+=#
+
+η_grid = collect(0.36:0.02:0.44)
+η_size = length(η_grid)
+a_min_grid = collect(-0.92:-0.04:-1.08)
+a_min_size = length(a_min_grid)
+results_NFF = zeros(η_size,6)
+for η_i in 1:η_size
+    parameters = para_func(; a_min = a_min_grid[η_i], η = η_grid[η_i], λ = 0.0)
+    variables = var_func(parameters)
+    solve_func!(variables, parameters)
+    results_NFF[η_i,:] .= variables.aggregate_var
+end

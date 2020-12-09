@@ -2,8 +2,9 @@ function para_func(;
     β::Real = 0.96,             # discount factor (households)
     σ::Real = 2.00,             # CRRA coefficient
     η::Real = 0.40,             # garnishment rate
+    ξ::Real = 0.10,             # recovery rate
     z::Real = 0.00,             # aggregate endowment shock
-    r_f::Real = 0.03,           # risk-free saving rate
+    r_f::Real = 0.02,           # risk-free saving rate
     ψ::Real = 4.80,             # upper bound of leverage ratio
     λ::Real = 0.02,             # multiplier of incentive constraint
     ω::Real = 0.20,             # capital injection rate
@@ -15,7 +16,7 @@ function para_func(;
     ν_size::Integer = 2,        # no. of preference shock
     a_min::Real = -1.00,        # min of asset holding
     a_max::Real = 50.0,         # max of asset holding
-    a_size_neg::Integer = 401,  # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 101,  # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 21,   # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,      # curvature of the positive asset gridpoints
     μ_scale::Integer = 10       # scale governing the number of grids in computing density
@@ -47,7 +48,7 @@ function para_func(;
     a_ind_zero = findall(iszero,a_grid)[]
 
     # asset holding grid for μ
-    a_size_neg_μ = convert(Int, (a_size_neg-1)*μ_scale+1)
+    a_size_neg_μ = convert(Int, a_size_neg)
     a_grid_neg_μ = collect(range(a_min, 0.0, length = a_size_neg_μ))
     a_size_pos_μ = convert(Int, (a_size_pos-1)*μ_scale+1)
     a_grid_pos_μ = collect(range(0.0, a_max, length = a_size_pos_μ))
@@ -56,7 +57,7 @@ function para_func(;
     a_ind_zero_μ = findall(iszero,a_grid_μ)[]
 
     # return values
-    return (β = β, σ = σ, η = η, z = z, r_f = r_f, ψ = ψ, λ = λ, ω = ω,
+    return (β = β, σ = σ, η = η, ξ = ξ, z = z, r_f = r_f, ψ = ψ, λ = λ, ω = ω,
             a_degree = a_degree, μ_scale = μ_scale,
             e_ρ = e_ρ, e_σ = e_σ, e_size = e_size, e_Γ = e_Γ, e_grid = e_grid,
             ν_s = ν_s, ν_p = ν_p, ν_size = ν_size, ν_Γ = ν_Γ, ν_grid = ν_grid,
@@ -75,7 +76,7 @@ mutable struct MutableVariables
     """
     V::Array{Float64,3}
     V_nd::Array{Float64,3}
-    V_d::Array{Float64,2}
+    V_d::Array{Float64,3}
     policy_a::Array{Float64,3}
     policy_d::Array{Float64,3}
     q::Array{Float64,2}
@@ -95,11 +96,11 @@ function var_func(
     @unpack a_size, a_size_neg, a_size_μ, e_size, ν_size, r_f, λ = parameters
 
     if load_initial_values == 1
-        @load "07112020_initial_values.bson" V q μ
+        @load "07122020_initial_values.bson" V q μ
 
         # define value functions
         V_nd = zeros(a_size, e_size, ν_size)
-        V_d = zeros(e_size, ν_size)
+        V_d = zeros(a_size_neg, e_size, ν_size)
 
         # define policy functions
         policy_a = zeros(a_size, e_size, ν_size)
@@ -108,7 +109,7 @@ function var_func(
         # define value functions
         V = zeros(a_size, e_size, ν_size)
         V_nd = zeros(a_size, e_size, ν_size)
-        V_d = zeros(e_size, ν_size)
+        V_d = zeros(a_size_neg, e_size, ν_size)
 
         # define policy functions
         policy_a = zeros(a_size, e_size, ν_size)
@@ -123,7 +124,7 @@ function var_func(
     end
 
     # define aggregate variables
-    aggregate_var = zeros(6)
+    aggregate_var = zeros(5)
 
     # return outputs
     variables = MutableVariables(V, V_nd, V_d,
@@ -154,9 +155,9 @@ function value_func!(
     update value functions
     """
 
-    @unpack β, σ, η, z, r_f = parameters
-    @unpack a_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero = parameters
-    @unpack x_size, x_grid, x_ind, ν_Γ, e_Γ = parameters
+    @unpack β, σ, η, ξ, z, r_f = parameters
+    @unpack a_size, a_grid, a_size_neg, a_grid_neg, a_grid_pos, a_ind_zero = parameters
+    @unpack x_size, x_grid, x_ind, ν_Γ, e_Γ, e_grid = parameters
 
     Threads.@threads for x_i in 1:x_size
 
@@ -167,9 +168,6 @@ function value_func!(
         V_expt_p = (ν_Γ[ν_i,1]*V_p[:,:,1] + ν_Γ[ν_i,2]*V_p[:,:,2])*e_Γ[e_i,:]
         V_hat = ν*β*V_expt_p
         V_hat_itp = Akima(a_grid, V_hat)
-
-        # compute defaulting value
-        variables.V_d[e_i,ν_i] = u_func((1-η)*exp(z+e), σ) + V_hat[a_ind_zero]
 
         # compute non-defaulting value
         q = q_p[:,e_i]
@@ -227,8 +225,7 @@ function value_func!(
 
                 # find the optimal asset holding
                 res_nd = optimize(object_nd, gradient_nd!,
-                                  # [rbl], [CoH],
-                                  [a_grid[1]], [CoH],
+                                  [rbl], [CoH],
                                   [initial],
                                   Fminbox(inner_optimizer))
 
@@ -240,14 +237,19 @@ function value_func!(
                 variables.V_nd[a_i,e_i,ν_i] = u_func(CoH - qa_itp(rbl), σ) + V_hat_itp(rbl)
                 variables.policy_a[a_i,e_i,ν_i] = rbl
             end
+            variables.V[a_i,e_i,ν_i] = variables.V_nd[a_i,e_i,ν_i]
+        end
+
+        # compute defaulting value
+        Threads.@threads for a_i in 1:a_size_neg
+            a = a_grid_neg[a_i]
+            CoH = max((1-η)*exp(z+e)+ξ*a, 0.1*e_grid[1])
+            variables.V_d[a_i,e_i,ν_i] = u_func(CoH, σ) + V_hat[a_ind_zero]
 
             # determine value function
-            if variables.V_d[e_i,ν_i] > variables.V_nd[a_i,e_i,ν_i]
-                variables.V[a_i,e_i,ν_i] = variables.V_d[e_i,ν_i]
+            if variables.V_d[a_i,e_i,ν_i] > variables.V_nd[a_i,e_i,ν_i]
+                variables.V[a_i,e_i,ν_i] = variables.V_d[a_i,e_i,ν_i]
                 variables.policy_d[a_i,e_i,ν_i] = 1.0
-            else
-                variables.V[a_i,e_i,ν_i] = variables.V_nd[a_i,e_i,ν_i]
-                variables.policy_d[a_i,e_i,ν_i] = 0.0
             end
         end
     end
@@ -263,10 +265,6 @@ function find_threshold_func(
     """
 
     V_diff = V_nd .- V_d
-    V_nd_itp = Akima(e_grid, V_nd)
-    V_d_itp = Akima(e_grid, V_d)
-    V_diff_itp(e) = V_nd_itp(e) - V_d_itp(e)
-
     if all(V_diff .> 0.0)
         e_p_thres = -Inf
     elseif all(V_diff .< 0.0)
@@ -274,6 +272,7 @@ function find_threshold_func(
     else
         e_p_lower = e_grid[findall(V_diff .<= 0.0)[end]]
         e_p_upper = e_grid[findall(V_diff .>= 0.0)[1]]
+        V_diff_itp = Akima(e_grid, V_diff)
         e_p_thres = find_zero(e_p->V_diff_itp(e_p), (e_p_lower, e_p_upper), Bisection())
     end
     return e_p_thres
@@ -288,7 +287,7 @@ function price_func!(
     update price function
     """
 
-    @unpack r_f, λ, η, a_grid_neg, a_size_neg, e_size, e_grid, e_ρ, e_σ, ν_p = parameters
+    @unpack r_f, λ, η, ξ, a_grid_neg, a_size_neg, e_size, e_grid, e_ρ, e_σ, ν_p = parameters
 
     # parameter controling update speed
     Δ = 0.7
@@ -299,8 +298,8 @@ function price_func!(
     for a_p_i in 1:a_size_neg
 
         # compute defaulting threshold for (im)patient households
-        e_p_thres_1 = find_threshold_func(variables.V_nd[a_p_i,:,1], variables.V_d[:,1], e_grid)
-        e_p_thres_2 = find_threshold_func(variables.V_nd[a_p_i,:,2], variables.V_d[:,2], e_grid)
+        e_p_thres_1 = find_threshold_func(variables.V_nd[a_p_i,:,1], variables.V_d[a_p_i,:,1], e_grid)
+        e_p_thres_2 = find_threshold_func(variables.V_nd[a_p_i,:,2], variables.V_d[a_p_i,:,2], e_grid)
 
         if a_p_i == a_size_neg
             q_update[a_p_i,:] .= 1.0 / ((1.0+r_f)*(1.0+λ))
@@ -321,7 +320,8 @@ function price_func!(
 
                 # update bond price
                 # q_update[a_p_i,e_i] = clamp(repayment + garnishment, 0.0, 1.0) / ((1.0+r_f)*(1.0+λ))
-                q_update[a_p_i,e_i] = clamp(repayment, 0.0, 1.0) / ((1.0+r_f)*(1.0+λ))
+                repayment = clamp(repayment, 0.0, 1.0)
+                q_update[a_p_i,e_i] = (repayment + (1-repayment)*ξ) / ((1.0+r_f)*(1.0+λ))
             end
         end
     end
@@ -453,7 +453,7 @@ function aggregate_func!(
     compute aggregate variables
     """
 
-    @unpack x_size, x_ind, e_size, e_grid, ν_size, a_grid, a_grid_neg, a_grid_pos = parameters
+    @unpack x_size, x_ind, e_size, ν_size, a_grid, a_grid_neg, a_grid_pos = parameters
     @unpack a_grid_μ, a_size_μ, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_size_pos_μ = parameters
     @unpack r_f, λ, ω = parameters
 
@@ -485,15 +485,10 @@ function aggregate_func!(
             variables.aggregate_var[3] += policy_d_itp(a_μ)*variables.μ[a_μ_i,e_i,ν_i]
 
             # net worth
-            # variables.aggregate_var[4] = ω*(1.0+r_f)*(1.0+λ)*variables.aggregate_var[1]
-            if a_μ < 0.0
-                variables.aggregate_var[4] += ω * (1.0-policy_d_itp(a_μ)) * (-a_μ) * variables.μ[a_μ_i,e_i,ν_i]
-            end
-
-            # debt to earnings
-            if policy_a_itp(a_μ) < 0.0
-                variables.aggregate_var[6] += (1.0-policy_d_itp(a_μ)) * -qa_itp(policy_a_itp(a_μ)) * variables.μ[a_μ_i,e_i,ν_i] / exp(e_grid[e_i])
-            end
+            variables.aggregate_var[4] = ω*(1.0+r_f)*(1.0+λ)*variables.aggregate_var[1]
+            # if a_μ < 0.0
+            #     variables.aggregate_var[4] += ω * (1.0-policy_d_itp(a_μ)) * (-a_μ) * variables.μ[a_μ_i,e_i,ν_i]
+            # end
         end
     end
 
@@ -534,7 +529,7 @@ function solve_func!(
     V = variables.V
     q = variables.q
     μ = variables.μ
-    @save "07112020_initial_values.bson" V q μ
+    @save "07122020_initial_values.bson" V q μ
 
     return ED
 end

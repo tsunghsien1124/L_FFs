@@ -31,3 +31,8 @@ d =  Akima(e_grid, variables.policy_d[a_p_i,:,1])
 dist = Normal(e_ρ*e, e_σ)
 f4(x) = (1-d(x))*pdf(dist, x)
 integral4, err4 = quadgk(x -> f4(x), -Inf, Inf, order=100, rtol=1E-10)
+
+using Main.FLOWMath: Akima, akima, interp2d
+q_itp(ap, e) = interp2d(akima, parameters.a_grid_neg, parameters.e_grid, variables.q, [ap], [e])[]
+
+variables.q

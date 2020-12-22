@@ -17,38 +17,40 @@ using Expectations
 using QuadGK: quadgk
 
 function para_func(;
-    β_H::Real = 0.94,           # discount factor (households)
-    β_B::Real = 0.90,           # discount factor (banks)
-    σ::Real = 2.0,              # CRRA coefficient
+    β_H::Real = 0.96,           # discount factor (households)
+    β_B::Real = 0.96,           # discount factor (banks)
+    σ::Real = 2.00,             # CRRA coefficient
     η::Real = 0.40,             # garnishment rate
     ξ_bar::Real = 0.1,          # upper bound of random utility cost
-    z::Real = 0.0,              # aggregate endowment uncertainty
-    r_f::Real = 0.08,           # risk-free saving rate
-    r_bar::Real = -0.50,        # rolling-over rate
-    ψ::Real = 0.80,             # bank's dividend policy
+    δ::Real = 0.08,             # depreciation rate
+    α::Real = 0.33,             # capital share
+    K2Y::Real = 3.0,            # capital to output ratio
+    ψ::Real = 0.95,             # bank's survival rate
     λ::Real = 0.00,             # multiplier of incentive constraint
-    θ::Real = 0.20,             # diverting fraction
-    e_ρ::Real = 0.90,           # AR(1) of endowment shock
-    e_σ::Real = 0.15,           # s.d. of endowment shock
-    e_size::Integer = 9,        # no. of endowment shock
-    ν_s::Real = 0.70,           # scale of patience
-    ν_p::Real = 0.30,           # probability of patience
-    ν_size::Integer = 2,        # no. of preference shock
-    a_min::Real = -2.5,         # min of asset holding
-    a_max::Real = 50.0,         # max of asset holding
-    a_size_neg::Integer = 251,  # number of grid of negative asset holding for VFI
-    a_size_pos::Integer = 21,   # number of grid of positive asset holding for VFI
+    θ::Real = 0.40,             # diverting fraction
+    e_ρ::Real = 0.95,           # AR(1) of endowment shock
+    e_σ::Real = 0.10,           # s.d. of endowment shock
+    e_size::Integer = 9,        # number of endowment shock
+    ν_s::Real = 0.95,           # scale of patience
+    ν_p::Real = 0.10,           # probability of patience
+    ν_size::Integer = 2,        # number of preference shock
+    a_min::Real = -1.5,         # min of asset holding
+    a_max::Real = 150.0,        # max of asset holding
+    a_size_neg::Integer = 151,  # number of grid of negative asset holding for VFI
+    a_size_pos::Integer = 51,   # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,      # curvature of the positive asset gridpoints
-    μ_scale::Integer = 1        # scale governing the number of grids in computing density
+    μ_scale::Integer = 30       # scale governing the number of grids in computing density
     )
     """
     contruct an immutable object containg all paramters
     """
 
     # endowment shock
-    e_M = tauchen(e_size, e_ρ, e_σ, 0.0, 3)
-    e_Γ = e_M.p
-    e_grid = collect(e_M.state_values)
+    e_MC = tauchen(e_size, e_ρ, e_σ, 0.0, 3)
+    e_Γ = e_MC.p
+    e_grid = collect(e_MC.state_values)
+    e_SD = stationary_distributions(e_MC)[]
+    e_SS = sum(e_SD .* e_grid)
 
     # preference schock
     ν_grid = [ν_s, 1.0]
@@ -67,31 +69,33 @@ function para_func(;
     a_grid_pos = ((range(0.0, stop = a_size_pos-1, length = a_size_pos)/(a_size_pos-1)).^a_degree)*a_max
     a_grid = cat(a_grid_neg, a_grid_pos[2:end], dims = 1)
     a_size = length(a_grid)
-    a_ind_zero = findall(iszero,a_grid)[]
+    a_ind_zero = findall(iszero, a_grid)[]
 
     # asset holding grid for μ
-    a_size_neg_μ = convert(Int, (a_size_neg-1)*μ_scale+1)
+    # a_size_neg_μ = convert(Int, (a_size_neg-1)*μ_scale+1)
+    a_size_neg_μ = convert(Int, a_size_neg)
     a_grid_neg_μ = collect(range(a_min, 0.0, length = a_size_neg_μ))
     a_size_pos_μ = convert(Int, (a_size_pos-1)*μ_scale+1)
     a_grid_pos_μ = collect(range(0.0, a_max, length = a_size_pos_μ))
     a_grid_μ = cat(a_grid_neg_μ, a_grid_pos_μ[2:end], dims = 1)
     a_size_μ = length(a_grid_μ)
-    a_ind_zero_μ = findall(iszero,a_grid_μ)[]
+    a_ind_zero_μ = findall(iszero, a_grid_μ)[]
 
-    # solve the steady-state values of banking variables
-    # λ = 1.0 - (β_B*ψ*(1+r_f))^(1/2)
-    α = (β_B*(1.0-ψ)*(1.0+r_f)) / ((1.0-λ)-β_B*ψ*(1.0+r_f))
-    Λ = β_B*(1.0-ψ+ψ*α)
+    # compute equilibrium prices and quantities
+    i = (α/K2Y) - δ
+    γ = (β_B*(1.0-ψ)*(1.0+i)) / ((1.0-λ)-β_B*ψ*(1.0+i))
+    Λ = β_B*(1.0-ψ+ψ*γ)
+    LR = γ/θ
+    AD = LR/(LR-1.0)
     r_lp = λ*θ/Λ
-    LR = α/θ
-    AD = LR/(LR-1)
-    ω = ((r_lp*LR+(1+r_f))^(-1)-ψ)/(1-ψ)
+    r_k = i + r_lp
+    K = exp(e_SS)*(α/(r_k+δ))^(1.0/(1.0-α))
+    w = (1.0-α)*(K^α)*(exp(e_SS)^(-α))
 
     # return values
-    return (β_H = β_H, β_B = β_B, σ = σ, η = η, ξ_bar = ξ_bar, z = z,
-            r_f = r_f, r_bar = r_bar,
-            ψ = ψ, λ = λ, θ = θ, a_degree = a_degree, μ_scale = μ_scale,
-            e_ρ = e_ρ, e_σ = e_σ, e_size = e_size, e_Γ = e_Γ, e_grid = e_grid,
+    return (β_H = β_H, β_B = β_B, σ = σ, η = η, ξ_bar = ξ_bar, δ = δ, α = α,
+            K2Y = K2Y, ψ = ψ, λ = λ, θ = θ, a_degree = a_degree, μ_scale = μ_scale,
+            e_ρ = e_ρ, e_σ = e_σ, e_size = e_size, e_Γ = e_Γ, e_grid = e_grid, e_SS = e_SS,
             ν_s = ν_s, ν_p = ν_p, ν_size = ν_size, ν_Γ = ν_Γ, ν_grid = ν_grid,
             x_Γ = x_Γ, x_grid = x_grid, x_ind = x_ind, x_size = x_size,
             a_grid = a_grid, a_grid_neg = a_grid_neg, a_grid_pos = a_grid_pos,
@@ -100,7 +104,7 @@ function para_func(;
             a_grid_μ = a_grid_μ, a_grid_neg_μ = a_grid_neg_μ, a_grid_pos_μ = a_grid_pos_μ,
             a_size_μ = a_size_μ, a_size_neg_μ = a_size_neg_μ, a_size_pos_μ = a_size_pos_μ,
             a_ind_zero_μ = a_ind_zero_μ,
-            α = α, Λ = Λ, r_lp = r_lp, LR = LR, AD = AD, ω = ω)
+            i = i, γ = γ, Λ = Λ, LR = LR, AD = AD, r_lp = r_lp, r_k = r_k, K = K, w = w)
 end
 
 mutable struct MutableVariables
@@ -109,8 +113,9 @@ mutable struct MutableVariables
     """
     V::Array{Float64,3}
     V_nd::Array{Float64,3}
-    V_d::Array{Float64,3}
+    V_d::Array{Float64,2}
     policy_a::Array{Float64,3}
+    policy_d::Array{Float64,3}
     q::Array{Float64,2}
     μ::Array{Float64,3}
     aggregate_var::Array{Float64,1}
@@ -125,28 +130,30 @@ function var_func(
     """
 
     # unpack parameters
-    @unpack a_size, a_size_neg, a_size_μ, e_size, ν_size, r_f, r_lp = parameters
+    @unpack a_size, a_size_neg, a_size_μ, e_size, ν_size, i, r_lp = parameters
 
     if load_initial_values == 1
-        @load "14122020_initial_values.bson" V q μ
+        @load "18122020_initial_values.bson" V q μ
 
         # define value functions
         V_nd = zeros(a_size, e_size, ν_size)
-        V_d = zeros(a_size_neg, e_size, ν_size)
+        V_d = zeros(e_size, ν_size)
 
         # define policy functions
         policy_a = zeros(a_size, e_size, ν_size)
+        policy_d = zeros(a_size, e_size, ν_size)
     else
         # define value functions
         V = zeros(a_size, e_size, ν_size)
         V_nd = zeros(a_size, e_size, ν_size)
-        V_d = zeros(a_size_neg, e_size, ν_size)
+        V_d = zeros(e_size, ν_size)
 
         # define policy functions
         policy_a = zeros(a_size, e_size, ν_size)
+        policy_d = zeros(a_size, e_size, ν_size)
 
         # define pricing function
-        q = ones(a_size_neg, e_size) ./ (1.0 + r_f + r_lp)
+        q = ones(a_size_neg, e_size) ./ (1.0 + i + r_lp)
 
         # define the type distribution and its transition matrix
         μ_size = a_size_μ*e_size*ν_size
@@ -157,11 +164,15 @@ function var_func(
     aggregate_var = zeros(5)
 
     # return outputs
-    variables = MutableVariables(V, V_nd, V_d, policy_a, q, μ, aggregate_var)
+    variables = MutableVariables(V, V_nd, V_d,
+                                 policy_a, policy_d,
+                                 q, μ, aggregate_var)
     return variables
 end
 
-function u_func(c::Real, σ::Real)
+function u_func(
+    c::Real,
+    σ::Real)
     """
     compute utility of CRRA utility function with coefficient σ
     """
@@ -183,13 +194,12 @@ function value_func!(
     update value functions
     """
 
-    @unpack β_H, σ, η, ξ_bar, z, r_f, r_bar = parameters
+    @unpack β_H, σ, η, ξ_bar, i, w = parameters
     @unpack a_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero = parameters
     @unpack x_size, x_grid, x_ind, ν_Γ, e_Γ = parameters
 
     Threads.@threads for x_i in 1:x_size
 
-        # extract idiosyncratic states
         e, ν = x_grid[x_i,:]
         e_i, ν_i = x_ind[x_i,:]
 
@@ -197,6 +207,9 @@ function value_func!(
         V_expt_p = (ν_Γ[ν_i,1]*V_p[:,:,1] + ν_Γ[ν_i,2]*V_p[:,:,2])*e_Γ[e_i,:]
         V_hat = (ν*β_H)*V_expt_p
         V_hat_itp = Akima(a_grid, V_hat)
+
+        # compute defaulting value
+        variables.V_d[e_i,ν_i] = u_func((1-η)*w*exp(e), σ) + V_hat[a_ind_zero]
 
         # compute non-defaulting value
         q = q_p[:,e_i]
@@ -224,25 +237,16 @@ function value_func!(
                            [a_grid[1]], [a_grid[a_ind_zero]],
                            [initial],
                            Fminbox(GradientDescent()))
-
         rbl = Optim.minimizer(res_rbl)[]
 
+        # compute non-defaulting value
         Threads.@threads for a_i in 1:a_size
 
-            # extract asset holdings and
             a = a_grid[a_i]
+            CoH = w*exp(e) + (1+i*(a>0))*a
 
-            # compute defaulting value
-            if a <= 0.0
-                a_adj = min(a+η*exp(z+e),0.0)*(1+r_bar)
-                variables.V_d[a_i,e_i,ν_i] = u_func((1-η)*exp(z+e), σ) + V_hat_itp(a_adj)
-            end
-
-            # compute cash on hands
-            CoH = exp(z+e) + (1+r_f*(a>0))*a
-
-            # compute non-defaulting value
             if CoH - qa_itp(rbl) >= 0.0
+
                 # Search initial value with discrete gridpoints
                 V_all = u_func.(CoH .- qa, σ) .+ V_hat
                 V_max_ind = argmax(V_all)
@@ -271,22 +275,23 @@ function value_func!(
                 # record results
                 variables.V_nd[a_i,e_i,ν_i] = -Optim.minimum(res_nd)
                 variables.policy_a[a_i,e_i,ν_i] = Optim.minimizer(res_nd)[]
+
             else
+
                 # record results
                 variables.V_nd[a_i,e_i,ν_i] = u_func(CoH - qa_itp(rbl), σ) + V_hat_itp(rbl)
                 variables.policy_a[a_i,e_i,ν_i] = rbl
             end
-
-            # compute cutoff, associated probability, and value function
-            if a <= 0.0
-                ξ_star = variables.V_d[a_i,e_i,ν_i] - variables.V_nd[a_i,e_i,ν_i]
-                ξ_star = clamp(ξ_star, 0.0, ξ_bar)
-                G_star = ξ_star / ξ_bar
-                variables.V[a_i,e_i,ν_i] = -(ξ_star^2)/(2.0*ξ_bar) + G_star*variables.V_d[a_i,e_i,ν_i] + (1.0 - G_star)*variables.V_nd[a_i,e_i,ν_i]
-            else
-                variables.V[a_i,e_i,ν_i] = variables.V_nd[a_i,e_i,ν_i]
-            end
         end
+
+        # compute cutoff
+        ξ_star = variables.V_d[e_i,ν_i] .- variables.V_nd[:,e_i,ν_i]
+        clamp!(ξ_star, 0.0, ξ_bar)
+        F_ξ_star = ξ_star ./ ξ_bar
+
+        # determine value function
+        variables.V[:,e_i,ν_i] .= -(ξ_star.^2)./(2.0*ξ_bar) .+ F_ξ_star.*variables.V_d[e_i,ν_i] .+ (1.0 .- F_ξ_star).*variables.V_nd[:,e_i,ν_i]
+        variables.policy_d[:,e_i,ν_i] .= F_ξ_star
     end
 end
 
@@ -295,19 +300,17 @@ function find_threshold_func(
     V_d::Array{Float64,1},
     e_grid::Array{Float64,1},
     cutoff_value::Real;
-    range::Real = 5.0
+    range::Real
     )
     """
     compute the threshold below which households file for bankruptcy
     """
 
-    # computet differences and interpolated function
     V_diff = V_nd .- V_d .+ cutoff_value
     V_nd_itp = Akima(e_grid, V_nd)
     V_d_itp = Akima(e_grid, V_d)
     V_diff_itp(x) = V_nd_itp(x) - V_d_itp(x) + cutoff_value
 
-    # compute threshold
     if all(V_diff .> 0.0)
         if V_diff_itp(-range) > 0.0
             e_p_thres = -range
@@ -332,82 +335,75 @@ end
 function price_func!(
     q_p::Array{Float64,2},
     variables::MutableVariables,
-    parameters::NamedTuple
+    parameters::NamedTuple;
+    Δ::Real = 0.7
     )
     """
     update price function
     """
 
-    @unpack z, η, ξ_bar, r_f, r_bar, r_lp = parameters
-    @unpack a_grid_neg, a_size_neg, e_size, e_grid, e_ρ, e_σ, ν_p = parameters
+    @unpack ξ_bar, i, r_lp, a_size_neg, e_size, e_grid, e_ρ, e_σ, ν_p = parameters
 
-    # parameter controling update speed
-    Δ = 0.7
+    # create the container
+    q_update = zeros(a_size_neg, e_size)
 
-    # create container
-    q_update = ones(a_size_neg, e_size) ./ (1.0+r_f+r_lp)
+    Threads.@threads for a_p_i in 1:a_size_neg
 
-    # interpolate the pricing function
-    q_itp(ap, e) = interp2d(akima, a_grid_neg, e_grid, q_p, [ap], [e])[]
-
-    Threads.@threads for a_p_i in 1:(a_size_neg-1)
-
-        # compute default thresholds
-        e_p_thres_zero_1   = find_threshold_func(variables.V_nd[a_p_i,:,1], variables.V_d[a_p_i,:,1], e_grid, 0.0)
-        e_p_thres_ξ_bar_1 = find_threshold_func(variables.V_nd[a_p_i,:,1], variables.V_d[a_p_i,:,1], e_grid, ξ_bar)
-        e_p_thres_zero_2   = find_threshold_func(variables.V_nd[a_p_i,:,2], variables.V_d[a_p_i,:,2], e_grid, 0.0)
-        e_p_thres_ξ_bar_2 = find_threshold_func(variables.V_nd[a_p_i,:,2], variables.V_d[a_p_i,:,2], e_grid, ξ_bar)
+        # compute defaulting threshold for (im)patient households
+        e_p_thres_ξ_bar_1 = find_threshold_func(variables.V_nd[a_p_i,:,1], variables.V_d[:,1], e_grid, ξ_bar, range = 20*e_σ)
+        e_p_thres_ξ_bar_2 = find_threshold_func(variables.V_nd[a_p_i,:,2], variables.V_d[:,2], e_grid, ξ_bar, range = 20*e_σ)
 
         # create default policy functions
-        V_d_1_itp = Akima(e_grid, variables.V_d[a_p_i,:,1])
         V_nd_1_itp = Akima(e_grid, variables.V_nd[a_p_i,:,1])
+        V_d_1_itp = Akima(e_grid, variables.V_d[:,1])
         V_diff_1_itp(x) = V_d_1_itp(x) - V_nd_1_itp(x)
         default_policy_1(x) = clamp(V_diff_1_itp(x), 0.0, ξ_bar) / ξ_bar
 
-        V_d_2_itp = Akima(e_grid, variables.V_d[a_p_i,:,2])
         V_nd_2_itp = Akima(e_grid, variables.V_nd[a_p_i,:,2])
+        V_d_2_itp = Akima(e_grid, variables.V_d[:,2])
         V_diff_2_itp(x) = V_d_2_itp(x) - V_nd_2_itp(x)
         default_policy_2(x) = clamp(V_diff_2_itp(x), 0.0, ξ_bar) / ξ_bar
 
         for e_i in 1:e_size
-
-            # extract current endowment state
             e = e_grid[e_i]
             dist = Normal(e_ρ*e, e_σ)
 
-            # extract asset holdings and
-            a_p = a_grid_neg[a_p_i]
-            a_p_adj(x) = min(a_p+η*exp(z+x),0.0)*(1+r_bar)
+            # compute default probability for (im)patient households
+            kernel_1(x) = (1-default_policy_1(x))*pdf(dist, x)
+            kernel_2(x) = (1-default_policy_2(x))*pdf(dist, x)
 
-            # compute repayment probability
-            kernel_repay_1(x) = (1 - default_policy_1(x))*pdf(dist, x)
-            kernel_repay_2(x) = (1 - default_policy_2(x))*pdf(dist, x)
-            repay_prob_1, err1 = quadgk(x -> kernel_repay_1(x), e_p_thres_ξ_bar_1, 5) # , order=100, rtol=1E-10
-            repay_prob_2, err2 = quadgk(x -> kernel_repay_2(x), e_p_thres_ξ_bar_2, 5)
+            if e_p_thres_ξ_bar_1 == Inf
+                repay_prob_1 = 0.0
+            elseif e_p_thres_ξ_bar_1 == -Inf
+                repay_prob_1 = 1.0
+            else
+                repay_prob_1, err1 = quadgk(x -> kernel_1(x), e_p_thres_ξ_bar_1, Inf) #, order=100, rtol=1E-10
+            end
+
+            if e_p_thres_ξ_bar_2 == Inf
+                repay_prob_2 = 0.0
+            elseif e_p_thres_ξ_bar_2 == -Inf
+                repay_prob_2 = 1.0
+            else
+                repay_prob_2, err2 = quadgk(x -> kernel_1(x), e_p_thres_ξ_bar_2, Inf) #, order=100, rtol=1E-10
+            end
+
             repay_prob = ν_p*repay_prob_1 + (1.0-ν_p)*repay_prob_2
 
-            # compute default probability
-            kernel_default_1(x) = (default_policy_1(x)*(q_itp(a_p_adj(x),x)*a_p_adj(x)/a_p))*pdf(dist, x)
-            kernel_default_2(x) = (default_policy_2(x)*(q_itp(a_p_adj(x),x)*a_p_adj(x)/a_p))*pdf(dist, x)
-            default_prob_1, err1 = quadgk(x -> kernel_default_1(x), -5, e_p_thres_zero_1)
-            default_prob_2, err2 = quadgk(x -> kernel_default_2(x), -5, e_p_thres_zero_2)
-            default_prob = ν_p*default_prob_1 + (1.0-ν_p)*default_prob_2
-
             # update bond price
-            q_update[a_p_i,e_i] = (default_prob + repay_prob) / (1.0+r_f+r_lp)
-
+            q_update[a_p_i,e_i] = clamp(repay_prob, 0.0, 1.0) / (1.0 + i + r_lp)
         end
     end
 
-    clamp!(q_update, 0.0, 1.0/(1.0+r_f+r_lp))
+    # clamp!(q_update, 0.0, 1.0/(1.0 + i + r_lp))
     variables.q = Δ*q_update + (1-Δ)*q_p
 end
 
 function household_func!(
     variables::MutableVariables,
     parameters::NamedTuple;
-    tol = tol_h,
-    iter_max = iter_max
+    tol::Real = tol_h,
+    iter_max::Real = iter_max
     )
     """
     update value and price functions simultaneously
@@ -421,9 +417,6 @@ function household_func!(
     # initialize the next-period value functions
     V_p = similar(variables.V)
     q_p = similar(variables.q)
-
-    # parameter controling update speed
-    Δ = 0.7
 
     while crit > tol && iter < iter_max
 
@@ -458,7 +451,7 @@ function density_func!(
     update the cross-sectional distribution
     """
 
-    @unpack x_size, x_ind, e_Γ, ν_Γ, a_grid, a_size_μ, a_grid_μ, a_ind_zero_μ = parameters
+    @unpack ξ_bar, x_size, x_ind, e_Γ, ν_Γ, a_grid, a_size_μ, a_grid_μ, a_ind_zero_μ = parameters
 
     iter = 0
     crit = Inf
@@ -477,7 +470,10 @@ function density_func!(
 
             # interpolate decision rules
             policy_a_itp = Akima(a_grid, variables.policy_a[:,e_i,ν_i])
-            policy_d_itp = Akima(a_grid, variables.policy_d[:,e_i,ν_i])
+            # policy_d_itp = Akima(a_grid, variables.policy_d[:,e_i,ν_i])
+            V_nd_itp = Akima(a_grid, variables.V_nd[:,e_i,ν_i])
+            V_diff_itp(x) = variables.V_d[e_i,ν_i] - V_nd_itp(x)
+            policy_d_itp(x) = clamp(V_diff_itp(x), 0.0, ξ_bar) / ξ_bar
 
             # loop over the dimension of asset holding
             for a_i in 1:a_size_μ
@@ -533,6 +529,7 @@ function aggregate_func!(
 
     @unpack x_size, x_ind, e_size, ν_size, a_grid, a_grid_neg, a_grid_pos = parameters
     @unpack a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ = parameters
+    @unpack K = parameters
 
     # total loans
     for x_i in 1:x_size
@@ -550,10 +547,10 @@ function aggregate_func!(
     variables.aggregate_var[2] = sum(variables.μ[(a_ind_zero_μ+1):end,:,:].*repeat(a_grid_pos_μ[2:end],1,e_size,ν_size))
 
     # net worth
-    variables.aggregate_var[3] = variables.aggregate_var[1] - variables.aggregate_var[2]
+    variables.aggregate_var[3] = (K + variables.aggregate_var[1]) - variables.aggregate_var[2]
 
-    # leverage ratio
-    variables.aggregate_var[4] = variables.aggregate_var[1] / variables.aggregate_var[3]
+    # asset-to-debt ratio (or loan-to-deposit ratio)
+    variables.aggregate_var[4] = (K + variables.aggregate_var[1]) / variables.aggregate_var[2]
 
     # share of defaulters
     for x_i in 1:x_size
@@ -569,9 +566,9 @@ end
 function solve_func!(
     variables::MutableVariables,
     parameters::NamedTuple;
-    tol_h = 1E-8,
-    tol_μ = 1E-10,
-    iter_max = 500
+    tol_h::Real = 1E-8,
+    tol_μ::Real = 1E-10,
+    iter_max::Real = 1E+3
     )
 
     # solve the household's problem (including price schemes)
@@ -583,54 +580,135 @@ function solve_func!(
     # compute aggregate variables
     aggregate_func!(variables, parameters)
 
-    ED = variables.aggregate_var[1] - parameters.LR*variables.aggregate_var[3]
+    ED = variables.aggregate_var[4] - parameters.AD
 
-    data_spec = Any[#=1=# "Multiplier"                   parameters.λ;
-                    #=2=# "Total Loans (LHS)"            variables.aggregate_var[1];
-                    #=3=# "Total Loans (RHS)"            parameters.LR*variables.aggregate_var[3];
-                    #=4=# "Difference"                   ED]
+    data_spec = Any[#=1=# "Garnishment Rate"             parameters.η;
+                    #=2=# "Multiplier"                   parameters.λ;
+                    #=3=# "Asset-to-Debt Ratio (Demand)" variables.aggregate_var[4];
+                    #=4=# "Asset-to-Debt Ratio (Supply)" parameters.AD;
+                    #=5=# "Difference"                   ED]
 
     pretty_table(data_spec, ["Name", "Value"];
                  alignment=[:l,:r],
-                 formatters = ft_round(12),
-                 body_hlines = [1,3])
+                 formatters = ft_round(8),
+                 body_hlines = [2,4])
 
     # save results
     V = variables.V
     q = variables.q
     μ = variables.μ
-    @save "14122020_initial_values.bson" V q μ
+    @save "18122020_initial_values.bson" V q μ
 
     return ED
 end
 
-λ_optimal = 0.00
-parameters = para_func(; λ = λ_optimal)
-variables = var_func(parameters)
-println("Solving the model with $(Threads.nthreads()) threads in Julia...")
+function λ_optimal_func(
+    η::Real,
+    a_min::Real;
+    λ_min_adhoc::Real = -Inf,
+    λ_max_adhoc::Real = Inf,
+    tol::Real = 1E-8,
+    iter_max::Real = 1E+3
+    )
+    """
+    solve for the optimal multiplier
+    """
+
+    # compute the associated number of gridpoints fro negative asset
+    a_size_neg = convert(Int, 1-a_min*100)
+
+    # check the case of λ_min = 0.0
+    λ_min = 0.0
+    parameters_λ_min = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_min)
+    variables_λ_min = var_func(parameters_λ_min, load_initial_values = 0)
+    ED_λ_min = solve_func!(variables_λ_min, parameters_λ_min)
+    if ED_λ_min > 0.0
+        return λ_min, parameters_λ_min, variables_λ_min
+    end
+
+    # check the case of λ_max = 1-(β*ψ*(1+i))^(1/2)
+    λ_max = 1.0 - (parameters_λ_min.β_B*parameters_λ_min.ψ*(1+parameters_λ_min.i))^(1/2)
+    parameters_λ_max = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_max)
+    variables_λ_max = var_func(parameters_λ_max, load_initial_values = 1)
+    ED_λ_max = solve_func!(variables_λ_max, parameters_λ_max)
+    if ED_λ_max < 0.0
+        return Inf, parameters_λ_max, variables_λ_max # solution doesn't exist!!!
+    end
+
+    # fing the optimal λ using bisection
+    λ_lower = max(λ_min_adhoc, λ_min)
+    λ_upper = min(λ_max_adhoc, λ_max)
+
+    # initialization
+    iter = 0
+    crit = Inf
+    λ_optimal = 0.0
+
+    # start looping
+    while crit > tol && iter < iter_max
+
+        # update the multiplier
+        λ_optimal = (λ_lower + λ_upper)/2
+
+        # compute the associated results
+        parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
+        variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 1)
+        ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
+
+        # update search region
+        if ED_λ_optimal > 0.0
+            λ_upper = λ_optimal
+        else
+            λ_lower = λ_optimal
+        end
+
+        # check convergence
+        crit = abs(ED_λ_optimal)
+
+        # update the iteration number
+        iter += 1
+
+    end
+
+    # re-run the results with the optimal multiplier
+    parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
+    variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 1)
+    ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
+
+    # return associated results
+    return λ_optimal, parameters_λ_optimal, variables_λ_optimal
+end
+
+#=
+parameters = para_func(η = 0.30, a_min = -1.20, a_size_neg = 121, λ = 0.0)
+variables =  var_func(parameters)
 solve_func!(variables, parameters)
+=#
+println("Solving the model with $(Threads.nthreads()) threads in Julia...")
+λ_optimal, parameters_optimal, variables_optimal = λ_optimal_func(parameters.η, parameters.a_grid[1])
 
-data_spec = Any[#= 1=# "Number of Endowment"                parameters.e_size;
-                #= 2=# "Number of Assets"                   parameters.a_size;
-                #= 3=# "Number of Negative Assets"          parameters.a_size_neg;
-                #= 4=# "Number of Positive Assets"          parameters.a_size_pos;
-                #= 5=# "Number of Assets (for Density)"     parameters.a_size_μ;
-                #= 6=# "Minimum of Assets"                  parameters.a_grid[1];
-                #= 7=# "Maximum of Assets"                  parameters.a_grid[end];
-                #= 8=# "Scale of Impatience"                parameters.ν_grid[1];
-                #= 9=# "Probability of being Impatient"     parameters.ν_Γ[1,1];
-                #=10=# "Exogenous Risk-free Rate"           parameters.r_f;
-                #=11=# "Multiplier of Incentive Constraint" parameters.λ;
-                #=12=# "Marginal Benifit of Net Worth"      parameters.α;
-                #=13=# "Diverting Fraction"                 parameters.θ;
-                #=14=# "Leverage Ratio (Supply)"            parameters.LR;
-                #=15=# "Additional Opportunity Cost"        parameters.r_lp;
-                #=16=# "Total Loans"                        variables.aggregate_var[1];
-                #=17=# "Total Deposits"                     variables.aggregate_var[2];
-                #=18=# "Net Worth"                          variables.aggregate_var[3];
-                #=19=# "Leverage Ratio (Demand)"            variables.aggregate_var[4]]
+data_spec = Any[#= 1=# "Number of Endowment"                parameters_optimal.e_size;
+                #= 2=# "Number of Assets"                   parameters_optimal.a_size;
+                #= 3=# "Number of Negative Assets"          parameters_optimal.a_size_neg;
+                #= 4=# "Number of Positive Assets"          parameters_optimal.a_size_pos;
+                #= 5=# "Number of Assets (for Density)"     parameters_optimal.a_size_μ;
+                #= 6=# "Minimum of Assets"                  parameters_optimal.a_grid[1];
+                #= 7=# "Maximum of Assets"                  parameters_optimal.a_grid[end];
+                #= 8=# "Scale of Impatience"                parameters_optimal.ν_grid[1];
+                #= 9=# "Probability of being Impatient"     parameters_optimal.ν_Γ[1,1];
+                #=10=# "Exogenous Risk-free Rate"           parameters_optimal.i;
+                #=11=# "Multiplier of Incentive Constraint" parameters_optimal.λ;
+                #=12=# "Marginal Benifit of Net Worth"      parameters_optimal.γ;
+                #=13=# "Diverting Fraction"                 parameters_optimal.θ;
+                #=14=# "Asset-to-Debt Ratio (Supply)"       parameters_optimal.AD;
+                #=15=# "Additional Opportunity Cost"        parameters_optimal.r_lp;
+                #=16=# "Capital"                            parameters_optimal.K;
+                #=17=# "Total Loans"                        variables_optimal.aggregate_var[1];
+                #=18=# "Total Deposits"                     variables_optimal.aggregate_var[2];
+                #=19=# "Net Worth"                          variables_optimal.aggregate_var[3];
+                #=20=# "Asset-to-Debt Ratio (Demand)"       variables_optimal.aggregate_var[4]]
 
-hl_LR = Highlighter(f      = (data,i,j) -> i == 14 || i == 19,
+hl_LR = Highlighter(f      = (data,i,j) -> i == 14 || i == 20,
                     crayon = Crayon(background = :light_blue))
 
 pretty_table(data_spec, ["Name", "Value"];
@@ -638,3 +716,30 @@ pretty_table(data_spec, ["Name", "Value"];
              formatters = ft_round(4),
              body_hlines = [7,9,15],
              highlighters = hl_LR)
+
+η_grid = collect(0.30:0.02:0.60)
+η_size = length(η_grid)
+a_min_grid = collect(-1.20:-0.06:-2.10)
+results = zeros(η_size,10)
+
+for η_i in 1:η_size
+
+    # compute the optimal multipliers with different η
+    if η_i == 1
+        λ_η, parameters_η, variables_η = λ_optimal_func(η_grid[η_i], a_min_grid[η_i])
+    else
+        λ_η, parameters_η, variables_η = λ_optimal_func(η_grid[η_i], a_min_grid[η_i], λ_max_adhoc = results[η_i-1,3])
+    end
+
+    # record results
+    results[η_i,1] = parameters_η.η
+    results[η_i,2] = parameters_η.i
+    results[η_i,3] = parameters_η.λ
+    results[η_i,4] = parameters_η.r_lp
+    results[η_i,5] = parameters_η.K
+    results[η_i,6:end] .= variables_η.aggregate_var
+end
+
+header = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/L", "% of Filers"]
+pretty_table(results, header, formatters = ft_round(8))
+@save "22122020_results_eta_0.3_0.6.bson" results header

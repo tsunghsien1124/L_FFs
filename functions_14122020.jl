@@ -17,27 +17,27 @@ using Expectations
 using QuadGK: quadgk
 
 function para_func(;
-    β_H::Real = 0.94,           # discount factor (households)
+    β_H::Real = 0.96,           # discount factor (households)
     β_B::Real = 0.90,           # discount factor (banks)
-    σ::Real = 2.0,              # CRRA coefficient
+    σ::Real = 2.00,             # CRRA coefficient
     η::Real = 0.40,             # garnishment rate
     ξ_bar::Real = 0.1,          # upper bound of random utility cost
     z::Real = 0.0,              # aggregate endowment uncertainty
-    r_f::Real = 0.08,           # risk-free saving rate
-    r_bar::Real = 0.06,         # rolling-over rate
+    r_f::Real = 0.02,           # risk-free saving rate
+    r_t::Real = 0.00,           # transaction cost
     ψ::Real = 0.80,             # bank's dividend policy
     λ::Real = 0.00,             # multiplier of incentive constraint
     θ::Real = 0.20,             # diverting fraction
-    e_ρ::Real = 0.90,           # AR(1) of endowment shock
-    e_σ::Real = 0.15,           # s.d. of endowment shock
-    e_size::Integer = 9,        # no. of endowment shock
-    ν_s::Real = 0.70,           # scale of patience
-    ν_p::Real = 0.30,           # probability of patience
+    e_ρ::Real = 0.95,           # AR(1) of endowment shock
+    e_σ::Real = 0.10,           # s.d. of endowment shock
+    e_size::Integer = 15,       # no. of endowment shock
+    ν_s::Real = 0.80,           # scale of patience
+    ν_p::Real = 0.10,           # probability of patience
     ν_size::Integer = 2,        # no. of preference shock
-    a_min::Real = -1.0,         # min of asset holding
-    a_max::Real = 50.0,         # max of asset holding
-    a_size_neg::Integer = 101,  # number of grid of negative asset holding for VFI
-    a_size_pos::Integer = 21,   # number of grid of positive asset holding for VFI
+    a_min::Real = -4.5,         # min of asset holding
+    a_max::Real = 350.0,        # max of asset holding
+    a_size_neg::Integer = 451,  # number of grid of negative asset holding for VFI
+    a_size_pos::Integer = 51,   # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,      # curvature of the positive asset gridpoints
     μ_scale::Integer = 1        # scale governing the number of grids in computing density
     )
@@ -46,7 +46,7 @@ function para_func(;
     """
 
     # endowment shock
-    e_M = tauchen(e_size, e_ρ, e_σ, 0.0, 3)
+    e_M = tauchen(e_size, e_ρ, e_σ, 0.0, 8)
     e_Γ = e_M.p
     e_grid = collect(e_M.state_values)
 
@@ -61,8 +61,8 @@ function para_func(;
     x_size = e_size*ν_size
 
     # asset holding grid for VFI
-    a_min = -floor(exp(e_grid[end])/2-e_σ, digits=2)
-    a_size_neg = convert(Int, -a_min*100+1)
+    # a_min = -floor(exp(e_grid[end])/2-e_σ, digits=2)
+    # a_size_neg = convert(Int, -a_min*100+1)
     a_grid_neg = collect(range(a_min, 0.0, length = a_size_neg))
     a_grid_pos = ((range(0.0, stop = a_size_pos-1, length = a_size_pos)/(a_size_pos-1)).^a_degree)*a_max
     a_grid = cat(a_grid_neg, a_grid_pos[2:end], dims = 1)
@@ -70,7 +70,8 @@ function para_func(;
     a_ind_zero = findall(iszero,a_grid)[]
 
     # asset holding grid for μ
-    a_size_neg_μ = convert(Int, (a_size_neg-1)*μ_scale+1)
+    # a_size_neg_μ = convert(Int, (a_size_neg-1)*μ_scale+1)
+    a_size_neg_μ = convert(Int, a_size_neg)
     a_grid_neg_μ = collect(range(a_min, 0.0, length = a_size_neg_μ))
     a_size_pos_μ = convert(Int, (a_size_pos-1)*μ_scale+1)
     a_grid_pos_μ = collect(range(0.0, a_max, length = a_size_pos_μ))
@@ -79,7 +80,7 @@ function para_func(;
     a_ind_zero_μ = findall(iszero,a_grid_μ)[]
 
     # solve the steady-state values of banking variables
-    # λ = 1.0 - (β_B*ψ*(1+r_f))^(1/2)
+    λ = 1.0 - (β_B*ψ*(1+r_f))^(1/2)
     α = (β_B*(1.0-ψ)*(1.0+r_f)) / ((1.0-λ)-β_B*ψ*(1.0+r_f))
     Λ = β_B*(1.0-ψ+ψ*α)
     r_lp = λ*θ/Λ
@@ -88,8 +89,7 @@ function para_func(;
     ω = ((r_lp*LR+(1+r_f))^(-1)-ψ)/(1-ψ)
 
     # return values
-    return (β_H = β_H, β_B = β_B, σ = σ, η = η, ξ_bar = ξ_bar, z = z,
-            r_f = r_f, r_bar = r_bar,
+    return (β_H = β_H, β_B = β_B, σ = σ, η = η, ξ_bar = ξ_bar, z = z, r_f = r_f, r_t = r_t,
             ψ = ψ, λ = λ, θ = θ, a_degree = a_degree, μ_scale = μ_scale,
             e_ρ = e_ρ, e_σ = e_σ, e_size = e_size, e_Γ = e_Γ, e_grid = e_grid,
             ν_s = ν_s, ν_p = ν_p, ν_size = ν_size, ν_Γ = ν_Γ, ν_grid = ν_grid,
@@ -126,7 +126,7 @@ function var_func(
     """
 
     # unpack parameters
-    @unpack a_size, a_size_neg, a_size_μ, e_size, ν_size, r_f, r_lp = parameters
+    @unpack a_size, a_size_neg, a_size_μ, e_size, ν_size, r_f, r_lp, r_t = parameters
 
     if load_initial_values == 1
         @load "14122020_initial_values.bson" V q μ
@@ -149,7 +149,7 @@ function var_func(
         policy_d = zeros(a_size, e_size, ν_size)
 
         # define pricing function
-        q = ones(a_size_neg, e_size) ./ (1.0 + r_f + r_lp)
+        q = ones(a_size_neg, e_size) ./ (1.0 + r_f + r_t + r_lp)
 
         # define the type distribution and its transition matrix
         μ_size = a_size_μ*e_size*ν_size
@@ -279,8 +279,8 @@ function value_func!(
         G_star = ξ_star ./ ξ_bar
 
         # determine value function
-        variables.V[:,e_i,ν_i] = -(ξ_star.^2)./(2.0*ξ_bar) .+ G_star.*variables.V_d[e_i,ν_i] .+ (1.0 .- G_star).*variables.V_nd[:,e_i,ν_i]
-        variables.policy_d[:,e_i,ν_i] = G_star
+        variables.V[:,e_i,ν_i] .= -(ξ_star.^2)./(2.0*ξ_bar) .+ G_star.*variables.V_d[e_i,ν_i] .+ (1.0 .- G_star).*variables.V_nd[:,e_i,ν_i]
+        variables.policy_d[:,e_i,ν_i] .= G_star
     end
 end
 
@@ -288,7 +288,8 @@ function find_threshold_func(
     V_nd::Array{Float64,1},
     V_d::Array{Float64,1},
     e_grid::Array{Float64,1},
-    cutoff_value::Real
+    cutoff_value::Real;
+    range::Real = 10.0
     )
     """
     compute the threshold below which households file for bankruptcy
@@ -300,16 +301,16 @@ function find_threshold_func(
     V_diff_itp(x) = V_nd_itp(x) - V_d_itp(x) + cutoff_value
 
     if all(V_diff .> 0.0)
-        if V_diff_itp(-10) > 0.0
-            e_p_thres = -10
+        if V_diff_itp(-range) > 0.0
+            e_p_thres = -range
         else
-            e_p_thres = find_zero(e_p->V_diff_itp(e_p), (-10, e_grid[1]), Bisection())
+            e_p_thres = find_zero(e_p->V_diff_itp(e_p), (-range, e_grid[1]), Bisection())
         end
     elseif all(V_diff .< 0.0)
-        if V_diff_itp(10) < 0.0
-            e_p_thres = 10
+        if V_diff_itp(range) < 0.0
+            e_p_thres = range
         else
-            e_p_thres = find_zero(e_p->V_diff_itp(e_p), (e_grid[end], 10), Bisection())
+            e_p_thres = find_zero(e_p->V_diff_itp(e_p), (e_grid[end], range), Bisection())
         end
     else
         e_p_lower = e_grid[findall(V_diff .<= 0.0)[end]]
@@ -329,7 +330,7 @@ function price_func!(
     update price function
     """
 
-    @unpack ξ_bar, r_f, r_lp, a_size_neg, e_size, e_grid, e_ρ, e_σ, ν_p = parameters
+    @unpack ξ_bar, r_f, r_lp, r_t, a_size_neg, e_size, e_grid, e_ρ, e_σ, ν_p = parameters
 
     # parameter controling update speed
     Δ = 0.7
@@ -340,9 +341,7 @@ function price_func!(
     Threads.@threads for a_p_i in 1:a_size_neg
 
         # compute defaulting threshold for (im)patient households
-        e_p_thres_zero_1   = find_threshold_func(variables.V_nd[a_p_i,:,1], variables.V_d[:,1], e_grid, 0.0)
         e_p_thres_ξ_bar_1 = find_threshold_func(variables.V_nd[a_p_i,:,1], variables.V_d[:,1], e_grid, ξ_bar)
-        e_p_thres_zero_2   = find_threshold_func(variables.V_nd[a_p_i,:,2], variables.V_d[:,2], e_grid, 0.0)
         e_p_thres_ξ_bar_2 = find_threshold_func(variables.V_nd[a_p_i,:,2], variables.V_d[:,2], e_grid, ξ_bar)
 
         # create default policy functions
@@ -363,18 +362,16 @@ function price_func!(
             # compute default probability for (im)patient households
             kernel_1(x) = (1-default_policy_1(x))*pdf(dist, x)
             kernel_2(x) = (1-default_policy_2(x))*pdf(dist, x)
-
             repay_prob_1, err1 = quadgk(x -> kernel_1(x), e_p_thres_ξ_bar_1, Inf, order=100, rtol=1E-10)
             repay_prob_2, err1 = quadgk(x -> kernel_2(x), e_p_thres_ξ_bar_2, Inf, order=100, rtol=1E-10)
-
             repay_prob = ν_p*repay_prob_1 + (1.0-ν_p)*repay_prob_2
 
             # update bond price
-            q_update[a_p_i,e_i] = repay_prob / (1.0+r_f+r_lp)
+            q_update[a_p_i,e_i] = repay_prob / (1.0 + r_f + r_t + r_lp)
         end
     end
 
-    clamp!(q_update, 0.0, 1.0/(1.0+r_f+r_lp))
+    clamp!(q_update, 0.0, 1.0/(1.0 + r_f + r_t + r_lp))
     variables.q = Δ*q_update + (1-Δ)*q_p
 end
 
@@ -433,7 +430,7 @@ function density_func!(
     update the cross-sectional distribution
     """
 
-    @unpack x_size, x_ind, e_Γ, ν_Γ, a_grid, a_size_μ, a_grid_μ, a_ind_zero_μ = parameters
+    @unpack ξ_bar, x_size, x_ind, e_Γ, ν_Γ, a_grid, a_size_μ, a_grid_μ, a_ind_zero_μ = parameters
 
     iter = 0
     crit = Inf
@@ -452,7 +449,10 @@ function density_func!(
 
             # interpolate decision rules
             policy_a_itp = Akima(a_grid, variables.policy_a[:,e_i,ν_i])
-            policy_d_itp = Akima(a_grid, variables.policy_d[:,e_i,ν_i])
+            # policy_d_itp = Akima(a_grid, variables.policy_d[:,e_i,ν_i])
+            V_nd_itp = Akima(a_grid, variables.V_nd[:,e_i,ν_i])
+            V_diff_itp(x) = variables.V_d[e_i,ν_i] - V_nd_itp(x)
+            policy_d_itp(x) = clamp(V_diff_itp(x), 0.0, ξ_bar) / ξ_bar
 
             # loop over the dimension of asset holding
             for a_i in 1:a_size_μ
@@ -527,8 +527,8 @@ function aggregate_func!(
     # net worth
     variables.aggregate_var[3] = variables.aggregate_var[1] - variables.aggregate_var[2]
 
-    # leverage ratio
-    variables.aggregate_var[4] = variables.aggregate_var[1] / variables.aggregate_var[3]
+    # asset-to-debt ratio (or loan-to-deposit ratio)
+    variables.aggregate_var[4] = variables.aggregate_var[1] / variables.aggregate_var[2]
 
     # share of defaulters
     for x_i in 1:x_size
@@ -558,16 +558,16 @@ function solve_func!(
     # compute aggregate variables
     aggregate_func!(variables, parameters)
 
-    ED = variables.aggregate_var[1] - parameters.LR*variables.aggregate_var[3]
+    ED = variables.aggregate_var[4] - parameters.AD
 
     data_spec = Any[#=1=# "Multiplier"                   parameters.λ;
-                    #=2=# "Total Loans (LHS)"            variables.aggregate_var[1];
-                    #=3=# "Total Loans (RHS)"            parameters.LR*variables.aggregate_var[3];
+                    #=2=# "Asset-to-Debt Ratio (Demand)" variables.aggregate_var[4];
+                    #=3=# "Asset-to-Debt Ratio (Supply)" parameters.AD;
                     #=4=# "Difference"                   ED]
 
     pretty_table(data_spec, ["Name", "Value"];
                  alignment=[:l,:r],
-                 formatters = ft_round(12),
+                 formatters = ft_round(4),
                  body_hlines = [1,3])
 
     # save results
@@ -598,12 +598,12 @@ data_spec = Any[#= 1=# "Number of Endowment"                parameters.e_size;
                 #=11=# "Multiplier of Incentive Constraint" parameters.λ;
                 #=12=# "Marginal Benifit of Net Worth"      parameters.α;
                 #=13=# "Diverting Fraction"                 parameters.θ;
-                #=14=# "Leverage Ratio (Supply)"            parameters.LR;
+                #=14=# "Asset-to-Debt Ratio (Supply)"       parameters.AD;
                 #=15=# "Additional Opportunity Cost"        parameters.r_lp;
                 #=16=# "Total Loans"                        variables.aggregate_var[1];
                 #=17=# "Total Deposits"                     variables.aggregate_var[2];
                 #=18=# "Net Worth"                          variables.aggregate_var[3];
-                #=19=# "Leverage Ratio (Demand)"            variables.aggregate_var[4]]
+                #=19=# "Asset-to-Debt Ratio (Demand)"       variables.aggregate_var[4]]
 
 hl_LR = Highlighter(f      = (data,i,j) -> i == 14 || i == 19,
                     crayon = Crayon(background = :light_blue))
@@ -613,3 +613,9 @@ pretty_table(data_spec, ["Name", "Value"];
              formatters = ft_round(4),
              body_hlines = [7,9,15],
              highlighters = hl_LR)
+
+#=
+parameters = para_func()
+para_targeted(x) = para_func(; λ = x)
+solve_targeted(x) = solve_func!(var_func(para_targeted(x)), para_targeted(x))
+λ_optimal = find_zero(solve_targeted, (0.00, 0.1182), Bisection())

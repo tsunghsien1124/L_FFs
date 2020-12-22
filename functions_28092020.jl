@@ -634,8 +634,8 @@ solve_targeted(x) = solve_func!(var_func(para_targeted(x)), para_targeted(x))
 # λ_optimal = find_zero(solve_targeted, (λ_lower, λ_upper), Bisection())
 λ_optimal = find_zero(solve_targeted, (0.04987767453057565, 0.05), Bisection())
 =#
-
-λ_optimal = 0.04988090645870582
+λ_optimal = 0.0
+# λ_optimal = 0.04988090645870582
 parameters = para_func(; λ = λ_optimal)
 variables = var_func(parameters)
 println("Solving the model with $(Threads.nthreads()) threads in Julia...")

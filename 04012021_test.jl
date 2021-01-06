@@ -10,7 +10,7 @@ function parameters_FI_function(;
     β_s::Real = 0.95,                           # scale of impatience
     β_p::Real = 0.10,                           # probability of impatience
     β_B::Real = 0.96,                           # discount factor (banks)
-    κ::Real = 0.40,                             # proportional filing cost
+    κ::Real = 0.60,                             # proportional filing cost
     γ::Real = 2.00,                             # risk aversion
     ρ::Real = 1.00,                             # survival probability
     σ::Real = 0.005,                            # EV scale parameter
@@ -22,10 +22,10 @@ function parameters_FI_function(;
     θ::Real = 0.40,                             # diverting fraction
     e_ρ::Real = 0.95,                           # AR(1) of persistent earnings
     e_σ::Real = 0.10,                           # s.d. of persistent earnings
-    e_size::Integer = 3,                        # number of persistent earnings
-    a_size_neg::Integer = 101,                  # number of negative assets
-    a_size_pos::Integer = 51,                   # number of positive assets
-    a_min::Real = -5.00,                        # minimum of assets
+    e_size::Integer = 9,                        # number of persistent earnings
+    a_size_neg::Integer = 121,                  # number of negative assets
+    a_size_pos::Integer = 11,                   # number of positive assets
+    a_min::Real = -6.00,                        # minimum of assets
     a_max::Real = 50.00,                        # maximum of assets
     a_degree::Integer = 1,                      # curvature of negative asset gridpoints
     μ_scale::Integer = 7                        # scale governing the number of grids in computing density
@@ -84,6 +84,12 @@ function parameters_FI_function(;
     K = exp(e_SS)*(α/(r_k+δ))^(1.0/(1.0-α))
     w = (1.0-α)*(K^α)*(exp(e_SS)^(-α))
 
+    # numerically relevant lower bound
+    L_σ = σ*log(eps(Float64))
+
+    # indices matrix for binary monotonicity
+    BM_indices = BM_function(a_size)
+
     # return the outcome
     return (β_B, κ = κ, γ = γ, ρ = ρ, σ = σ, δ = δ, α = α, K2Y = K2Y,
             ψ = ψ, λ = λ, θ = θ, i = i, ξ = ξ, Λ = Λ, LR = LR, AD = AD,
@@ -97,7 +103,8 @@ function parameters_FI_function(;
             a_size_μ = a_size_μ, a_size_neg_μ = a_size_neg_μ, a_size_pos_μ = a_size_pos_μ,
             a_ind_zero_μ = a_ind_zero_μ,
             action_grid = action_grid, action_ind = action_ind,
-            action_size = action_size)
+            action_size = action_size,
+            L_σ = L_σ, BM_indices = BM_indices)
 end
 
 mutable struct MutableVariables_FI
@@ -160,6 +167,50 @@ function utility_function(
     end
 end
 
+function U_function(
+    e_i::Integer,
+    β_i::Integer,
+    a_i::Integer,
+    d::Integer,
+    a_p_i::Integer,
+    W_p::Array{Float64,3} = W_p,
+    q_p::Array{Float64,2} = q_p;
+    variables_FI::MutableVariables_FI = variables_FI,
+    parameters_FI::NamedTuple = parameters_FI
+    )
+    """
+    compute conditional value function for given state and action
+    """
+
+    @unpack a_grid, a_grid_neg, a_grid_pos, e_grid, e_size, e_Γ = parameters_FI
+    @unpack β_grid, β_size, β_Γ, κ, ρ, γ, i, w = parameters_FI
+
+    # retrieve the associated states
+    a = a_grid[a_i]
+    e = e_grid[e_i]
+    β = β_grid[β_i]
+    a_p = a_grid[a_p_i]
+
+    # construct the size of asset holdings
+    q = q_p[:,e_i]
+    qa = [q.*a_grid_neg; a_grid_pos[2:end]]
+
+    # compute consumption in Equation (2)
+    if d == 0
+        c = w * e + a * (1.0 + i * (a>0.0)) - qa[a_p_i]
+    else
+        c = w * e * (1.0 - κ)
+        # c = w * e  - κ
+    end
+
+    W_expect = 0.0
+    for e_p_i in 1:e_size, β_p_i in 1:β_size
+        W_expect += β_Γ[β_p_i]*e_Γ[e_i,e_p_i]*W_p[β_p_i,e_p_i,a_p_i]
+    end
+
+    return (1.0-β*ρ)*utility_function(c, γ) + β*ρ*W_expect
+end
+
 function value_function!(
     W_p::Array{Float64,3},
     q_p::Array{Float64,2},
@@ -170,42 +221,82 @@ function value_function!(
     compute feasible set and (un)conditional value functions
     """
 
-    @unpack a_grid, a_grid_neg, a_grid_pos, a_size, e_grid, e_size, e_Γ, β_grid, β_size, β_Γ = parameters_FI
-    @unpack action_grid, action_ind, action_size, κ, ρ, γ, σ, i, w = parameters_FI
+    @unpack a_grid, a_size, a_ind_zero, e_size, β_size, σ, L_σ, BM_indices = parameters_FI
+
+    # Reset feasible set and unconditional value function
+    variables_FI.F .= 0.0
+    variables_FI.v .= -Inf
 
     # feasible set and conditional value function
-    for a_i in 1:a_size, e_i in 1:e_size, β_i in 1:β_size, action_i in 1:action_size
-        # retrieve the associated states
-        a = a_grid[a_i]
-        e = e_grid[e_i]
-        β = β_grid[β_i]
-        d, a_p = action_grid[action_i,:]
-        d_i, a_p_i = action_ind[action_i,:]
+    for e_i in 1:e_size, β_i in 1:β_size
 
-        # construct the size of asset holdings
-        q = q_p[:,e_i]
-        qa = [q.*a_grid_neg; a_grid_pos[2:end]]
+        # defaulting value
+        variables_FI.v[1,β_i,e_i,:] .= U_function(e_i,β_i,a_ind_zero,1,a_ind_zero,W_p,q_p)
+        variables_FI.F[1,β_i,e_i,:] .= 1.0
 
-        # compute consumption
-        if d == 0.0
-            c = w*e + a*(1.0+i*(a>0.0)) - qa[a_p_i]
-        else
-            c = w*e*(1.0 - κ)
+        # non-defaulting value
+        BM_bounds = zeros(Int,a_size,3)
+        BM_bounds[:,1] = 1:a_size
+        BM_bounds[1,2] = 1
+        BM_bounds[1,3] = a_size
+        BM_bounds[a_size,3] = a_size
+
+        for BM_i in 1:a_size
+
+            # retrieve the associated state, lower and upper bounds
+            a_i, lb_i, ub_i = BM_indices[BM_i,:]
+            lb = BM_bounds[lb_i,2]
+            ub = BM_bounds[ub_i,3]
+
+            if ub != 0
+                # compute the optimal choice
+                Π(a_p_i) = U_function(e_i,β_i,a_i,0,a_p_i,W_p,q_p)
+                a_p_i_star, U_star = HM_algorithm(lb,ub,Π)
+
+                # evaluate numerically relevant actions
+                if U_star == -Inf # All choices infeasible
+                    BM_bounds[a_i,2] = 1
+                    BM_bounds[a_i,3] = 0
+                else
+                    # assign the optimal value
+                    variables_FI.v[a_p_i_star+1,β_i,e_i,a_i] = U_star
+
+                    # Get new bounds (in terms of asset grid index!)
+                    lb_new = a_p_i_star
+                    while lb_new > 1
+                        lb_new -= 1
+                        Π_lb_new = Π(lb_new)
+                        if Π_lb_new - U_star < L_σ
+                            lb_new += 1
+                            break
+                        else
+                            variables_FI.v[lb_new+1,β_i,e_i,a_i] = Π_lb_new
+                        end
+                    end
+
+                    ub_new = a_p_i_star
+                    while ub_new < a_size
+                        ub_new += 1
+                        Π_ub_new = Π(ub_new)
+                        if Π_ub_new - U_star < L_σ
+                            ub_new -= 1
+                            break
+                        else
+                            variables_FI.v[ub_new+1,β_i,e_i,a_i] = Π_ub_new
+                        end
+                    end
+
+                    BM_bounds[a_i,2] = lb_new
+                    BM_bounds[a_i,3] = ub_new
+
+                    # Set feasible choices
+                    variables_FI.F[(lb_new+1):(ub_new+1),β_i,e_i,a_i] .= 1.0
+                end
+            else # If ub == 0, then all choices must be infeasible
+                BM_bounds[a_i,2] = 1
+                BM_bounds[a_i,3] = 0
+            end
         end
-
-        # check feasibility
-        if c > 0.0
-            variables_FI.F[action_i,β_i,e_i,a_i] = 1.0
-        else
-            variables_FI.F[action_i,β_i,e_i,a_i] = 0.0
-        end
-
-        # update conditional value function
-        W_expect = 0.0
-        for e_p_i in 1:e_size, β_p_i in 1:β_size
-            W_expect += β_Γ[β_p_i]*e_Γ[e_i,e_p_i]*W_p[β_p_i,e_p_i,a_p_i]
-        end
-        variables_FI.v[action_i,β_i,e_i,a_i] = (1.0-β*ρ)*utility_function(c, γ) + β*ρ*W_expect
     end
 
     # unconditional value function
@@ -389,6 +480,151 @@ function solve_function!(
     end
 end
 
+function BM_function(
+    action_size::Integer
+    )
+    """
+    compute the sorted indices of binary monotonicity algorithm
+
+    BM_index[:,1] saves the middle point
+    BM_index[:,2] saves the indicator of lower bound
+    BM_index[:,3] saves the indicator of upper bound
+    """
+
+    # initialize auxiliary matrix
+    auxiliary_matrix = []
+    push!(auxiliary_matrix, [1, action_size])
+
+    # initialize the matrix storing binary search indices
+    BM_index = zeros(Int, 2, 3)
+    BM_index[1,:] = [1 1 1]
+    BM_index[2,:] = [action_size 1 action_size]
+
+    # set up criterion and iteration number
+    k = Inf
+    iter = 1
+
+    while k > 1
+
+        # initializa the number of rows, i.e., k
+        if iter == 1
+            k = 1
+        end
+
+        # step 2 on page 35 in Gordon and Qiu (2017, WP)
+        while (auxiliary_matrix[end][1]+1) < auxiliary_matrix[end][2]
+            m = convert(Int, floor((auxiliary_matrix[end][1]+auxiliary_matrix[end][2])/2))
+
+            if findall(BM_index[:,1] .== m) == []
+                BM_index = cat(BM_index, [m auxiliary_matrix[end][1] auxiliary_matrix[end][2]]; dims = 1)
+            end
+
+            push!(auxiliary_matrix, [auxiliary_matrix[end][1], m])
+            k += 1
+        end
+
+        # step 3 on page 35 in Gordon and Qiu (2017, WP)
+        if k == 1
+            break
+        end
+        while auxiliary_matrix[end][2] == auxiliary_matrix[end-1][2]
+            pop!(auxiliary_matrix)
+            k -= 1
+            if k == 1
+                break
+            end
+        end
+        if k == 1
+            break
+        end
+
+        # step 4 on page 35 in Gordon and Qiu (2017, WP)
+        auxiliary_matrix[end][1] = auxiliary_matrix[end][2]
+        auxiliary_matrix[end][2] = auxiliary_matrix[end-1][2]
+
+        # update iteration number
+        iter += 1
+    end
+
+    # return results
+    return BM_index
+end
+
+function HM_algorithm(
+    lb::Integer,            # lower bound of choices
+    ub::Integer,            # upper bound of choices
+    Π::Function             # return function
+    )
+    """
+    implement Heer and Maussner's (2005) algorithm of binary concavity
+    """
+
+    while true
+        # points of considered
+        n = ub - lb + 1
+
+        if n < 1
+            error("n < 1 in HM algorithm")
+        end
+
+        # step 1 on page 536 in Gordon and Qiu (2018, QE)
+        if n == 1
+            return lb, Π(lb)
+        else
+            flag_lb = 0
+            flag_ub = 0
+        end
+
+        # step 2 on page 536 in Gordon and Qiu (2018, QE)
+        if n == 2
+            if flag_lb == 0
+                Π_lb = Π(lb)
+            end
+            if flag_ub == 0
+                Π_ub = Π(ub)
+            end
+            if Π_lb > Π_ub
+                return lb, Π_lb
+            else
+                return ub, Π_ub
+            end
+        end
+
+        # step 3 on page 536 in Gordon and Qiu (2018, QE)
+        if n == 3
+            if max(flag_lb, flag_ub) == 0
+                Π_lb = Π(lb)
+                flag_lb = 1
+            end
+            m = convert(Int, (lb+ub)/2)
+            Π_m = Π(m)
+            if flag_lb == 1
+                if Π_lb > Π_m
+                    return  lb, Π_lb
+                end
+                lb, Π_lb, flag_lb = m, Π_m, 1
+            else # flag_ub == 1
+                if Π_ub > Π_m
+                    return  ub, Π_ub
+                end
+                ub, Π_ub, flag_ub = m, Π_m, 1
+            end
+        end
+
+        # step 4 on page 536 in Gordon and Qiu (2018, QE)
+        if n >= 4
+            m = convert(Int, floor((lb+ub)/2))
+            Π_m = Π(m)
+            Π_m1 = Π(m+1)
+            if Π_m < Π_m1
+                lb, Π_lb, flag_lb = (m+1), Π_m1, 1
+            else
+                ub, Π_ub, flag_ub = m, Π_m, 1
+            end
+        end
+    end
+end
+
 # solve the model
 parameters_FI = parameters_FI_function()
 variables_FI = variables_FI_function(parameters_FI)
@@ -401,7 +637,7 @@ all(sum(variables_FI.σ, dims=1) .≈ 1.0)
 label_latex = reshape(latexstring.("\$",["e = $(round(parameters_FI.e_grid[i],digits=2))" for i in 1:parameters_FI.e_size],"\$"),1,:)
 title_latex = latexstring("\$","\\kappa = $(parameters_FI.κ)","\$")
 plot(parameters_FI.a_grid_neg, variables_FI.q,
-     title = title_latex, label = label_latex, legend = :bottomright, legendfont = font(6))
+     title = title_latex, label = label_latex, legend = :topleft, legendfont = font(6))
 
 #=
 plot(parameters_FI.a_grid_neg[end-50:end], variables_FI.q[parameters_FI.a_ind_zero-50:parameters_FI.a_ind_zero,1,:],

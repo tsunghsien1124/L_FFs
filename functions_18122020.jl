@@ -5,8 +5,8 @@ using ProgressMeter
 using Parameters
 using QuantEcon: rouwenhorst, tauchen, gridmake, MarkovChain, stationary_distributions
 using Plots
-# using LaTeXStrings
-# using PlotThemes
+using LaTeXStrings
+using PlotThemes
 using PrettyTables
 using Roots
 using Optim
@@ -829,7 +829,7 @@ pretty_table(results_NFF, header, formatters = ft_round(8))
 pretty_table(results_FF, header, formatters = ft_round(8))
 @save "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header
 
-#=
+
 plot(results[:,1], results[:,3], seriestype=:scatter, legend=:none, title="Multiplier")
 plot(results[:,1], results[:,4], seriestype=:scatter, legend=:none, title="Liquidity Premium")
 plot(results[:,1], results[:,9], seriestype=:scatter, legend=:none, title="Leverage")
@@ -852,4 +852,3 @@ function _func(
         CEV_μ_results[:,:,:,η_i] .= variables_η.μ
     end
 end
-=#

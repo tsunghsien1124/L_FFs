@@ -585,7 +585,7 @@ function aggregate_func!(
         policy_d_itp(x) = clamp(V_diff_itp(x), 0.0, ξ_bar) / ξ_bar
         for a_μ_i in 1:a_size_neg_μ
             a_μ = a_grid_neg_μ[a_μ_i]
-            variables.aggregate_var[5] += (variables.μ[a_μ_i,e_i,ν_i] * policy_d_itp(a_μ))
+            variables.aggregate_var[5] += (variables.μ[a_μ_i,e_i,ν_i] * policy_d_itp(a_μ))*100
         end
     end
 
@@ -594,7 +594,7 @@ function aggregate_func!(
         e_i, ν_i = x_ind[x_i,:]
         for a_μ_i in 1:(a_size_neg_μ-1)
             a_μ = a_grid_neg_μ[a_μ_i]
-            variables.aggregate_var[6] += variables.μ[a_μ_i,e_i,ν_i]
+            variables.aggregate_var[6] += variables.μ[a_μ_i,e_i,ν_i]*100
         end
     end
 
@@ -629,7 +629,7 @@ function aggregate_func!(
             a_μ = a_grid_μ[a_μ_i]
             a_p = clamp(policy_a_itp(a_μ), a_grid[1], a_grid[end])
             if a_p < 0.0
-                variables.aggregate_var[8] += (variables.μ[a_μ_i,e_i,ν_i] * (1.0-policy_d_itp(a_μ)) * (a_p/qa_itp(a_p)))
+                variables.aggregate_var[8] += (variables.μ[a_μ_i,e_i,ν_i] * (1.0-policy_d_itp(a_μ)) * (a_p/qa_itp(a_p)))*100
             end
         end
     end
@@ -794,40 +794,52 @@ pretty_table(data_spec, ["Name", "Value"];
              highlighters = hl_LR)
 =#
 
-# with financial frictions
-η_grid = collect(0.80:-0.025:0.25)
+
+η_min = 0.25
+η_max = 0.80
+η_step = 0.5
+η_grid = collect(η_max:-η_step:η_min)
 η_size = length(η_grid)
 results_NFF = zeros(η_size,13)
 results_FF = zeros(η_size,13)
+a_min = -3.50
+a_size_neg = 701
+parameters_CEV = para_func(a_min = a_min, a_size_neg = a_size_neg)
+CEV_V_results = zeros(parameters_CEV.a_size, parameters_CEV.e_size, parameters_CEV.ν_size, η_size)
+CEV_μ_results = zeros(parameters_CEV.a_size, parameters_CEV.e_size, parameters_CEV.ν_size, η_size)
 
+# compute the optimal multipliers with different η
 for η_i in 1:η_size
-    # compute the optimal multipliers with different η
+
     if η_i == 1
-        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], -3.50)
+        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min)
     else
-        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], -3.50, λ_min_adhoc = results_FF[η_i-1,3])
+        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min, λ_min_adhoc = results_FF[η_i-1,3])
     end
 
     # record results
     results_NFF[η_i,1] = parameters_NFF.η
-    results_NFF[η_i,2] = parameters_NFF.i
+    results_NFF[η_i,2] = parameters_NFF.i*100
     results_NFF[η_i,3] = parameters_NFF.λ
-    results_NFF[η_i,4] = parameters_NFF.r_lp
+    results_NFF[η_i,4] = parameters_NFF.r_lp*100
     results_NFF[η_i,5] = parameters_NFF.K
     results_NFF[η_i,6:end] .= variables_NFF.aggregate_var
 
     results_FF[η_i,1] = parameters_FF.η
-    results_FF[η_i,2] = parameters_FF.i
+    results_FF[η_i,2] = parameters_FF.i*100
     results_FF[η_i,3] = parameters_FF.λ
-    results_FF[η_i,4] = parameters_FF.r_lp
+    results_FF[η_i,4] = parameters_FF.r_lp*100
     results_FF[η_i,5] = parameters_FF.K
     results_FF[η_i,6:end] .= variables_FF.aggregate_var
 end
 
-header = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of Filers", "% in Debt", "Debt-to-Income", "Avg Loan Rate"]
-pretty_table(results_NFF, header, formatters = ft_round(8))
-pretty_table(results_FF, header, formatters = ft_round(8))
-@save "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header
+symbol = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of d=1", "% of a'<0", "a'<0/e", "avg. 1/q"]
+header = ["Garnishment Rate", "Interest Rate", "Multiplier", "Liquidity Premium",
+          "Capital", "Loans", "Deposits", "Net Worth", "Leverage",
+          "Percentage of Defaulters", "Percentage in Debt", "Debt-to-Income Ratio", "Average Loan Rate"]
+pretty_table(results_NFF, symbol, formatters = ft_round(8))
+pretty_table(results_FF, symbol, formatters = ft_round(8))
+@save "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
 
 @load "05012021_results_eta_0.25_0.80.bson" results header
 pretty_table(results, header, formatters = ft_round(8))

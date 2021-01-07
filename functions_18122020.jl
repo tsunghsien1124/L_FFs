@@ -715,9 +715,11 @@ function λ_optimal_func(
     iter = 0
     crit = Inf
     λ_optimal = 0.0
+    parameters_λ_optimal =[]
+    variables_λ_optimal = []
 
     # start looping
-    while crit > tol && iter < iter_max
+    while (crit > tol) && (iter < iter_max)
 
         # update the multiplier
         λ_optimal = (λ_lower + λ_upper)/2
@@ -743,9 +745,9 @@ function λ_optimal_func(
     end
 
     # re-run the results with the optimal multiplier
-    parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
-    variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 0)
-    ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
+    # parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
+    # variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 0)
+    # ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
 
     # return associated results
     return parameters_λ_min, variables_λ_min, parameters_λ_optimal, variables_λ_optimal
@@ -804,9 +806,6 @@ results_NFF = zeros(η_size,13)
 results_FF = zeros(η_size,13)
 a_min = -3.50
 a_size_neg = 701
-parameters_CEV = para_func(a_min = a_min, a_size_neg = a_size_neg)
-CEV_V_results = zeros(parameters_CEV.a_size, parameters_CEV.e_size, parameters_CEV.ν_size, η_size)
-CEV_μ_results = zeros(parameters_CEV.a_size, parameters_CEV.e_size, parameters_CEV.ν_size, η_size)
 
 # compute the optimal multipliers with different η
 for η_i in 1:η_size
@@ -831,6 +830,7 @@ for η_i in 1:η_size
     results_FF[η_i,4] = parameters_FF.r_lp*100
     results_FF[η_i,5] = parameters_FF.K
     results_FF[η_i,6:end] .= variables_FF.aggregate_var
+
 end
 
 symbol = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of d=1", "% of a'<0", "a'<0/e", "avg. 1/q"]
@@ -884,19 +884,25 @@ label_latex = reshape(latexstring.("\$",["e = 1" for i in 1:parameters_FI.e_size
 latexstring("\$","\\alpha","\$")
 
 function CEV_function(
-    results_NFF::Array{Float64,2},
-    results_FF::Array{Float64,2}
+    results::Array{Float64,2}
+    a_min::Real,
+    a_size_neg::Integer
     )
+    """
+    compute the optimal value functions and cross-sectional distribution
+    """
 
-    CEV_V_results = zeros(a_size, e_size, ν_size, η_size)
-    CEV_μ_results = zeros(a_size, e_size, ν_size, η_size)
+    η_size = size(results,1)
+    parameters_CEV = para_func(a_min = a_min, a_size_neg = a_size_neg)
+    CEV_V_results = zeros(parameters_CEV.a_size, parameters_CEV.e_size, parameters_CEV.ν_size, η_size)
+    CEV_μ_results = zeros(parameters_CEV.a_size, parameters_CEV.e_size, parameters_CEV.ν_size, η_size)
 
     for η_i in 1:η_size
-
-        parameters_η = para_func(η = η_grid[η_i], a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
+        parameters_η = para_func(η = results[η_i,1], λ = results[η_i,3], a_min = a_min, a_size_neg = a_size_neg)
         variables_η = var_func(parameters_η)
-
-        CEV_V_results[:,:,:,η_i] .= variables_η.V
-        CEV_μ_results[:,:,:,η_i] .= variables_η.μ
+        CEV_V_results[:,:,:,η_i] = variables_η.V
+        CEV_μ_results[:,:,:,η_i] = variables_η.μ
     end
+
+    return CEV_V_results, CEV_μ_results
 end

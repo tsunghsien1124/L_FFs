@@ -824,17 +824,52 @@ for η_i in 1:η_size
     results_FF[η_i,6:end] .= variables_FF.aggregate_var
 end
 
-header = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of Filers", "% in Debt", "Debt-to_Income", "Avg Loan Rate"]
+header = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of Filers", "% in Debt", "Debt-to-Income", "Avg Loan Rate"]
 pretty_table(results_NFF, header, formatters = ft_round(8))
 pretty_table(results_FF, header, formatters = ft_round(8))
 @save "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header
 
+@load "05012021_results_eta_0.25_0.80.bson" results header
+pretty_table(results, header, formatters = ft_round(8))
 
-plot(results[:,1], results[:,3], seriestype=:scatter, legend=:none, title="Multiplier")
+plot_row = 3
+plot_col = 2
+plot_size = plot_row * plot_col
+plot_ordering = [4,9,10,11,12,13]
+plot_title = [header[i] for i in plot_ordering]
+plot_all = plot(layout = (plot_row,plot_col),
+                size=(700,900),
+                box = :on)
+for sp_i in 1:plot_size
+    plot_index = plot_ordering[sp_i]
+    plot_all = plot!(subplot = sp_i,
+                     results[:,1],
+                     results[:,plot_index],
+                     title = plot_title[sp_i],
+                     xtickfont = font(10, "Computer Modern", :black),
+                     ytickfont = font(10, "Computer Modern", :black),
+                     titlefont = font(14, "Computer Modern", :black),
+                     seriestype = :path,
+                     markershapes = :auto,
+                     markerstrokecolor = :auto,
+                     legend = :none,
+                     yformatter = :auto)
+    # plot!(subplot = sp_i,results_FF[:,1], results_FF[:,plot_index])
+end
+plot_all
+
+plot(results[:,1], results[:,3], seriestype=:path, legend=:none, markershapes=:auto,
+theme=theme(:default), box=:on,
+xlabel = latexstring("\$","\\alpha = 0.30","\$"), xtickfont = font(10, "times"),
+title="\$ \\nabla_p \\sum_\\sigma \\log (\\textrm{CEV Welfare chg. %}) \$")
+
 plot(results[:,1], results[:,4], seriestype=:scatter, legend=:none, title="Liquidity Premium")
 plot(results[:,1], results[:,9], seriestype=:scatter, legend=:none, title="Leverage")
 plot(results[:,1], results[:,10]*100, seriestype=:scatter, legend=:none, title="Percentage of Filers")
 
+label_latex = reshape(latexstring.("\$",["e = 1" for i in 1:parameters_FI.e_size],"\$"),1,:)
+
+latexstring("\$","\\alpha","\$")
 
 function _func(
     η_results::Array{Float64,2}

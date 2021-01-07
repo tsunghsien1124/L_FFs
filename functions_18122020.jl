@@ -871,8 +871,9 @@ label_latex = reshape(latexstring.("\$",["e = 1" for i in 1:parameters_FI.e_size
 
 latexstring("\$","\\alpha","\$")
 
-function _func(
-    η_results::Array{Float64,2}
+function CEV_function(
+    results_NFF::Array{Float64,2},
+    results_FF::Array{Float64,2}
     )
 
     CEV_V_results = zeros(a_size, e_size, ν_size, η_size)

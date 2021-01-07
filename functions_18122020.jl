@@ -17,6 +17,7 @@ using BSON: @save, @load
 # using UnicodePlots: spy
 # using Expectations
 using QuadGK: quadgk
+using Measures
 
 function para_func(;
     β_H::Real = 0.96,           # discount factor (households)
@@ -794,6 +795,7 @@ pretty_table(data_spec, ["Name", "Value"];
              highlighters = hl_LR)
 =#
 
+#=
 η_grid = collect(0.225:-0.025:0.20)
 η_size = length(η_grid)
 results_NFF = zeros(η_size,13)
@@ -830,6 +832,9 @@ header = ["Garnishment Rate", "Interest Rate", "Multiplier", "Liquidity Premium"
 pretty_table(results_NFF, symbol, formatters = ft_round(8))
 pretty_table(results_FF, symbol, formatters = ft_round(8))
 @save "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
+=#
+
+@load "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
 
 plot_row = 5
 plot_col = 2
@@ -844,23 +849,24 @@ for sp_i in 1:plot_size
     plot_all = plot!(subplot = sp_i,
                      results_NFF[:,1],
                      results_NFF[:,plot_index],
+                     title = plot_title[sp_i],
                      seriestype = :path,
-                     markershapes = :circle,
+                     markershapes = :auto,
                      markerstrokecolor = :auto,
                      legend = :none,
-                     yformatter = :auto)
+                     margin = 6mm)
     plot_all = plot!(subplot = sp_i,
                      results_FF[:,1],
                      results_FF[:,plot_index],
                      title = plot_title[sp_i],
-                     xtickfont = font(10, "Computer Modern", :black),
-                     ytickfont = font(10, "Computer Modern", :black),
-                     titlefont = font(14, "Computer Modern", :black),
+                     xtickfont = font(12, "Computer Modern", :black),
+                     ytickfont = font(12, "Computer Modern", :black),
+                     titlefont = font(16, "Computer Modern", :black),
                      seriestype = :path,
-                     markershapes = :square,
+                     markershapes = :auto,
                      markerstrokecolor = :auto,
                      legend = :none,
-                     yformatter = :auto)
+                     margin = 6mm)
 end
 plot_all
 savefig(plot_all, "plot_all.pdf")

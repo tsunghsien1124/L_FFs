@@ -715,11 +715,9 @@ function λ_optimal_func(
     iter = 0
     crit = Inf
     λ_optimal = 0.0
-    parameters_λ_optimal =[]
-    variables_λ_optimal = []
 
     # start looping
-    while (crit > tol) && (iter < iter_max)
+    while crit > tol && iter < iter_max
 
         # update the multiplier
         λ_optimal = (λ_lower + λ_upper)/2
@@ -745,9 +743,9 @@ function λ_optimal_func(
     end
 
     # re-run the results with the optimal multiplier
-    # parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
-    # variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 0)
-    # ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
+    parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
+    variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 0)
+    ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
 
     # return associated results
     return parameters_λ_min, variables_λ_min, parameters_λ_optimal, variables_λ_optimal
@@ -796,24 +794,17 @@ pretty_table(data_spec, ["Name", "Value"];
              highlighters = hl_LR)
 =#
 
-
-η_min = 0.25
-η_max = 0.80
-η_step = 0.5
-η_grid = collect(η_max:-η_step:η_min)
+η_grid = collect(0.225:-0.025:0.20)
 η_size = length(η_grid)
 results_NFF = zeros(η_size,13)
 results_FF = zeros(η_size,13)
-a_min = -3.50
-a_size_neg = 701
 
-# compute the optimal multipliers with different η
 for η_i in 1:η_size
-
+    # compute the optimal multipliers with different η
     if η_i == 1
-        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min)
+        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], -3.50, λ_min_adhoc = results_FF_old[end,3])
     else
-        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min, λ_min_adhoc = results_FF[η_i-1,3])
+        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], -3.50, λ_min_adhoc = results_FF[η_i-1,3])
     end
 
     # record results
@@ -830,7 +821,6 @@ for η_i in 1:η_size
     results_FF[η_i,4] = parameters_FF.r_lp*100
     results_FF[η_i,5] = parameters_FF.K
     results_FF[η_i,6:end] .= variables_FF.aggregate_var
-
 end
 
 symbol = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of d=1", "% of a'<0", "a'<0/e", "avg. 1/q"]
@@ -841,35 +831,41 @@ pretty_table(results_NFF, symbol, formatters = ft_round(8))
 pretty_table(results_FF, symbol, formatters = ft_round(8))
 @save "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
 
-@load "05012021_results_eta_0.25_0.80.bson" results header
-pretty_table(results, header, formatters = ft_round(8))
-
-plot_row = 3
+plot_row = 5
 plot_col = 2
 plot_size = plot_row * plot_col
-plot_ordering = [4,9,10,11,12,13]
+plot_ordering = [4,5,6,7,8,9,10,11,12,13]
 plot_title = [header[i] for i in plot_ordering]
 plot_all = plot(layout = (plot_row,plot_col),
-                size=(700,900),
+                size=(1000,1800),
                 box = :on)
 for sp_i in 1:plot_size
     plot_index = plot_ordering[sp_i]
     plot_all = plot!(subplot = sp_i,
-                     results[:,1],
-                     results[:,plot_index],
+                     results_NFF[:,1],
+                     results_NFF[:,plot_index],
+                     seriestype = :path,
+                     markershapes = :circle,
+                     markerstrokecolor = :auto,
+                     legend = :none,
+                     yformatter = :auto)
+    plot_all = plot!(subplot = sp_i,
+                     results_FF[:,1],
+                     results_FF[:,plot_index],
                      title = plot_title[sp_i],
                      xtickfont = font(10, "Computer Modern", :black),
                      ytickfont = font(10, "Computer Modern", :black),
                      titlefont = font(14, "Computer Modern", :black),
                      seriestype = :path,
-                     markershapes = :auto,
+                     markershapes = :square,
                      markerstrokecolor = :auto,
                      legend = :none,
                      yformatter = :auto)
-    # plot!(subplot = sp_i,results_FF[:,1], results_FF[:,plot_index])
 end
 plot_all
+savefig(plot_all, "plot_all.pdf")
 
+#=
 plot(results[:,1], results[:,3], seriestype=:path, legend=:none, markershapes=:auto,
 theme=theme(:default), box=:on,
 xlabel = latexstring("\$","\\alpha = 0.30","\$"), xtickfont = font(10, "times"),
@@ -882,20 +878,21 @@ plot(results[:,1], results[:,10]*100, seriestype=:scatter, legend=:none, title="
 label_latex = reshape(latexstring.("\$",["e = 1" for i in 1:parameters_FI.e_size],"\$"),1,:)
 
 latexstring("\$","\\alpha","\$")
+=#
 
 function CEV_function(
-    results::Array{Float64,2}
-    a_min::Real,
-    a_size_neg::Integer
+    results::Array{Float64,2};
+    a_min::Real = -3.5,
+    a_size_neg::Integer = 701
     )
     """
-    compute the optimal value functions and cross-sectional distribution
+    compute the optimal value function and cross-sectional distribution
     """
 
     η_size = size(results,1)
-    parameters_CEV = para_func(a_min = a_min, a_size_neg = a_size_neg)
-    CEV_V_results = zeros(parameters_CEV.a_size, parameters_CEV.e_size, parameters_CEV.ν_size, η_size)
-    CEV_μ_results = zeros(parameters_CEV.a_size, parameters_CEV.e_size, parameters_CEV.ν_size, η_size)
+    CEV_parameters = para_func(a_min = a_min, a_size_neg = a_size_neg)
+    CEV_V_results = zeros(CEV_parameters.a_size, CEV_parameters.e_size, CEV_parameters.ν_size, η_size)
+    CEV_μ_results = zeros(CEV_parameters.a_size, CEV_parameters.e_size, CEV_parameters.ν_size, η_size)
 
     for η_i in 1:η_size
         parameters_η = para_func(η = results[η_i,1], λ = results[η_i,3], a_min = a_min, a_size_neg = a_size_neg)

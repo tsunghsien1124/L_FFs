@@ -23,7 +23,7 @@ function parameters_FI_function(;
     e_ρ::Real = 0.95,                           # AR(1) of persistent earnings
     e_σ::Real = 0.10,                           # s.d. of persistent earnings
     e_size::Integer = 9,                        # number of persistent earnings
-    a_size_neg::Integer = 121,                  # number of negative assets
+    a_size_neg::Integer = 151,                  # number of negative assets
     a_size_pos::Integer = 11,                   # number of positive assets
     a_min::Real = -6.00,                        # minimum of assets
     a_max::Real = 50.00,                        # maximum of assets

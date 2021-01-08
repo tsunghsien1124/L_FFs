@@ -677,7 +677,8 @@ end
 
 function λ_optimal_func(
     η::Real,
-    a_min::Real;
+    a_min::Real,
+    a_size_neg::Real;
     λ_min_adhoc::Real = -Inf,
     λ_max_adhoc::Real = Inf,
     tol::Real = 1E-6,
@@ -686,9 +687,6 @@ function λ_optimal_func(
     """
     solve for the optimal multiplier
     """
-
-    # compute the associated number of gridpoints fro negative asset
-    a_size_neg = convert(Int, 1-a_min*200)
 
     # check the case of λ_min = 0.0
     λ_min = 0.0
@@ -716,6 +714,8 @@ function λ_optimal_func(
     iter = 0
     crit = Inf
     λ_optimal = 0.0
+    parameters_λ_optimal = []
+    variables_λ_optimal = []
 
     # start looping
     while crit > tol && iter < iter_max
@@ -744,9 +744,9 @@ function λ_optimal_func(
     end
 
     # re-run the results with the optimal multiplier
-    parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
-    variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 0)
-    ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
+    # parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
+    # variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 0)
+    # ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
 
     # return associated results
     return parameters_λ_min, variables_λ_min, parameters_λ_optimal, variables_λ_optimal
@@ -795,44 +795,76 @@ pretty_table(data_spec, ["Name", "Value"];
              highlighters = hl_LR)
 =#
 
-#=
-η_grid = collect(0.225:-0.025:0.20)
-η_size = length(η_grid)
-results_NFF = zeros(η_size,13)
-results_FF = zeros(η_size,13)
+function results_η_func(;
+    η_min::Real,
+    η_max::Real,
+    η_step::Real,
+    a_min::Real
+    )
+    """
+    compute the stationary equilibrium for different η considered
+    """
 
-for η_i in 1:η_size
+    # initial the grid of η considered
+    η_grid = collect(η_max:-η_step:η_min)
+    η_size = length(η_grid)
+
+    # compute the associated number of gridpoints for negative asset
+    a_size_neg = convert(Int, 1-a_min*200)
+
+    # initialize pparameters
+    parameters = para_func(a_min = a_min, a_size_neg = a_size_neg)
+
+    # initialize results matrices
+    results_A_NFF = zeros(η_size,13)
+    results_V_NFF = zeros(parameters.a_size, parameters.e_size, parameters.ν_size, η_size)
+    results_μ_NFF = zeros(parameters.a_size_μ, parameters.e_size, parameters.ν_size, η_size)
+
+    results_A_FF = zeros(η_size,13)
+    results_V_FF = zeros(parameters.a_size, parameters.e_size, parameters.ν_size, η_size)
+    results_μ_FF = zeros(parameters.a_size_μ, parameters.e_size, parameters.ν_size, η_size)
+
     # compute the optimal multipliers with different η
-    if η_i == 1
-        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], -3.50, λ_min_adhoc = results_FF_old[end,3])
-    else
-        parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], -3.50, λ_min_adhoc = results_FF[η_i-1,3])
+    for η_i in 1:η_size
+        if η_i == 1
+            parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min, a_size_neg)
+        else
+            parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min, a_size_neg, λ_min_adhoc = results_FF[η_i-1,3])
+        end
+
+        # record results
+        results_A_NFF[η_i,1] = parameters_NFF.η
+        results_A_NFF[η_i,2] = parameters_NFF.r_k*100
+        results_A_NFF[η_i,3] = parameters_NFF.λ
+        results_A_NFF[η_i,4] = parameters_NFF.r_lp*100
+        results_A_NFF[η_i,5] = parameters_NFF.K
+        results_A_NFF[η_i,6:end] .= variables_NFF.aggregate_var
+        results_V_NFF[:,:,:,η_i] = variables_NFF.V
+        results_μ_NFF[:,:,:,η_i] = variables_NFF.μ
+
+        results_A_FF[η_i,1] = parameters_FF.η
+        results_A_FF[η_i,2] = parameters_FF.r_k*100
+        results_A_FF[η_i,3] = parameters_FF.λ
+        results_A_FF[η_i,4] = parameters_FF.r_lp*100
+        results_A_FF[η_i,5] = parameters_FF.K
+        results_A_FF[η_i,6:end] .= variables_FF.aggregate_var
+        results_V_FF[:,:,:,η_i] = variables_FF.V
+        results_μ_FF[:,:,:,η_i] = variables_FF.μ
     end
 
-    # record results
-    results_NFF[η_i,1] = parameters_NFF.η
-    results_NFF[η_i,2] = parameters_NFF.i*100
-    results_NFF[η_i,3] = parameters_NFF.λ
-    results_NFF[η_i,4] = parameters_NFF.r_lp*100
-    results_NFF[η_i,5] = parameters_NFF.K
-    results_NFF[η_i,6:end] .= variables_NFF.aggregate_var
+    symbol = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of d=1", "% of a'<0", "a'<0/e", "avg. 1/q"]
+    header = ["Garnishment Rate", "Rental Rate", "Multiplier", "Liquidity Premium",
+              "Capital", "Loans", "Deposits", "Net Worth", "Leverage",
+              "Percentage of Defaulters", "Percentage in Debt", "Debt-to-Income Ratio", "Average Loan Rate"]
 
-    results_FF[η_i,1] = parameters_FF.η
-    results_FF[η_i,2] = parameters_FF.i*100
-    results_FF[η_i,3] = parameters_FF.λ
-    results_FF[η_i,4] = parameters_FF.r_lp*100
-    results_FF[η_i,5] = parameters_FF.K
-    results_FF[η_i,6:end] .= variables_FF.aggregate_var
+    return results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF, symbol, header
 end
 
-symbol = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of d=1", "% of a'<0", "a'<0/e", "avg. 1/q"]
-header = ["Garnishment Rate", "Interest Rate", "Multiplier", "Liquidity Premium",
-          "Capital", "Loans", "Deposits", "Net Worth", "Leverage",
-          "Percentage of Defaulters", "Percentage in Debt", "Debt-to-Income Ratio", "Average Loan Rate"]
-pretty_table(results_NFF, symbol, formatters = ft_round(8))
-pretty_table(results_FF, symbol, formatters = ft_round(8))
-@save "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
-=#
+results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF, symbol, header = results_η_func(η_min = 0.20, η_max = 0.80, η_step = 0.05, a_min = -3.50)
+pretty_table(results_A_NFF, symbol, formatters = ft_round(8))
+pretty_table(results_A_FF, symbol, formatters = ft_round(8))
+@save "results_eta_0.20_0.80_0.05.bson" results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF, symbol, header
+
 
 @load "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
 
@@ -886,26 +918,38 @@ label_latex = reshape(latexstring.("\$",["e = 1" for i in 1:parameters_FI.e_size
 latexstring("\$","\\alpha","\$")
 =#
 
-function CEV_function(
-    results::Array{Float64,2};
-    a_min::Real = -3.5,
-    a_size_neg::Integer = 701
+function results_CEV_func(
+    results_V::Array{Float64,4},
+    a_min::Real
     )
     """
-    compute the optimal value function and cross-sectional distribution
+    compute the consumption equivalent variation for different η considered
     """
 
-    η_size = size(results,1)
-    CEV_parameters = para_func(a_min = a_min, a_size_neg = a_size_neg)
-    CEV_V_results = zeros(CEV_parameters.a_size, CEV_parameters.e_size, CEV_parameters.ν_size, η_size)
-    CEV_μ_results = zeros(CEV_parameters.a_size, CEV_parameters.e_size, CEV_parameters.ν_size, η_size)
+    # compute the associated number of gridpoints for negative asset
+    a_size_neg = convert(Int, 1-a_min*200)
 
-    for η_i in 1:η_size
-        parameters_η = para_func(η = results[η_i,1], λ = results[η_i,3], a_min = a_min, a_size_neg = a_size_neg)
-        variables_η = var_func(parameters_η)
-        CEV_V_results[:,:,:,η_i] = variables_η.V
-        CEV_μ_results[:,:,:,η_i] = variables_η.μ
+    # initialize pparameters
+    parameters = para_func(a_min = a_min, a_size_neg = a_size_neg)
+
+    # initialize the result matrix
+    η_size = size(results_V,4)
+    results_CEV = zeros(parameters.a_size_μ, parameters.e_size, parameters.ν_size, η_size)
+
+    # compute CEV for different η
+    for η_i in 1:η_size, x_i in 1:parameters.x_size
+        e_i, ν_i = parameters.x_ind[x_i,:]
+        V_itp_new = Akima(parameters.a_grid, results_V[:,e_i,ν_i,η_i])
+        V_itp_old = Akima(parameters.a_grid, results_V[:,e_i,ν_i,1])
+        for a_i_μ in 1:parameters.a_size_μ
+            a_μ = parameters.a_grid_μ[a_i_μ]
+            results_CEV[a_i_μ,e_i,ν_i,η_i] = (V_itp_new(a_μ)/V_itp_old(a_μ))^(1/(1-parameters.σ)) - 1
+        end
     end
 
-    return CEV_V_results, CEV_μ_results
+    # return results
+    return parameters, results_CEV
 end
+
+results_CEV_NFF = results_CEV_func(results_V_NFF, a_min)
+results_CEV_FF = results_CEV_func(results_V_FF, a_min)

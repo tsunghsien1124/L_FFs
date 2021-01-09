@@ -678,7 +678,9 @@ end
 function λ_optimal_func(
     η::Real,
     a_min::Real,
-    a_size_neg::Real;
+    a_size_neg::Real,
+    e_ρ::Real,
+    e_σ::Real;
     λ_min_adhoc::Real = -Inf,
     λ_max_adhoc::Real = Inf,
     tol::Real = 1E-6,
@@ -690,7 +692,7 @@ function λ_optimal_func(
 
     # check the case of λ_min = 0.0
     λ_min = 0.0
-    parameters_λ_min = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_min)
+    parameters_λ_min = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_min, e_ρ = e_ρ, e_σ = e_σ)
     variables_λ_min = var_func(parameters_λ_min, load_initial_values = 0)
     ED_λ_min = solve_func!(variables_λ_min, parameters_λ_min)
     if ED_λ_min > 0.0
@@ -699,7 +701,7 @@ function λ_optimal_func(
 
     # check the case of λ_max = 1-(β*ψ*(1+i))^(1/2)
     λ_max = 1.0 - (parameters_λ_min.β_B*parameters_λ_min.ψ*(1+parameters_λ_min.i))^(1/2)
-    parameters_λ_max = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_max)
+    parameters_λ_max = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_max, e_ρ = e_ρ, e_σ = e_σ)
     variables_λ_max = var_func(parameters_λ_max, load_initial_values = 0)
     ED_λ_max = solve_func!(variables_λ_max, parameters_λ_max)
     if ED_λ_max < 0.0
@@ -724,7 +726,7 @@ function λ_optimal_func(
         λ_optimal = (λ_lower + λ_upper)/2
 
         # compute the associated results
-        parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal)
+        parameters_λ_optimal = para_func(η = η, a_min = a_min, a_size_neg = a_size_neg, λ = λ_optimal, e_ρ = e_ρ, e_σ = e_σ)
         variables_λ_optimal = var_func(parameters_λ_optimal, load_initial_values = 0)
         ED_λ_optimal = solve_func!(variables_λ_optimal, parameters_λ_optimal)
 
@@ -799,7 +801,9 @@ function results_η_func(;
     η_min::Real,
     η_max::Real,
     η_step::Real,
-    a_min::Real
+    a_min::Real,
+    e_ρ::Real,
+    e_σ::Real
     )
     """
     compute the stationary equilibrium for different η considered
@@ -813,7 +817,7 @@ function results_η_func(;
     a_size_neg = convert(Int, 1-a_min*200)
 
     # initialize pparameters
-    parameters = para_func(a_min = a_min, a_size_neg = a_size_neg)
+    parameters = para_func(a_min = a_min, a_size_neg = a_size_neg, e_ρ = e_ρ, e_σ = e_σ)
 
     # initialize results matrices
     results_A_NFF = zeros(η_size,13)
@@ -827,9 +831,9 @@ function results_η_func(;
     # compute the optimal multipliers with different η
     for η_i in 1:η_size
         if η_i == 1
-            parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min, a_size_neg)
+            parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min, a_size_neg, e_ρ, e_σ)
         else
-            parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min, a_size_neg, λ_min_adhoc = results_FF[η_i-1,3])
+            parameters_NFF, variables_NFF, parameters_FF, variables_FF = λ_optimal_func(η_grid[η_i], a_min, a_size_neg, λ_min_adhoc = results_FF[η_i-1,3], e_ρ, e_σ)
         end
 
         # record results
@@ -852,7 +856,7 @@ function results_η_func(;
         results_μ_FF[:,:,:,η_i] = variables_FF.μ
     end
 
-    symbol = ["η", "i", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of d=1", "% of a'<0", "a'<0/e", "avg. 1/q"]
+    symbol = ["η", "r_k", "λ", "lp", "K", "B", "D", "N", "(K+B)/D", "% of d=1", "% of a'<0", "a'<0/e", "avg. 1/q"]
     header = ["Garnishment Rate", "Rental Rate", "Multiplier", "Liquidity Premium",
               "Capital", "Loans", "Deposits", "Net Worth", "Leverage",
               "Percentage of Defaulters", "Percentage in Debt", "Debt-to-Income Ratio", "Average Loan Rate"]
@@ -860,10 +864,15 @@ function results_η_func(;
     return results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF, symbol, header
 end
 
-results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF, symbol, header = results_η_func(η_min = 0.20, η_max = 0.80, η_step = 0.05, a_min = -3.50)
+results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF, symbol, header = results_η_func(η_min = 0.20, η_max = 0.80, η_step = 0.05, a_min = -3.50, e_ρ = 0.95, e_σ = 0.10)
 pretty_table(results_A_NFF, symbol, formatters = ft_round(8))
 pretty_table(results_A_FF, symbol, formatters = ft_round(8))
-@save "results_eta_0.20_0.80_0.05.bson" results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF, symbol, header
+@save "results_eta_0.20_0.80_0.05.bson" results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF symbol header
+
+results_A_NFF_low_eσ, results_V_NFF_low_eσ, results_μ_NFF_low_eσ, results_A_FF_low_eσ, results_V_FF_low_eσ, results_μ_FF_low_eσ, symbol, header = results_η_func(η_min = 0.20, η_max = 0.80, η_step = 0.05, a_min = -3.50, e_ρ = 0.95, e_σ = 0.09)
+pretty_table(results_A_NFF_low_eσ, symbol, formatters = ft_round(8))
+pretty_table(results_A_FF_low_eσ, symbol, formatters = ft_round(8))
+@save "results_eta_0.20_0.80_0.05_low_eσ.bson" results_A_NFF_low_eσ results_V_NFF_low_eσ results_μ_NFF_low_eσ results_A_FF_low_eσ results_V_FF_low_eσ results_μ_FF_low_eσ symbol header
 
 
 @load "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
@@ -879,8 +888,8 @@ plot_all = plot(layout = (plot_row,plot_col),
 for sp_i in 1:plot_size
     plot_index = plot_ordering[sp_i]
     plot_all = plot!(subplot = sp_i,
-                     results_NFF[:,1],
-                     results_NFF[:,plot_index],
+                     results_A_NFF[:,1],
+                     results_A_NFF[:,plot_index],
                      title = plot_title[sp_i],
                      seriestype = :path,
                      markershapes = :auto,
@@ -888,8 +897,8 @@ for sp_i in 1:plot_size
                      legend = :none,
                      margin = 6mm)
     plot_all = plot!(subplot = sp_i,
-                     results_FF[:,1],
-                     results_FF[:,plot_index],
+                     results_A_FF[:,1],
+                     results_A_FF[:,plot_index],
                      title = plot_title[sp_i],
                      xtickfont = font(12, "Computer Modern", :black),
                      ytickfont = font(12, "Computer Modern", :black),
@@ -951,5 +960,5 @@ function results_CEV_func(
     return parameters, results_CEV
 end
 
-results_CEV_NFF = results_CEV_func(results_V_NFF, a_min)
-results_CEV_FF = results_CEV_func(results_V_FF, a_min)
+parameters_CEV, results_CEV_NFF = results_CEV_func(results_V_NFF, a_min)
+parameters_CEV, results_CEV_FF = results_CEV_func(results_V_FF, a_min)

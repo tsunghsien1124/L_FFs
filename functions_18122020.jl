@@ -536,7 +536,7 @@ function aggregate_func!(
 
     @unpack x_size, x_ind, x_grid, e_size, ν_size, a_grid, a_grid_neg, a_grid_pos = parameters
     @unpack a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ = parameters
-    @unpack K, ξ_bar = parameters
+    @unpack K, ξ_bar, w = parameters
 
     # total loans and deposits
     for x_i in 1:x_size
@@ -599,13 +599,13 @@ function aggregate_func!(
         end
     end
 
-    # debt-to-income ratio
+    # debt-to-earnings ratio
     for x_i in 1:x_size
         e_i, ν_i = x_ind[x_i,:]
         e, ν = x_grid[x_i,:]
         for a_μ_i in 1:(a_size_neg_μ-1)
             a_μ = a_grid_neg_μ[a_μ_i]
-            variables.aggregate_var[7] += variables.μ[a_μ_i,e_i,ν_i] * (-a_μ/exp(e))
+            variables.aggregate_var[7] += variables.μ[a_μ_i,e_i,ν_i] * (-a_μ/(w*exp(e)))
         end
     end
 
@@ -875,42 +875,63 @@ pretty_table(results_A_FF_low_eσ, symbol, formatters = ft_round(8))
 @save "results_eta_0.20_0.80_0.05_low_eσ.bson" results_A_NFF_low_eσ results_V_NFF_low_eσ results_μ_NFF_low_eσ results_A_FF_low_eσ results_V_FF_low_eσ results_μ_FF_low_eσ symbol header
 
 
-@load "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
+# @load "06012021_results_eta_0.25_0.80.bson" results_NFF results_FF header symbol
 
-plot_row = 5
+@load "results_eta_0.20_0.80_0.05.bson" results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF symbol header
+
+plot_row = 2
 plot_col = 2
 plot_size = plot_row * plot_col
-plot_ordering = [4,5,6,7,8,9,10,11,12,13]
+plot_ordering = [4,5,6,7]
+# plot_ordering = [4,5,6,7,9,10,11,12,13]
 plot_title = [header[i] for i in plot_ordering]
 plot_all = plot(layout = (plot_row,plot_col),
-                size=(1000,1800),
-                box = :on)
+                size=(plot_row*500,plot_col*350),
+                box = :on,
+                xtickfont = font(12, "Computer Modern", :black),
+                ytickfont = font(12, "Computer Modern", :black),
+                titlefont = font(18, "Computer Modern", :black),
+                guidefont = font(16, "Computer Modern", :black),
+                legendfont = font(12, "Computer Modern", :black))
 for sp_i in 1:plot_size
     plot_index = plot_ordering[sp_i]
     plot_all = plot!(subplot = sp_i,
                      results_A_NFF[:,1],
                      results_A_NFF[:,plot_index],
-                     title = plot_title[sp_i],
+                     # lc = :blue,
                      seriestype = :path,
                      markershapes = :auto,
+                     markercolor = :auto,
+                     markersize = 5,
                      markerstrokecolor = :auto,
+                     lw = 2,
+                     label = "Without Financial Frictions",
                      legend = :none,
                      margin = 6mm)
     plot_all = plot!(subplot = sp_i,
                      results_A_FF[:,1],
                      results_A_FF[:,plot_index],
                      title = plot_title[sp_i],
-                     xtickfont = font(12, "Computer Modern", :black),
-                     ytickfont = font(12, "Computer Modern", :black),
-                     titlefont = font(16, "Computer Modern", :black),
                      seriestype = :path,
                      markershapes = :auto,
+                     markercolor = :auto,
                      markerstrokecolor = :auto,
+                     # lc = :red,
+                     lw = 2,
+                     label = "With Financial Frictions",
                      legend = :none,
                      margin = 6mm)
+    if sp_i > (plot_row-1)*plot_col
+        plot_all = plot!(subplot = sp_i,
+                         xlabel = "\$ \\textrm{garnishment rate } (\\eta) \$")
+    end
+    if sp_i == plot_row*plot_col
+        plot_all = plot!(subplot = sp_i,
+                         legend = :bottomleft)
+    end
 end
 plot_all
-savefig(plot_all, "plot_all.pdf")
+savefig(plot_all, "plot_all_equlibria.pdf")
 
 #=
 plot(results[:,1], results[:,3], seriestype=:path, legend=:none, markershapes=:auto,

@@ -6,7 +6,6 @@ module SimplePCHIP
 
 export interpolate
 
-
 struct _pchip
     N :: Integer
     xs :: Array{Float64}
@@ -32,7 +31,7 @@ end
 
 function _pchip_index(pchip :: _pchip, x)
     N = pchip.N
-    if N < 200  # Approximate performance cross-over on my old intel i7-3517U
+    if N < 100000  # Approximate performance cross-over on my old intel i7-3517U
         i = _pchip_index_linear_search(pchip, x)
     else
         i = _pchip_index_bisectional_search(pchip, x)
@@ -77,7 +76,6 @@ function _pchip_index_bisectional_search(pchip :: _pchip, x)
     end
     i
 end
-
 
 "Similar to how SciPy's PCHIP does it"
 function _initial_ds_scipy(xs, ys)

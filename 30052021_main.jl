@@ -140,6 +140,43 @@ function utility_function(
     end
 end
 
+function EV_itp_function(
+    V::Array{Float64,3},
+    V_d::Array{Float64,2},
+    parameters::NamedTuple
+    )
+    """
+    construct interpolated expected value function
+    """
+
+    # construct zero functions
+    V_hat_impatient_itp(a_p) = 0.0
+    V_hat_patient_itp(a_p) = 0.0
+
+    for e_p_i in 1:e_size, ν_p_i in 1:ν_size
+
+        V_nd_Non_Inf = findall(V_nd[:,ν_p_i,e_p_i] .!= -Inf)
+        V_nd_itp = Akima(a_grid[V_nd_Non_Inf], V_nd[V_nd_Non_Inf,ν_p_i,e_p_i])
+
+        function V_p_function(a_p)
+            if a_p >= -w*exp(e_grid[e_i])
+                return ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_nd_itp(a_p)
+            else
+                return ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_d[ν_p_i,e_p_i]
+            end
+        end
+
+        V_p_function(a_p) = a_p >= -w*exp(e_grid[e_i]) ? V_nd_itp(a_p) : V_d[ν_p_i,e_p_i]
+
+        EV_itp(a_p) = let EV_itp = EV_itp
+            a_p -> EV_itp(a_p) + ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_p_function(a_p)
+        end
+    end
+
+    V_hat_impatient_itp = Akima(a_grid, V_hat_impatient)
+
+end
+
 function solve_ED_function(
     parameters::NamedTuple;
     tol::Real = tol,

@@ -22,7 +22,7 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 function parameters_function(;
     β::Real = 0.96,             # discount factor (households)
     β_f::Real = 0.96,           # discount factor (bank)
-    r_f::Real = 1.0/β_f-1.0,   # risk-free rate
+    r_f::Real = 1.00/β_f-1.00,  # risk-free rate
     σ::Real = 2.00,             # CRRA coefficient
     η::Real = 0.40,             # garnishment rate
     δ::Real = 0.08,             # depreciation rate
@@ -141,40 +141,48 @@ function utility_function(
 end
 
 function EV_itp_function(
-    V::Array{Float64,3},
-    V_d::Array{Float64,2},
+    e_i::Integer,
+    V_d_p::Array{Float64,2},
+    V_nd_p::Array{Float64,3},
+    γ::Array{Float64,1},
     parameters::NamedTuple
     )
     """
     construct interpolated expected value function
     """
 
-    # construct zero functions
-    V_hat_impatient_itp(a_p) = 0.0
-    V_hat_patient_itp(a_p) = 0.0
+    # unpack parameters
+    @unpack e_size, e_Γ, ν_size, ν_Γ = parameters
 
+    # construct zero function
+    EV_itp(a_p) = 0.0
+
+    # initialize array of functions
+    N = 1 + e_size*ν_size
+    EV_array = Array{Function}(undef, N);
+    EV_array[1] = EV_itp;
+
+    # loop nested functions
     for e_p_i in 1:e_size, ν_p_i in 1:ν_size
 
-        V_nd_Non_Inf = findall(V_nd[:,ν_p_i,e_p_i] .!= -Inf)
-        V_nd_itp = Akima(a_grid[V_nd_Non_Inf], V_nd[V_nd_Non_Inf,ν_p_i,e_p_i])
+        # interpolated non-defaulting value function
+        V_nd_p_Non_Inf = findall(V_nd_p[:,ν_p_i,e_p_i] .!= -Inf)
+        V_nd_p_itp = Akima(a_grid[V_nd_p_Non_Inf], V_nd_p[V_nd_p_Non_Inf,ν_p_i,e_p_i])
 
-        function V_p_function(a_p)
-            if a_p >= -w*exp(e_grid[e_i])
-                return ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_nd_itp(a_p)
-            else
-                return ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_d[ν_p_i,e_p_i]
-            end
-        end
+        # interpolated value function based on defaulting threshold
+        V_p_itp(a_p) = a_p >= γ[e_i] ? V_nd_p_itp(a_p) : V_d_p[ν_p_i,e_p_i]
 
-        V_p_function(a_p) = a_p >= -w*exp(e_grid[e_i]) ? V_nd_itp(a_p) : V_d[ν_p_i,e_p_i]
-
+        # update expected value function
+        i = (e_p_i-1)*ν_size + ν_p_i
+        EV_array[i+1] = a_p -> EV_array[i](a_p) + ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_p_itp(a_p)
+        #=
         EV_itp(a_p) = let EV_itp = EV_itp
-            a_p -> EV_itp(a_p) + ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_p_function(a_p)
+            a_p -> EV_itp(a_p) + ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_p_itp(a_p)
         end
+        =#
     end
 
-    V_hat_impatient_itp = Akima(a_grid, V_hat_impatient)
-
+    return EV_itp
 end
 
 function solve_ED_function(
@@ -198,11 +206,13 @@ function solve_ED_function(
     prog = ProgressThresh(tol, "Solving ED economy for initialization: ")
 
     # compute equilibrium repament probability and pricing functions
-    p = ones(a_size, e_size)
-    q = ones(a_size, e_size)
+    p = zeros(a_size, e_size)
+    q = zeros(a_size, e_size)
+    γ = zeros(e_size)
     for e_i in 1:e_size
         @inbounds e_μ = e_ρ*e_grid[e_i]
-        @inbounds @views p[:,e_i] = 1.0 .- cdf.(LogNormal(e_μ,e_σ),-a_grid)
+        @inbounds γ[e_i] = -w*exp(e_grid[e_i])
+        @inbounds @views p[:,e_i] = 1.0 .- cdf.(LogNormal(e_μ,e_σ),-a_grid/w)
         @inbounds @views q[:,e_i] = p[:,e_i]./(1.0+r_f+ι)
     end
     q_function(a_p,e_μ,e_σ) = (1.0-cdf(LogNormal(e_μ,e_σ),-a_p))/(1.0+r_f+ι)
@@ -210,14 +220,19 @@ function solve_ED_function(
 
     # initialize containers
     V = zeros(a_size, ν_size, e_size)
-    V_p = similar(V)
+    V_p = zeros(a_size, ν_size, e_size)
     V_d = zeros(ν_size, e_size)
+    V_d_p = zeros(ν_size, e_size)
     V_nd = zeros(a_size, ν_size, e_size)
+    V_nd_p = zeros(a_size, ν_size, e_size)
 
     # solve eqquilibrium value functions
     while crit > tol && iter < iter_max
+
         # copy the current value function to the pre-specified container
         copyto!(V_p, V)
+        copyto!(V_d_p, V_d)
+        copyto!(V_nd_p, V_nd)
 
         # update household's problem
         Threads.@threads for e_i in 1:e_size
@@ -322,8 +337,7 @@ function value_function!(
     """
 
     # unpack parameters
-    @unpack a_grid, a_size, e_grid, e_size, e_Γ, β_grid, β_size, β_Γ = parameters
-    @unpack action_grid, action_ind, a_ind_zero, action_size, s_grid, s_size, κ_grid, ρ, γ, α = parameters
+    @unpack a_grid, a_size, e_grid, e_size, e_Γ, ν_grid, ν_size, ν_Γ = parameters
 
     # feasible set and conditional value function
     Threads.@threads for e_i in 1:e_size
@@ -399,3 +413,9 @@ variables = variables_function(parameters)
 e_label = round.(exp.(parameters.e_grid),digits=2)'
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg,:],legend=:bottomright,label=e_label)
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg,:].*parameters.a_grid_neg,legend=:bottomright,label=e_label)
+
+copyto!(V_p, variables.V)
+copyto!(V_d_p, variables.V_d)
+copyto!(V_nd_p, variables.V_nd)
+e_i = 1
+f = EV_itp_function(e_i, V_d_p, V_nd_p, γ, parameters)

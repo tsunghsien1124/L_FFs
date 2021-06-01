@@ -39,7 +39,7 @@ function parameters_function(;
     a_min::Real = -5.0,         # min of asset holding
     a_max::Real = 350.0,        # max of asset holding
     a_size_neg::Integer = 501,  # number of grid of negative asset holding for VFI
-    a_size_pos::Integer = 351,  # number of grid of positive asset holding for VFI
+    a_size_pos::Integer = 51,   # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,      # curvature of the positive asset gridpoints
     μ_scale::Integer = 7        # scale governing the number of grids in computing density
     )
@@ -141,6 +141,7 @@ function utility_function(
 end
 
 function EV_itp_function(
+    a_p::Real,
     e_i::Integer,
     V_d_p::Array{Float64,2},
     V_nd_p::Array{Float64,3},
@@ -152,15 +153,14 @@ function EV_itp_function(
     """
 
     # unpack parameters
-    @unpack e_size, e_Γ, ν_size, ν_Γ = parameters
+    @unpack a_grid, e_size, e_Γ, ν_size, ν_Γ = parameters
 
-    # construct zero function
-    EV_itp(a_p) = 0.0
+    # construct container
+    EV = 0.0
 
     # initialize array of functions
-    N = 1 + e_size*ν_size
-    EV_array = Array{Function}(undef, N);
-    EV_array[1] = EV_itp;
+    # N = e_size*ν_size
+    # EV_array = Array{Function}(undef, N);
 
     # loop nested functions
     for e_p_i in 1:e_size, ν_p_i in 1:ν_size
@@ -172,17 +172,43 @@ function EV_itp_function(
         # interpolated value function based on defaulting threshold
         V_p_itp(a_p) = a_p >= γ[e_i] ? V_nd_p_itp(a_p) : V_d_p[ν_p_i,e_p_i]
 
-        # update expected value function
-        i = (e_p_i-1)*ν_size + ν_p_i
-        EV_array[i+1] = a_p -> EV_array[i](a_p) + ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_p_itp(a_p)
-        #=
-        EV_itp(a_p) = let EV_itp = EV_itp
-            a_p -> EV_itp(a_p) + ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_p_itp(a_p)
-        end
-        =#
-    end
+        # assign expected value function
+        # i = (e_p_i-1)*ν_size + ν_p_i
+        # EV_array[i+1] = a_p -> ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_p_itp(a_p)
 
-    return EV_itp
+        # update expected value
+        EV += ν_Γ[ν_p_i]*e_Γ[e_i,e_p_i]*V_p_itp(a_p)
+    end
+    return EV
+end
+
+function optim_bounds_function(
+    obj::Function,
+    grid_min::Real,
+    grid_max::Real;
+    grid_length::Integer = 20,
+    obj_range::Integer = 1
+    )
+    """
+    compute bounds for optimization
+    """
+
+    grid = range(grid_min, grid_max, length = grid_length)
+    grid_size = length(grid)
+    obj_grid = obj.(grid)
+    obj_index = argmin(obj_grid)
+    # obj_index = findfirst(obj_grid .== minimum(obj_grid))
+    if obj_index < (1+obj_range)
+        lb = grid_min
+        ub = grid[obj_index + 2*obj_range]
+    elseif obj_index > (grid_size-obj_range)
+        lb = grid[obj_index - 2*obj_range]
+        ub = grid_max
+    else
+        lb = grid[obj_index - obj_range]
+        ub = grid[obj_index + obj_range]
+    end
+    return lb, ub
 end
 
 function solve_ED_function(
@@ -220,10 +246,11 @@ function solve_ED_function(
 
     # initialize containers
     V = zeros(a_size, ν_size, e_size)
-    V_p = zeros(a_size, ν_size, e_size)
     V_d = zeros(ν_size, e_size)
-    V_d_p = zeros(ν_size, e_size)
     V_nd = zeros(a_size, ν_size, e_size)
+
+    V_p = zeros(a_size, ν_size, e_size)
+    V_d_p = zeros(ν_size, e_size)
     V_nd_p = zeros(a_size, ν_size, e_size)
 
     # solve eqquilibrium value functions
@@ -235,25 +262,31 @@ function solve_ED_function(
         copyto!(V_nd_p, V_nd)
 
         # update household's problem
-        Threads.@threads for e_i in 1:e_size
+        @time Threads.@threads for e_i in 1:e_size
 
             # extract endowment
             @inbounds e = e_grid[e_i]
 
             # compute the next-period discounted expected value funtions and interpolated functions
-            @inbounds @views V_expt_p = (ν_Γ[1]*V_p[:,1,:] + ν_Γ[2]*V_p[:,2,:])*e_Γ[e_i,:]
-            @inbounds @views V_hat_impatient = ν_grid[1]*β*V_expt_p
-            @inbounds @views V_hat_patient = ν_grid[2]*β*V_expt_p
-            V_hat_impatient_itp = Akima(a_grid, V_hat_impatient)
-            V_hat_patient_itp = Akima(a_grid, V_hat_patient)
+            # @inbounds @views V_expt_p = (ν_Γ[1]*V_p[:,1,:] + ν_Γ[2]*V_p[:,2,:])*e_Γ[e_i,:]
+            # @inbounds @views V_hat_impatient = ν_grid[1]*β*V_expt_p
+            # @inbounds @views V_hat_patient = ν_grid[2]*β*V_expt_p
+            # V_hat_impatient_itp = Akima(a_grid, V_hat_impatient)
+            # V_hat_patient_itp = Akima(a_grid, V_hat_patient)
+            EV_itp(a_p) = EV_itp_function(a_p, e_i, V_d_p, V_nd_p, γ, parameters)
+            V_hat_impatient_itp(a_p) = ν_grid[1]*β*EV_itp(a_p)
+            V_hat_patient_itp(a_p) = ν_grid[2]*β*EV_itp(a_p)
 
             # compute defaulting value
-            @inbounds V_d[1,e_i] = utility_function((1-η)*w*exp(e),σ) + V_hat_impatient[a_ind_zero]
-            @inbounds V_d[2,e_i] = utility_function((1-η)*w*exp(e),σ) + V_hat_patient[a_ind_zero]
+            # @inbounds V_d[1,e_i] = utility_function((1-η)*w*exp(e),σ) + V_hat_impatient[a_ind_zero]
+            # @inbounds V_d[2,e_i] = utility_function((1-η)*w*exp(e),σ) + V_hat_patient[a_ind_zero]
+            @inbounds V_d[1,e_i] = utility_function((1-η)*w*exp(e),σ) + V_hat_impatient_itp(0.0)
+            @inbounds V_d[2,e_i] = utility_function((1-η)*w*exp(e),σ) + V_hat_patient_itp(0.0)
 
             # find risky borrowing limit
             object_rbl(a_p) = qa_function(a_p,e_ρ*e,e_σ)
-            res_rbl = optimize(object_rbl, a_grid[1], 0.0)
+            rbl_lb, rbl_ub = optim_bounds_function(object_rbl, a_grid[1], 0.0)
+            res_rbl = optimize(object_rbl, rbl_lb, rbl_ub)
             rbl = Optim.minimizer(res_rbl)
 
             # compute non-defaulting value
@@ -261,10 +294,13 @@ function solve_ED_function(
                 @inbounds CoH = w*exp(e) + a_grid[a_i]
                 if (CoH - object_rbl(rbl)) >= 0.0
                     object_nd_impatient(a_p) = -(utility_function(CoH-object_rbl(a_p),σ) + V_hat_impatient_itp(a_p))
-                    res_nd_impatient = optimize(object_nd_impatient, rbl, CoH*(1+r_f+ι))
+                    impatient_lb, impatient_ub = optim_bounds_function(object_nd_impatient, rbl, CoH*(1+r_f+ι))
+                    res_nd_impatient = optimize(object_nd_impatient, impatient_lb, impatient_ub)
                     @inbounds V_nd[a_i,1,e_i] = -Optim.minimum(res_nd_impatient)
+
                     object_nd_patient(a_p) = -(utility_function(CoH-object_rbl(a_p),σ) + V_hat_patient_itp(a_p))
-                    res_nd_patient = optimize(object_nd_patient, rbl, CoH*(1+r_f+ι))
+                    patient_lb, patient_ub = optim_bounds_function(object_nd_patient, rbl, CoH*(1+r_f+ι))
+                    res_nd_patient = optimize(object_nd_patient, patient_lb, patient_ub)
                     @inbounds V_nd[a_i,2,e_i] = -Optim.minimum(res_nd_patient)
                 else
                     @inbounds @views V_nd[a_i,:,e_i] .= utility_function(0.0,σ)
@@ -292,7 +328,7 @@ function solve_ED_function(
         iter += 1
     end
 
-    return p, q, V, V_d, V_nd
+    return p, q, γ, V, V_d, V_nd
 end
 
 function variables_function(
@@ -306,7 +342,7 @@ function variables_function(
     @unpack a_size, a_size_μ, e_size, ν_size = parameters
 
     # initialization
-    p, q, V, V_d, V_nd = solve_ED_function(parameters; tol = 1E-8, iter_max = 1000)
+    p, q, γ, V, V_d, V_nd = solve_ED_function(parameters; tol = 1E-8, iter_max = 1000)
     policy_a = zeros(a_size, ν_size, e_size)
     policy_d = zeros(a_size, ν_size, e_size)
 
@@ -411,7 +447,7 @@ parameters = parameters_function()
 variables = variables_function(parameters)
 
 e_label = round.(exp.(parameters.e_grid),digits=2)'
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg,:],legend=:bottomright,label=e_label)
+plot(parameters.a_grid_neg, q[1:parameters.a_size_neg,:],legend=:bottomright,label=e_label)
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg,:].*parameters.a_grid_neg,legend=:bottomright,label=e_label)
 
 copyto!(V_p, variables.V)

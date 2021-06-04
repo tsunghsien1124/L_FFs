@@ -19,28 +19,28 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 # Define functions #
 #==================#
 function parameters_function(;
-    β::Real = 0.96,             # discount factor (households)
-    β_f::Real = 0.96,           # discount factor (bank)
+    β::Real = 0.96,                 # discount factor (households)
+    β_f::Real = 0.96,               # discount factor (bank)
     r_f::Real = 1.00 / β_f - 1.00,  # risk-free rate
-    σ::Real = 2.00,             # CRRA coefficient
-    η::Real = 0.40,             # garnishment rate
-    δ::Real = 0.08,             # depreciation rate
-    α::Real = 1.0 / 3.0,          # capital share
-    ψ::Real = 0.90,             # exogenous dividend rate
-    λ::Real = 0.00,             # multiplier of incentive constraint
-    θ::Real = 0.40,             # diverting fraction
-    e_ρ::Real = 0.95,           # AR(1) of endowment shock
-    e_σ::Real = 0.10,           # s.d. of endowment shock
-    e_size::Integer = 9,        # number of endowment shock
-    ν_s::Real = 0.95,           # scale of patience
-    ν_p::Real = 0.10,           # probability of patience
-    ν_size::Integer = 2,        # number of preference shock
-    a_min::Real = -5.0,         # min of asset holding
-    a_max::Real = 350.0,        # max of asset holding
-    a_size_neg::Integer = 501,  # number of grid of negative asset holding for VFI
-    a_size_pos::Integer = 51,   # number of grid of positive asset holding for VFI
-    a_degree::Integer = 3,      # curvature of the positive asset gridpoints
-    μ_scale::Integer = 7,        # scale governing the number of grids in computing density
+    σ::Real = 2.00,                 # CRRA coefficient
+    η::Real = 0.40,                 # garnishment rate
+    δ::Real = 0.08,                 # depreciation rate
+    α::Real = 1.0 / 3.0,            # capital share
+    ψ::Real = 0.90,                 # exogenous dividend rate
+    λ::Real = 0.00,                 # multiplier of incentive constraint
+    θ::Real = 0.40,                 # diverting fraction
+    e_ρ::Real = 0.95,               # AR(1) of endowment shock
+    e_σ::Real = 0.10,               # s.d. of endowment shock
+    e_size::Integer = 9,            # number of endowment shock
+    ν_s::Real = 0.95,               # scale of patience
+    ν_p::Real = 0.10,               # probability of patience
+    ν_size::Integer = 2,            # number of preference shock
+    a_min::Real = -5.0,             # min of asset holding
+    a_max::Real = 350.0,            # max of asset holding
+    a_size_neg::Integer = 501,      # number of grid of negative asset holding for VFI
+    a_size_pos::Integer = 51,       # number of grid of positive asset holding for VFI
+    a_degree::Integer = 3,          # curvature of the positive asset gridpoints
+    μ_scale::Integer = 7,           # scale governing the number of grids in computing density
 )
     """
     contruct an immutable object containg all paramters
@@ -161,13 +161,7 @@ mutable struct MutableVariables
     aggregate_variables::MutableAggregateVariables
 end
 
-function optim_bounds_function(
-    obj::Function,
-    grid_min::Real,
-    grid_max::Real;
-    grid_length::Integer = 50,
-    obj_range::Integer = 1,
-)
+function optim_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 50, obj_range::Integer = 1)
     """
     compute bounds for optimization
     """
@@ -177,10 +171,10 @@ function optim_bounds_function(
     obj_grid = obj.(grid)
     obj_index = argmin(obj_grid)
     # obj_index = findfirst(obj_grid .== minimum(obj_grid))
-    if obj_index < (1+obj_range)
+    if obj_index < (1 + obj_range)
         lb = grid_min
         ub = grid[obj_index+obj_range]
-    elseif obj_index > (grid_size-obj_range)
+    elseif obj_index > (grid_size - obj_range)
         lb = grid[obj_index-obj_range]
         ub = grid_max
     else
@@ -202,9 +196,7 @@ function utility_function(c::Real, γ::Real)
     end
 end
 
-function variables_function(
-    parameters::NamedTuple
-)
+function variables_function(parameters::NamedTuple)
     """
     construct a mutable object containing endogenous variables
     """
@@ -217,7 +209,7 @@ function variables_function(
     q = zeros(a_size, e_size)
     rbl = zeros(e_size, 2)
 
-    for e_i in 1:e_size
+    for e_i = 1:e_size
         @inbounds e_μ = e_ρ * e_grid[e_i]
 
         p_function(a_p) = 1.0 - cdf(LogNormal(e_μ, e_σ), -a_p / w)
@@ -243,7 +235,7 @@ function variables_function(
 
         Threads.@threads for a_i = 1:a_size
             @inbounds a = a_grid[a_i]
-            @inbounds @views V_nd[a_i, e_i, :] .= utility_function(y + a - q[a_i, e_i]*a, σ)
+            @inbounds @views V_nd[a_i, e_i, :] .= utility_function(y + a - q[a_i, e_i] * a, σ)
 
             @inbounds if V_d[e_i, 1] > V_nd[a_i, e_i, 1]
                 @inbounds @views V[a_i, e_i, :] = V_d[e_i, :]
@@ -290,14 +282,7 @@ end
 
 
 
-function EV_itp_function(
-    a_p::Real,
-    e_i::Integer,
-    V_d_p::Array{Float64,2},
-    V_nd_p::Array{Float64,3},
-    threshold_e::Array{Float64,1},
-    parameters::NamedTuple,
-)
+function EV_itp_function(a_p::Real, e_i::Integer, V_d_p::Array{Float64,2}, V_nd_p::Array{Float64,3}, threshold_e::Array{Float64,1}, parameters::NamedTuple)
     """
     construct interpolated expected value function
     """
@@ -326,11 +311,7 @@ end
 
 
 
-function solve_ED_function(
-    parameters::NamedTuple;
-    tol::Real = tol,
-    iter_max::Integer = iter_max
-)
+function solve_ED_function(parameters::NamedTuple; tol::Real = tol, iter_max::Integer = iter_max)
     """
     solve the economy where enforced defualt (ED) is imposed based on income
     """
@@ -342,7 +323,7 @@ function solve_ED_function(
     @unpack β, σ, r_f, ι, η, w = parameters
 
     # update household's problem
-    for e_i in 1:e_size
+    for e_i = 1:e_size
 
         # extract endowment
         @inbounds e = e_grid[e_i]
@@ -354,15 +335,15 @@ function solve_ED_function(
         V_hat_patient_itp(a_p) = ν_grid[2] * β * EV_itp(a_p)
 
         # compute defaulting value
-        @inbounds variables.V_d[e_i, 1] = utility_function((1-η)*w*exp(e), σ) + V_hat_impatient_itp(0.0)
-        @inbounds variables.V_d[e_i, 2] = utility_function((1-η)*w*exp(e), σ) + V_hat_patient_itp(0.0)
+        @inbounds variables.V_d[e_i, 1] = utility_function((1 - η) * w * exp(e), σ) + V_hat_impatient_itp(0.0)
+        @inbounds variables.V_d[e_i, 2] = utility_function((1 - η) * w * exp(e), σ) + V_hat_patient_itp(0.0)
 
         #
-        @inbounds @views q_function = Akima(a_grid, variables.q[:,e_i])
-        qa_function(a_p) = q_function(a_p)*a_p
+        @inbounds @views q_function = Akima(a_grid, variables.q[:, e_i])
+        qa_function(a_p) = q_function(a_p) * a_p
 
         # compute non-defaulting value
-        Threads.@threads for a_i in 1:a_size
+        Threads.@threads for a_i = 1:a_size
 
             # cash on hand
             @inbounds CoH = w * exp(e) + a_grid[a_i]
@@ -371,7 +352,7 @@ function solve_ED_function(
 
                 # impatient household
                 object_nd_impatient(a_p) = -(utility_function(CoH - qa_function(a_p), σ) + V_hat_impatient_itp(a_p))
-                impatient_lb, impatient_ub = optim_bounds_function(object_nd_impatient, rbl_a, CoH * (1+r_f+ι))
+                impatient_lb, impatient_ub = optim_bounds_function(object_nd_impatient, rbl_a, CoH * (1 + r_f + ι))
                 res_nd_impatient = optimize(object_nd_impatient, impatient_lb, impatient_ub)
                 @inbounds variables.V_nd[a_i, e_i, 1] = -Optim.minimum(res_nd_impatient)
                 @inbounds variables.policy_a[a_i, e_i, 1] = Optim.minimizer(res_nd_impatient)
@@ -383,7 +364,7 @@ function solve_ED_function(
 
                 # patient household
                 object_nd_patient(a_p) = -(utility_function(CoH - qa_function(a_p), σ) + V_hat_patient_itp(a_p))
-                patient_lb, patient_ub = optim_bounds_function(object_nd_patient, rbl_a, CoH * (1+r_f+ι))
+                patient_lb, patient_ub = optim_bounds_function(object_nd_patient, rbl_a, CoH * (1 + r_f + ι))
                 res_nd_patient = optimize(object_nd_patient, patient_lb, patient_ub)
                 @inbounds variables.V_nd[a_i, e_i, 2] = -Optim.minimum(res_nd_patient)
                 @inbounds variables.policy_a[a_i, e_i, 2] = Optim.minimizer(res_nd_patient)
@@ -401,13 +382,7 @@ function solve_ED_function(
     end
 end
 
-function value_function!(
-    V_p::Array{Float64,3},
-    q_p::Array{Float64,2},
-    variables::MutableVariables,
-    parameters::NamedTuple;
-    slow_updating::Real = 1.0,
-)
+function value_function!(V_p::Array{Float64,3}, q_p::Array{Float64,2}, variables::MutableVariables, parameters::NamedTuple; slow_updating::Real = 1.0)
     """
     update value and policy functions
     """
@@ -446,11 +421,7 @@ function value_function!(
                     @inbounds W_expect += β_Γ[β_i, β_p_i] * e_Γ[e_i, e_p_i] * W_p[β_p_i, e_p_i, a_p_i, 1]
                 else
                     for s_p_i = 1:s_size
-                        @inbounds W_expect +=
-                            β_Γ[β_i, β_p_i] *
-                            e_Γ[e_i, e_p_i] *
-                            variables.Q_s[s_p_i, action_i, e_i, a_i, s_i] *
-                            W_p[β_p_i, e_p_i, a_p_i, s_p_i]
+                        @inbounds W_expect += β_Γ[β_i, β_p_i] * e_Γ[e_i, e_p_i] * variables.Q_s[s_p_i, action_i, e_i, a_i, s_i] * W_p[β_p_i, e_p_i, a_p_i, s_p_i]
                     end
                 end
             end
@@ -471,8 +442,7 @@ function value_function!(
             if V_ND ≈ 0.0
                 @inbounds @views variables.σ_ND[:, β_i, e_i, a_i, s_i] .= 0.0
             else
-                @inbounds @views variables.σ_ND[:, β_i, e_i, a_i, s_i] =
-                    exp.(variables.v[2:end, β_i, e_i, a_i, s_i] ./ α) ./ V_ND
+                @inbounds @views variables.σ_ND[:, β_i, e_i, a_i, s_i] = exp.(variables.v[2:end, β_i, e_i, a_i, s_i] ./ α) ./ V_ND
             end
             @inbounds @views variables.F_ND[:, β_i, e_i, a_i, s_i] .= 1.0
             @inbounds @views variables.F_ND[variables.σ_ND[:, β_i, e_i, a_i, s_i].≈0.0, β_i, e_i, a_i, s_i] .= 0.0
@@ -493,40 +463,16 @@ variables = variables_function(parameters)
 e_label = round.(exp.(parameters.e_grid), digits = 2)'
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :], legend = :topleft, label = e_label)
 
-plot(
-    parameters.a_grid_neg,
-    variables.q[1:parameters.a_size_neg, :] .* parameters.a_grid_neg,
-    legend = :topleft,
-    label = e_label,
-)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :] .* parameters.a_grid_neg, legend = :topleft, label = e_label)
 plot!(variables.rbl[:, 1], variables.rbl[:, 2], label = "rbl", seriestype = :scatter)
 
 plot(parameters.a_grid_neg, variables.V[1:parameters.a_ind_zero, :, 1], legend = :bottomleft, label = e_label)
 plot!(variables.threshold_a[:, 1], variables.V_d[:, 1], label = "defaulting debt level", seriestype = :scatter)
 
-plot(
-    -variables.threshold_a[:, 1],
-    parameters.w * exp.(parameters.e_grid),
-    legend = :none,
-    markershape = :circle,
-    xlabel = "defaulting debt level",
-    ylabel = "w*exp(e)",
-)
+plot(-variables.threshold_a[:, 1], parameters.w * exp.(parameters.e_grid), legend = :none, markershape = :circle, xlabel = "defaulting debt level", ylabel = "w*exp(e)")
 
-plot(
-    parameters.a_grid_neg,
-    variables.threshold_e[1:parameters.a_ind_zero, 1],
-    legend = :none,
-    xlabel = "debt level",
-    ylabel = "defaulting e level",
-)
+plot(parameters.a_grid_neg, variables.threshold_e[1:parameters.a_ind_zero, 1], legend = :none, xlabel = "debt level", ylabel = "defaulting e level")
 plot!(variables.threshold_a[:, 1], parameters.e_grid, seriestype = :scatter)
 
-plot(
-    parameters.a_grid_neg,
-    parameters.w .* exp.(variables.threshold_e[1:parameters.a_ind_zero, 1]),
-    legend = :none,
-    xlabel = "debt level",
-    ylabel = "defaulting w*exp(e) level",
-)
+plot(parameters.a_grid_neg, parameters.w .* exp.(variables.threshold_e[1:parameters.a_ind_zero, 1]), legend = :none, xlabel = "debt level", ylabel = "defaulting w*exp(e) level")
 plot!(variables.threshold_a[:, 1], parameters.w * exp.(parameters.e_grid), seriestype = :scatter)

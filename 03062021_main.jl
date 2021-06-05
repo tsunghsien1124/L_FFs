@@ -32,13 +32,13 @@ function parameters_function(;
     θ::Real = 0.40,                 # diverting fraction
     e_ρ::Real = 0.95,               # AR(1) of endowment shock
     e_σ::Real = 0.10,               # s.d. of endowment shock
-    e_size::Integer = 9,            # number of endowment shock
+    e_size::Integer = 5,            # number of endowment shock
     ν_s::Real = 0.00,               # scale of patience
     ν_p::Real = 0.01,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -2.0,             # min of asset holding
+    a_min::Real = -1.5,             # min of asset holding
     a_max::Real = 150.0,            # max of asset holding
-    a_size_neg::Integer = 201,      # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 151,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 51,       # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     μ_scale::Integer = 7,           # scale governing the number of grids in computing density
@@ -147,8 +147,8 @@ mutable struct MutableAggregateVariables
     debt_to_earning_ratio::Real
     share_of_filers::Real
     share_in_debts::Real
-    ave_loan_rate::Real
-    ave_loan_rate_pw::Real
+    avg_loan_rate::Real
+    avg_loan_rate_pw::Real
 end
 
 mutable struct MutableVariables
@@ -225,13 +225,23 @@ function variables_function(parameters::NamedTuple)
     q = zeros(a_size, e_size)
     rbl = zeros(e_size, 2)
     for e_i = 1:e_size
-        @inbounds e_μ = e_ρ * e_grid[e_i]
-
+        @inbounds e = e_grid[e_i]
+        e_μ = e_ρ * e
         p_function(a_p) = 1.0 - cdf(LogNormal(e_μ, e_σ), -a_p / w)
-        @inbounds @views p[:, e_i] = p_function.(a_grid)
-        @inbounds @views q[:, e_i] = p[:, e_i] ./ (1.0 + r_f + ι)
 
-        qa_funcion(a_p) = (p_function(a_p) / (1.0 + r_f + ι)) * a_p
+        for a_i = 1:a_size
+            @inbounds a = a_grid[a_i]
+            if a < 0.0
+                @inbounds @views p[a_i, e_i] = p_function(a)
+                @inbounds @views q[a_i, e_i] = (p[a_i, e_i] + (1.0 - p[a_i, e_i]) * (η * exp(e) / -a)) / (1.0 + r_f + ι)
+            else
+                @inbounds @views p[a_i, e_i] = 1.0
+                @inbounds @views q[a_i, e_i] = 1.0 / (1.0 + r_f + ι)
+            end
+        end
+
+        qa_funcion_itp = Akima(a_grid, q[:, e_i] .* a_grid)
+        qa_funcion(a_p) = qa_funcion_itp(a_p)
         @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0; grid_length = 20)
         res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
         @inbounds rbl[e_i, 1] = Optim.minimizer(res_rbl)
@@ -260,9 +270,9 @@ function variables_function(parameters::NamedTuple)
     debt_to_earning_ratio = 0.0
     share_of_filers = 0.0
     share_in_debts = 0.0
-    ave_loan_rate = 0.0
-    ave_loan_rate_pw = 0.0
-    aggregate_variables = MutableAggregateVariables(L, D, N, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_in_debts, ave_loan_rate, ave_loan_rate_pw)
+    avg_loan_rate = 0.0
+    avg_loan_rate_pw = 0.0
+    aggregate_variables = MutableAggregateVariables(L, D, N, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     # return outputs
     variables = MutableVariables(p, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ, aggregate_variables)
@@ -432,7 +442,7 @@ function pricing_and_rbl_function!(variables::MutableVariables, parameters::Name
     """
 
     # unpack parameters
-    @unpack r_f, ι, a_size, a_grid, e_size, e_grid, e_ρ, e_σ, ν_size, ν_Γ = parameters
+    @unpack r_f, ι, a_size, a_grid, e_size, e_grid, e_ρ, e_σ, ν_size, ν_Γ, η = parameters
 
     # initialization
     variables.p .= 0.0
@@ -441,13 +451,26 @@ function pricing_and_rbl_function!(variables::MutableVariables, parameters::Name
     # loop over states
     for e_i = 1:e_size
 
+        # extract endowment
+        @inbounds e = e_grid[e_i]
+        e_μ = e_ρ * e
+
         # repayment probability and pricing funciton
         Threads.@threads for a_p_i = 1:a_size
-            @inbounds e_μ = e_ρ * e_grid[e_i]
-            for ν_p_i = 1:ν_size
-                @inbounds variables.p[a_p_i, e_i] += ν_Γ[ν_p_i] * (1.0 - cdf(Normal(e_μ, e_σ), variables.threshold_e[a_p_i, ν_p_i]))
-                @inbounds variables.q[a_p_i, e_i] += ν_Γ[ν_p_i] * variables.p[a_p_i, e_i] / (1.0 + r_f + ι)
+
+            # extract asset choice
+            @inbounds a_p = a_grid[a_p_i]
+
+            if a_p < 0.0
+                for ν_p_i = 1:ν_size
+                    @inbounds variables.p[a_p_i, e_i] += ν_Γ[ν_p_i] * (1.0 - cdf(Normal(e_μ, e_σ), variables.threshold_e[a_p_i, ν_p_i]))
+                    @inbounds variables.p[a_p_i, e_i] += ν_Γ[ν_p_i] * cdf(Normal(e_μ, e_σ), variables.threshold_e[a_p_i, ν_p_i]) * (η * exp(e) / -a_p)
+                end
+            else
+                @inbounds variables.p[a_p_i, e_i] = 1.0
             end
+
+            @inbounds variables.q[a_p_i, e_i] = variables.p[a_p_i, e_i] / (1.0 + r_f + ι)
         end
 
         # risky borrowing limit and maximum discounted borrwoing amount
@@ -637,10 +660,10 @@ function solve_aggregate_variable_function!(variables::MutableVariables, paramet
     variables.aggregate_variables.debt_to_earning_ratio = 0.0
 
     # construct auxiliary variables
-    ave_loan_rate_num = 0.0
-    ave_loan_rate_den = 0.0
-    ave_loan_rate_pw_num = 0.0
-    ave_loan_rate_pw_den = 0.0
+    avg_loan_rate_num = 0.0
+    avg_loan_rate_den = 0.0
+    avg_loan_rate_pw_num = 0.0
+    avg_loan_rate_pw_den = 0.0
 
     # total loans, deposits, share of filers, nad debt-to-earning ratio
     for e_i = 1:e_size, ν_i = 1:ν_size
@@ -667,12 +690,12 @@ function solve_aggregate_variable_function!(variables::MutableVariables, paramet
                 @inbounds variables.aggregate_variables.L += -(variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
 
                 # average loan rate
-                ave_loan_rate_num += variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_itp(a_p) - 1.0) * 100
-                ave_loan_rate_den += variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ))
+                avg_loan_rate_num += variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0) * 100
+                avg_loan_rate_den += variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ))
 
                 # average loan rate (persons-weighted)
-                ave_loan_rate_pw_num += (1.0 - policy_d_itp(a_μ)) * (1.0 / q_itp(a_p) - 1.0) * 100
-                ave_loan_rate_pw_den += 1
+                avg_loan_rate_pw_num += (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0) * 100
+                avg_loan_rate_pw_den += 1
             else
                 # total deposits
                 @inbounds variables.aggregate_variables.D += (variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
@@ -689,6 +712,8 @@ function solve_aggregate_variable_function!(variables::MutableVariables, paramet
     end
 
     # average loan rate
+    variables.aggregate_variables.avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
+    variables.aggregate_variables.avg_loan_rate_pw = avg_loan_rate_pw_num / avg_loan_rate_pw_den
 
     # net worth
     variables.aggregate_variables.N = (K + variables.aggregate_variables.L) - variables.aggregate_variables.D
@@ -705,8 +730,8 @@ end
 #=================#
 parameters = parameters_function()
 variables = variables_function(parameters)
-solve_value_and_pricing_function!(variables, parameters; tol = 1E-4, iter_max = 300, figure_track = true)
-solve_stationary_distribution_function!(variables, parameters; tol = 1E-6, iter_max = 1000)
+solve_value_and_pricing_function!(variables, parameters; tol = 1E-4, iter_max = 100, figure_track = true)
+solve_stationary_distribution_function!(variables, parameters; tol = 1E-8, iter_max = 1000)
 solve_aggregate_variable_function!(variables, parameters)
 
 #==================#
@@ -729,10 +754,11 @@ end
 #================#
 e_label = round.(exp.(parameters.e_grid), digits = 2)'
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :], legend = :topleft, label = e_label)
+plot(parameters.a_grid, variables.q[1:parameters.a_size, :], legend = :topleft, label = e_label)
 
 e_plot_i = 1
 q_itp = Akima(parameters.a_grid, variables.q[:, e_plot_i])
-a_grid_plot = findall(-0.5 .<= parameters.a_grid .<= -0.1)
+a_grid_plot = findall(-0.5 .<= parameters.a_grid .<= 0.0)
 plot(parameters.a_grid[a_grid_plot], q_itp.(parameters.a_grid[a_grid_plot]), legend = :topleft, label = "e = $(parameters.e_grid[e_plot_i])")
 plot!(parameters.a_grid[a_grid_plot], variables.q[a_grid_plot, e_plot_i], seriestype = :scatter, label = "")
 

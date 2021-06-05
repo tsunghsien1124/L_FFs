@@ -20,11 +20,11 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 # Define functions #
 #==================#
 function parameters_function(;
-    β::Real = 0.96,                 # discount factor (households)
+    β::Real = 0.92,                 # discount factor (households)
     β_f::Real = 0.96,               # discount factor (bank)
-    r_f::Real = 1.00 / β_f - 1.00,  # risk-free rate
+    r_f::Real = 1.0 / β_f - 1.0,    # risk-free rate
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.40,                 # garnishment rate
+    η::Real = 0.35,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 1.0 / 3.0,            # capital share
     ψ::Real = 0.90,                 # exogenous dividend rate
@@ -32,9 +32,9 @@ function parameters_function(;
     θ::Real = 0.40,                 # diverting fraction
     e_ρ::Real = 0.95,               # AR(1) of endowment shock
     e_σ::Real = 0.10,               # s.d. of endowment shock
-    e_size::Integer = 3,            # number of endowment shock
-    ν_s::Real = 0.95,               # scale of patience
-    ν_p::Real = 0.10,               # probability of patience
+    e_size::Integer = 9,            # number of endowment shock
+    ν_s::Real = 0.00,               # scale of patience
+    ν_p::Real = 0.01,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -2.0,             # min of asset holding
     a_max::Real = 150.0,            # max of asset holding
@@ -140,9 +140,15 @@ mutable struct MutableAggregateVariables
     """
     construct a type for mutable aggregate variables
     """
-    K::Real
     L::Real
+    D::Real
     N::Real
+    KL_to_D_ratio::Real
+    debt_to_earning_ratio::Real
+    share_of_filers::Real
+    share_in_debts::Real
+    ave_loan_rate::Real
+    ave_loan_rate_pw::Real
 end
 
 mutable struct MutableVariables
@@ -162,7 +168,7 @@ mutable struct MutableVariables
     aggregate_variables::MutableAggregateVariables
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 50, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 20, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """
@@ -226,7 +232,7 @@ function variables_function(parameters::NamedTuple)
         @inbounds @views q[:, e_i] = p[:, e_i] ./ (1.0 + r_f + ι)
 
         qa_funcion(a_p) = (p_function(a_p) / (1.0 + r_f + ι)) * a_p
-        @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0; grid_length = 50)
+        @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0; grid_length = 20)
         res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
         @inbounds rbl[e_i, 1] = Optim.minimizer(res_rbl)
         @inbounds rbl[e_i, 2] = Optim.minimum(res_rbl)
@@ -247,13 +253,19 @@ function variables_function(parameters::NamedTuple)
     μ = ones(a_size_μ, e_size, ν_size) ./ μ_size
 
     # define aggregate variables
-    K = 0.0
     L = 0.0
+    D = 0.0
     N = 0.0
-    aggregate_var = MutableAggregateVariables(K, L, N)
+    KL_to_D_ratio = 0.0
+    debt_to_earning_ratio = 0.0
+    share_of_filers = 0.0
+    share_in_debts = 0.0
+    ave_loan_rate = 0.0
+    ave_loan_rate_pw = 0.0
+    aggregate_variables = MutableAggregateVariables(L, D, N, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_in_debts, ave_loan_rate, ave_loan_rate_pw)
 
     # return outputs
-    variables = MutableVariables(p, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ, aggregate_var)
+    variables = MutableVariables(p, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ, aggregate_variables)
     return variables
 end
 
@@ -335,14 +347,16 @@ function value_and_policy_function!(V_d_p::Array{Float64,2}, V_nd_p::Array{Float
             # initialize policy function
             @inbounds @views variables.policy_a[:, e_i, ν_i] .= -Inf
 
-            # compute non-defaulting value Threads.@threads
-            for a_i = 1:a_size
+            # compute non-defaulting value
+            Threads.@threads for a_i = 1:a_size
 
                 # cash on hand
                 @inbounds CoH = y + a_grid[a_i]
 
                 if (CoH - rbl_qa) >= 0.0
                     object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
+                    #=
+                    # monotonicity of policy function and if used Threads.@threads must be removed from the loop over current wealth
                     if a_i > 1
                         if variables.policy_a[a_i-1, e_i, ν_i] != -Inf
                             lb, ub = min_bounds_function(object_nd, variables.policy_a[a_i-1, e_i, ν_i] - eps(), CoH * (1 + r_f + ι); grid_length = 100)
@@ -352,6 +366,8 @@ function value_and_policy_function!(V_d_p::Array{Float64,2}, V_nd_p::Array{Float
                     else
                         lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH * (1 + r_f + ι); grid_length = 100)
                     end
+                    =#
+                    lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH * (1 + r_f + ι); grid_length = 10)
                     res_nd = optimize(object_nd, lb, ub)
                     @inbounds variables.V_nd[a_i, e_i, ν_i] = -Optim.minimum(res_nd)
                     @inbounds variables.policy_a[a_i, e_i, ν_i] = Optim.minimizer(res_nd)
@@ -438,22 +454,22 @@ function pricing_and_rbl_function!(variables::MutableVariables, parameters::Name
         @inbounds @views q_e = variables.q[:, e_i]
         qa_function_itp = Akima(a_grid, q_e .* a_grid)
         qa_function(x) = qa_function_itp(x)
-        rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid[1], 0.0; grid_length = 50)
+        rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid[1], 0.0; grid_length = 20)
         res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
         @inbounds variables.rbl[e_i, 1] = Optim.minimizer(res_rbl)
         @inbounds variables.rbl[e_i, 2] = Optim.minimum(res_rbl)
     end
 end
 
-function solve_function!(variables::MutableVariables, parameters::NamedTuple; tol::Real = tol, iter_max::Integer = iter_max)
+function solve_value_and_pricing_function!(variables::MutableVariables, parameters::NamedTuple; tol::Real = 1E-8, iter_max::Integer = 1000, figure_track::Bool = false)
     """
-    solve stationary equlibrium using one-loop algorithm
+    solve household and banking problems using one-loop algorithm
     """
 
     # initialize the iteration number and criterion
     iter = 0
     crit = Inf
-    prog = ProgressThresh(tol, "Solving stationary equlibrium (one-loop): ")
+    prog = ProgressThresh(tol, "Solving household and banking problems (one-loop): ")
 
     # construct containers
     V_p = similar(variables.V)
@@ -489,23 +505,199 @@ function solve_function!(variables::MutableVariables, parameters::NamedTuple; to
         # update the iteration number
         iter += 1
 
-        #===============#
-        # Unicode plots #
-        #===============#
-        println()
+        # tracking figures
+        if figure_track == true
 
-        plt_q = lineplot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, end])
-        for e_i = (parameters.e_size-1):(-1):1
-            lineplot!(plt_q, parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e_i])
-        end
-        println(plt_q)
+            # add new line
+            println()
 
-        plt_qa = lineplot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, end] .* parameters.a_grid_neg)
-        for e_i = (parameters.e_size-1):(-1):1
-            lineplot!(plt_qa, parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e_i] .* parameters.a_grid_neg)
+            # discounted bond price
+            plt_q = lineplot(
+                parameters.a_grid_neg,
+                variables.q[1:parameters.a_size_neg, end],
+                name = "e = $(round(parameters.e_grid[end],digits=2))",
+                title = "discounted bond price",
+                xlim = [round(parameters.a_grid[1], digits = 1), 0.0],
+                ylim = [0.0, ceil(maximum(variables.q[1:parameters.a_size_neg, end]); digits = 1)],
+                width = 50,
+                height = 10,
+            )
+            for e_i = (parameters.e_size-1):(-1):1
+                lineplot!(plt_q, parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e_i], name = "e = $(round(parameters.e_grid[e_i],digits=2))")
+            end
+            println(plt_q)
+
+            # discounted borrowing amount
+            plt_qa = lineplot(
+                parameters.a_grid_neg,
+                -variables.q[1:parameters.a_size_neg, end] .* parameters.a_grid_neg,
+                name = "e = $(round(parameters.e_grid[end],digits=2))",
+                title = "discounted borrowing amount",
+                xlim = [round(parameters.a_grid[1], digits = 1), 0.0],
+                ylim = [0.0, ceil(maximum(-variables.q[1:parameters.a_size_neg, end] .* parameters.a_grid_neg); digits = 1)],
+                width = 50,
+                height = 10,
+            )
+            for e_i = (parameters.e_size-1):(-1):1
+                lineplot!(plt_qa, parameters.a_grid_neg, -variables.q[1:parameters.a_size_neg, e_i] .* parameters.a_grid_neg, name = "e = $(round(parameters.e_grid[e_i],digits=2))")
+            end
+            println(plt_qa)
         end
-        println(plt_qa)
     end
+end
+
+function solve_stationary_distribution_function!(variables::MutableVariables, parameters::NamedTuple; tol::Real = 1E-8, iter_max::Integer = 2000)
+    """
+    solve stationary distribution
+    """
+
+    # unpack parameters
+    @unpack e_size, e_Γ, ν_size, ν_Γ, a_grid, a_size_μ, a_grid_μ, a_ind_zero_μ = parameters
+
+    # initialize the iteration number and criterion
+    iter = 0
+    crit = Inf
+    prog = ProgressThresh(tol, "Solving stationary distribution: ")
+
+    # construct container
+    μ_p = similar(variables.μ)
+
+    while crit > tol && iter < iter_max
+
+        # copy previous value
+        copyto!(μ_p, variables.μ)
+
+        # initialization
+        variables.μ .= 0.0
+
+        for e_i = 1:e_size, ν_i = 1:ν_size
+
+            # interpolated decision rules
+            @inbounds @views policy_a_Non_Inf = findall(variables.policy_a[:, e_i, ν_i] .!= -Inf)
+            @inbounds policy_a_itp = Akima(a_grid[policy_a_Non_Inf], variables.policy_a[policy_a_Non_Inf, e_i, ν_i])
+            @inbounds policy_d_itp(a_μ) = a_μ > variables.threshold_a[e_i, ν_i] ? 0.0 : 1.0
+
+            # loop over the dimension of asset holding
+            for a_μ_i = 1:a_size_μ
+
+                # extract wealth and compute asset choice
+                @inbounds a_μ = a_grid_μ[a_μ_i]
+                @inbounds a_p = clamp(policy_a_itp(a_μ), a_grid[1], a_grid[end])
+
+                # locate it on the original grid
+                a_p_lb = findall(a_grid_μ .<= a_p)[end]
+                a_p_ub = findall(a_p .<= a_grid_μ)[1]
+
+                # compute weights
+                if a_p_lb != a_p_ub
+                    @inbounds a_p_lower = a_grid_μ[a_p_lb]
+                    @inbounds a_p_upper = a_grid_μ[a_p_ub]
+                    weight_lower = (a_p_upper - a_p) / (a_p_upper - a_p_lower)
+                    weight_upper = (a_p - a_p_lower) / (a_p_upper - a_p_lower)
+                else
+                    weight_lower = 0.5
+                    weight_upper = 0.5
+                end
+
+                # loop over the dimension of exogenous individual states
+                for e_p_i = 1:e_size, ν_p_i = 1:ν_size
+                    @inbounds variables.μ[a_p_lb, e_p_i, ν_p_i] += (1.0 - policy_d_itp(a_μ)) * ν_Γ[ν_p_i] * e_Γ[e_i, e_p_i] * weight_lower * μ_p[a_μ_i, e_i, ν_i]
+                    @inbounds variables.μ[a_p_ub, e_p_i, ν_p_i] += (1.0 - policy_d_itp(a_μ)) * ν_Γ[ν_p_i] * e_Γ[e_i, e_p_i] * weight_upper * μ_p[a_μ_i, e_i, ν_i]
+                    @inbounds variables.μ[a_ind_zero_μ, e_p_i, ν_p_i] += policy_d_itp(a_μ) * ν_Γ[ν_p_i] * e_Γ[e_i, e_p_i] * μ_p[a_μ_i, e_i, ν_i]
+                end
+            end
+        end
+        variables.μ .= variables.μ ./ sum(variables.μ)
+
+        # check convergence
+        crit = norm(variables.μ .- μ_p, Inf)
+
+        # report preogress
+        ProgressMeter.update!(prog, crit)
+
+        # update the iteration number
+        iter += 1
+    end
+end
+
+function solve_aggregate_variable_function!(variables::MutableVariables, parameters::NamedTuple)
+    """
+    compute equlibrium aggregate variables
+    """
+
+    # unpack parameters
+    @unpack e_size, e_grid, ν_size, a_grid, a_grid_neg, a_grid_pos = parameters
+    @unpack a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ = parameters
+    @unpack K, w = parameters
+
+    # initialize container
+    variables.aggregate_variables.L = 0.0
+    variables.aggregate_variables.D = 0.0
+    variables.aggregate_variables.share_of_filers = 0.0
+    variables.aggregate_variables.debt_to_earning_ratio = 0.0
+
+    # construct auxiliary variables
+    ave_loan_rate_num = 0.0
+    ave_loan_rate_den = 0.0
+    ave_loan_rate_pw_num = 0.0
+    ave_loan_rate_pw_den = 0.0
+
+    # total loans, deposits, share of filers, nad debt-to-earning ratio
+    for e_i = 1:e_size, ν_i = 1:ν_size
+
+        # interpolated decision rules
+        @inbounds @views policy_a_Non_Inf = findall(variables.policy_a[:, e_i, ν_i] .!= -Inf)
+        @inbounds policy_a_itp = Akima(a_grid[policy_a_Non_Inf], variables.policy_a[policy_a_Non_Inf, e_i, ν_i])
+        @inbounds policy_d_itp(a_μ) = a_μ > variables.threshold_a[e_i, ν_i] ? 0.0 : 1.0
+
+        # interpolated discounted borrowing amount
+        @inbounds @views q_e = variables.q[:, e_i]
+        q_function_itp = Akima(a_grid, q_e)
+        qa_function_itp = Akima(a_grid, q_e .* a_grid)
+
+        # loop over the dimension of asset holding
+        for a_μ_i = 1:a_size_μ
+
+            # extract wealth and compute asset choice
+            @inbounds a_μ = a_grid_μ[a_μ_i]
+            @inbounds a_p = clamp(policy_a_itp(a_μ), a_grid[1], a_grid[end])
+
+            if a_p < 0.0
+                # total loans
+                @inbounds variables.aggregate_variables.L += -(variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
+
+                # average loan rate
+                ave_loan_rate_num += variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_itp(a_p) - 1.0) * 100
+                ave_loan_rate_den += variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ))
+
+                # average loan rate (persons-weighted)
+                ave_loan_rate_pw_num += (1.0 - policy_d_itp(a_μ)) * (1.0 / q_itp(a_p) - 1.0) * 100
+                ave_loan_rate_pw_den += 1
+            else
+                # total deposits
+                @inbounds variables.aggregate_variables.D += (variables.μ[a_μ_i, e_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
+            end
+
+            if a_μ < 0.0
+                # share of filers
+                @inbounds variables.aggregate_variables.share_of_filers += (variables.μ[a_μ_i, e_i, ν_i] * policy_d_itp(a_μ)) * 100
+
+                # debt-to-earning ratio
+                @inbounds variables.aggregate_variables.debt_to_earning_ratio += variables.μ[a_μ_i, e_i, ν_i] * (-a_μ / (w * exp(e_grid[e_i])))
+            end
+        end
+    end
+
+    # average loan rate
+
+    # net worth
+    variables.aggregate_variables.N = (K + variables.aggregate_variables.L) - variables.aggregate_variables.D
+
+    # capital-loan-to-deposit ratio
+    variables.aggregate_variables.KL_to_D_ratio = (K + variables.aggregate_variables.L) / variables.aggregate_variables.D
+
+    # share in debt
+    variables.aggregate_variables.share_in_debts = sum(variables.μ[1:(a_ind_zero_μ-1), :, :]) * 100
 end
 
 #=================#
@@ -513,26 +705,46 @@ end
 #=================#
 parameters = parameters_function()
 variables = variables_function(parameters)
-solve_function!(variables, parameters; tol = 1E-8, iter_max = 100)
+solve_value_and_pricing_function!(variables, parameters; tol = 1E-4, iter_max = 300, figure_track = true)
+solve_stationary_distribution_function!(variables, parameters; tol = 1E-6, iter_max = 1000)
+solve_aggregate_variable_function!(variables, parameters)
 
+#==================#
+# Checking moments #
+#==================#
+fraction_default_e = zeros(parameters.e_size)
+for e_i = 1:parameters.e_size
+    default_index = findall(parameters.a_grid_μ .< variables.γ[e_i])
+    fraction_default_e[e_i] = (sum(variables.μ[default_index, e_i])) * 100
+end
+
+fraction_debt = sum(variables.μ[1:(parameters.a_ind_zero_μ-1), :]) * 100
+fraction_debt_e = zeros(parameters.e_size)
+for e_i = 1:parameters.e_size
+    fraction_debt_e[e_i] = (sum(variables.μ[1:(parameters.a_ind_zero_μ-1), e_i]) / fraction_debt) * 100
+end
+
+#================#
+# Checking plots #
+#================#
 e_label = round.(exp.(parameters.e_grid), digits = 2)'
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :], legend = :topleft, label = e_label)
 
 e_plot_i = 1
 q_itp = Akima(parameters.a_grid, variables.q[:, e_plot_i])
-a_grid_plot = findall(-0.3 .<= parameters.a_grid .<= -0.1)
+a_grid_plot = findall(-0.5 .<= parameters.a_grid .<= -0.1)
 plot(parameters.a_grid[a_grid_plot], q_itp.(parameters.a_grid[a_grid_plot]), legend = :topleft, label = "e = $(parameters.e_grid[e_plot_i])")
 plot!(parameters.a_grid[a_grid_plot], variables.q[a_grid_plot, e_plot_i], seriestype = :scatter, label = "")
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :] .* parameters.a_grid_neg, legend = :left, label = e_label)
 plot!(variables.rbl[:, 1], variables.rbl[:, 2], label = "rbl", seriestype = :scatter)
-plot!(parameters.a_grid_neg, parameters.a_grid_neg, lc = :black, label = "")
+# plot!(parameters.a_grid_neg, parameters.a_grid_neg, lc = :black, label = "")
 
 plot(parameters.a_grid, variables.q .* parameters.a_grid, legend = :bottomright, label = e_label)
 plot!(variables.rbl[:, 1], variables.rbl[:, 2], label = "rbl", seriestype = :scatter)
 plot!(parameters.a_grid, parameters.a_grid, lc = :black, label = "")
 
-e_plot_i = 3
+e_plot_i = 1
 qa_itp = Akima(parameters.a_grid, variables.q[:, e_plot_i] .* parameters.a_grid)
 a_grid_plot = findall(-2.0 .<= parameters.a_grid .<= 0.5)
 plot(parameters.a_grid[a_grid_plot], qa_itp.(parameters.a_grid[a_grid_plot]), legend = :topleft, label = "e = $(parameters.e_grid[e_plot_i])")

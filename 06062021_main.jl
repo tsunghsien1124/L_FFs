@@ -30,18 +30,17 @@ function parameters_function(;
     ψ::Real = 0.90,                 # exogenous dividend rate
     λ::Real = 0.00,                 # multiplier of incentive constraint
     θ::Real = 0.40,                 # diverting fraction
-    e_ρ::Real = 0.95,               # AR(1) of persistent endowment shock
+    e_ρ::Real = 0.90,               # AR(1) of persistent endowment shock
     e_σ::Real = 0.10,               # s.d. of persistent endowment shock
     e_size::Integer = 5,            # number of persistent endowment shock
-    t_ρ::Real = 0.00,               # AR(1) of transitory endowment shock
-    t_σ::Real = 0.10,               # s.d. of transitory endowment shock
-    t_size::Integer = 5,            # number oftransitory endowment shock
+    t_σ::Real = 0.20,               # s.d. of transitory endowment shock
+    t_size::Integer = 3,            # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
     ν_p::Real = 0.01,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -1.5,             # min of asset holding
-    a_max::Real = 150.0,            # max of asset holding
-    a_size_neg::Integer = 151,      # number of grid of negative asset holding for VFI
+    a_min::Real = -2.0,             # min of asset holding
+    a_max::Real = 50.0,             # max of asset holding
+    a_size_neg::Integer = 201,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 51,       # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     μ_scale::Integer = 7,           # scale governing the number of grids in computing density
@@ -58,21 +57,19 @@ function parameters_function(;
     e_SS = sum(e_SD .* e_grid)
 
     # transitory endowment shock
-    t_MC = tauchen(t_size, t_ρ, t_σ, 0.0, 3)
-    t_Γ = t_MC.p
-    t_grid = collect(t_MC.state_values)
-    t_SD = stationary_distributions(t_MC)[]
-    t_SS = sum(t_SD .* t_grid)
-
-    # total endowment shock
-    x_SD = kron(t_SD, e_SD)
-    x_grid = sum(gridmake(e_grid, t_grid), dims = 2)
-    x_SS = sum(x_SD .* x_grid)
-    t_Γ = t_Γ[1, :]
+    t_grid = quantile.(Normal(0.0, t_σ), collect(range(0.0, 1.0; step = 1.0 / (t_size + 1))))
+    t_grid = t_grid[2:(end-1)]
+    t_Γ = repeat([1.0 / t_size], inner = t_size)
+    t_SS = sum(t_Γ .* t_grid)
 
     # preference schock
     ν_grid = [ν_s, 1.0]
     ν_Γ = [ν_p, 1.0 - ν_p]
+
+    # idiosyncratic state
+    x_grid = gridmake(e_grid, t_grid, ν_grid)
+    x_ind = gridmake(1:e_size, 1:t_size, 1:ν_size)
+    x_size = e_size * t_size * ν_size
 
     # asset holding grid for VFI
     a_grid_neg = collect(range(a_min, 0.0, length = a_size_neg))
@@ -98,7 +95,7 @@ function parameters_function(;
     AD = LR / (LR - 1.0)
     ι = λ * θ / Λ
     r_k = r_f + ι
-    E = exp(x_SS)
+    E = exp(e_SS + t_SS)
     K = E * ((r_k + δ) / α)^(1.0 / (α - 1.0))
     w = (1.0 - α) * (K / E)^α
 
@@ -121,7 +118,6 @@ function parameters_function(;
         e_size = e_size,
         e_Γ = e_Γ,
         e_grid = e_grid,
-        t_ρ = t_ρ,
         t_σ = t_σ,
         t_size = t_size,
         t_Γ = t_Γ,
@@ -131,6 +127,9 @@ function parameters_function(;
         ν_size = ν_size,
         ν_Γ = ν_Γ,
         ν_grid = ν_grid,
+        x_grid = x_grid,
+        x_ind = x_ind,
+        x_size = x_size,
         a_grid = a_grid,
         a_grid_neg = a_grid_neg,
         a_grid_pos = a_grid_pos,
@@ -176,7 +175,7 @@ mutable struct MutableVariables
     """
     construct a type for mutable variables
     """
-    p::Array{Float64,2}
+    R::Array{Float64,2}
     q::Array{Float64,2}
     rbl::Array{Float64,2}
     V::Array{Float64,4}
@@ -233,17 +232,38 @@ function utility_function(c::Real, γ::Real)
     end
 end
 
-function expexted_repayment_function(a_p::Real, threshold::Real; wage_garnishment::Bool = true)
+function log_function(threshold_e::Real)
     """
-    evaluate expected repayment analytically with and without wage garnishment
+    adjusted log funciton where assigning -Inf to negative domain
     """
 
-    default_prob = cdf(LogNormal(e_μ, e_σ), threshold)
+    if threshold_e > 0.0
+        return log(threshold_e)
+    else
+        return -Inf
+    end
+end
+
+function repayment_function(e_i::Integer, a_p::Real, threshold::Real, parameters::NamedTuple; wage_garnishment::Bool = true)
+    """
+    evaluate repayment analytically with and without wage garnishment for a given defaulting threshold in e'
+    """
+
+    # unpack parameters
+    @unpack e_grid, e_ρ, e_σ, η = parameters
+
+    # compute expected repayment amount
+    @inbounds e_μ = e_ρ * e_grid[e_i]
+
+    # (1) not default
+    default_prob = cdf(Normal(e_μ, e_σ), threshold)
     amount_repay = -a_p * (1.0 - default_prob)
 
+    # (2) default and reclaiming wage garnishment is enabled
+    amount_default = 0.0
     if wage_garnishment == true
-        default_adjusted_prob = cdf(LogNormal(e_μ + e_σ^2.0, e_σ), threshold)
-        amount_default = exp(e_μ + e_σ^2.0 / 2.0) * default_adjusted_prob / default_prob
+        default_adjusted_prob = cdf(Normal(e_μ + e_σ^2.0, e_σ), threshold)
+        amount_default = η * exp(e_μ + e_σ^2.0 / 2.0) * default_adjusted_prob
     end
 
     return total_amount = amount_repay + amount_default
@@ -255,32 +275,20 @@ function variables_function(parameters::NamedTuple)
     """
 
     # unpack parameters
-    @unpack a_size, a_grid, a_size_μ, e_size, e_grid, t_size, t_grid, t_Γ, e_ρ, e_σ, ν_size, w, r_f, ι, η, σ = parameters
+    @unpack a_size, a_grid, a_size_neg, a_grid_neg, a_size_μ, e_size, e_grid, t_size, t_grid, t_Γ, e_ρ, e_σ, ν_size, w, r_f, ι, η, σ = parameters
 
     # define repayment probability, pricing function, and risky borrowing limit
-    p = zeros(a_size, e_size)
-    q = zeros(a_size, e_size)
+    R = zeros(a_size_neg, e_size)
+    q = ones(a_size, e_size) ./ (1.0 + r_f + ι)
     rbl = zeros(e_size, 2)
     for e_i = 1:e_size
-        @inbounds e = e_grid[e_i]
-        e_μ = e_ρ * e
-
-        for t_p_i = 1:t_size
-            @inbounds t_p = t_grid[t_i]
-            p_function(a_p) = t_Γ[t_i] * (1.0 - cdf(Normal(e_μ, e_σ), log(-a_p / w) - t_p))
-
-            for a_p_i = 1:a_size
-                @inbounds a_p = a_grid[a_i]
-                -a_p / (w * exp(t_p))
-
-                if a < 0.0
-                    @inbounds @views p[a_p_i, e_i] = p_function(a)
-                    @inbounds @views q[a_p_i, e_i] = (p[a_p_i, e_i] + (1.0 - p[a_p_i, e_i]) * (η * exp(e) / -a_p)) / (1.0 + r_f + ι)
-                else
-                    @inbounds @views p[a_p_i, e_i] = 1.0
-                    @inbounds @views q[a_p_i, e_i] = 1.0 / (1.0 + r_f + ι)
-                end
+        for a_p_i = 1:(a_size_neg-1)
+            @inbounds a_p = a_grid_neg[a_p_i]
+            for t_p_i = 1:t_size
+                @inbounds threshold = log_function(-a_p / w) - t_grid[t_p_i]
+                @inbounds R[a_p_i, e_i] += t_Γ[t_p_i] * repayment_function(e_i, a_p, threshold, parameters)
             end
+            @inbounds q[a_p_i, e_i] = R[a_p_i, e_i] / ((-a_p) * (1.0 + r_f + ι))
         end
 
         qa_funcion_itp = Akima(a_grid, q[:, e_i] .* a_grid)
@@ -292,18 +300,18 @@ function variables_function(parameters::NamedTuple)
     end
 
     # define value and policy functions
-    V = zeros(a_size, e_size, ν_size)
-    V_d = zeros(e_size, ν_size)
-    V_nd = zeros(a_size, e_size, ν_size)
-    policy_a = zeros(a_size, e_size, ν_size)
+    V = zeros(a_size, e_size, t_size, ν_size)
+    V_d = zeros(e_size, t_size, ν_size)
+    V_nd = zeros(a_size, e_size, t_size, ν_size)
+    policy_a = zeros(a_size, e_size, t_size, ν_size)
 
     # define thresholds conditional on endowment or asset
-    threshold_a = zeros(e_size, ν_size)
-    threshold_e = zeros(a_size, ν_size)
+    threshold_a = zeros(e_size, t_size, ν_size)
+    threshold_e = zeros(a_size, t_size, ν_size)
 
     # define cross-sectional distribution
-    μ_size = a_size_μ * e_size * ν_size
-    μ = ones(a_size_μ, e_size, ν_size) ./ μ_size
+    μ_size = a_size_μ * e_size * t_size * ν_size
+    μ = ones(a_size_μ, e_size, t_size, ν_size) ./ μ_size
 
     # define aggregate variables
     L = 0.0
@@ -318,57 +326,58 @@ function variables_function(parameters::NamedTuple)
     aggregate_variables = MutableAggregateVariables(L, D, N, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     # return outputs
-    variables = MutableVariables(p, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ, aggregate_variables)
+    variables = MutableVariables(R, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ, aggregate_variables)
     return variables
 end
 
-function EV_itp_function(a_p::Real, e_i::Integer, V_d_p::Array{Float64,2}, V_nd_p::Array{Float64,3}, threshold_a::Array{Float64,2}, parameters::NamedTuple)
+function EV_itp_function(a_p::Real, e_i::Integer, V_d_p::Array{Float64,3}, V_nd_p::Array{Float64,4}, threshold_a::Array{Float64,3}, parameters::NamedTuple)
     """
     construct interpolated expected value function
     """
 
     # unpack parameters
-    @unpack a_grid, e_size, e_Γ, ν_size, ν_Γ = parameters
+    @unpack a_grid, e_size, e_Γ, t_size, t_Γ, ν_size, ν_Γ = parameters
 
     # construct container
     EV = 0.0
 
     # loop nested functions
-    for e_p_i = 1:e_size, ν_p_i = 1:ν_size
+    for e_p_i = 1:e_size, t_p_i = 1:t_size, ν_p_i = 1:ν_size
 
         # interpolated non-defaulting value function
-        @inbounds @views V_nd_p_Non_Inf = findall(V_nd_p[:, e_p_i, ν_p_i] .!= -Inf)
+        @inbounds @views V_nd_p_Non_Inf = findall(V_nd_p[:, e_p_i, t_p_i, ν_p_i] .!= -Inf)
         @inbounds @views a_grid_itp = a_grid[V_nd_p_Non_Inf]
-        @inbounds @views V_nd_p_grid_itp = V_nd_p[V_nd_p_Non_Inf, e_p_i, ν_p_i]
+        @inbounds @views V_nd_p_grid_itp = V_nd_p[V_nd_p_Non_Inf, e_p_i, t_p_i, ν_p_i]
         V_nd_p_itp = Akima(a_grid_itp, V_nd_p_grid_itp)
 
         # interpolated value function based on defaulting threshold
-        @inbounds V_p_itp(a_p) = a_p >= threshold_a[e_p_i, ν_p_i] ? V_nd_p_itp(a_p) : V_d_p[e_p_i, ν_p_i]
+        @inbounds V_p_itp(a_p) = a_p >= threshold_a[e_p_i, t_p_i, ν_p_i] ? V_nd_p_itp(a_p) : V_d_p[e_p_i, t_p_i, ν_p_i]
 
         # update expected value
-        @inbounds EV += ν_Γ[ν_p_i] * e_Γ[e_i, e_p_i] * V_p_itp(a_p)
+        @inbounds EV += ν_Γ[ν_p_i] * t_Γ[t_p_i] * e_Γ[e_i, e_p_i] * V_p_itp(a_p)
     end
 
     # return value
     return EV
 end
 
-function value_and_policy_function!(V_d_p::Array{Float64,2}, V_nd_p::Array{Float64,3}, variables::MutableVariables, parameters::NamedTuple)
+function value_and_policy_function!(V_d_p::Array{Float64,3}, V_nd_p::Array{Float64,4}, variables::MutableVariables, parameters::NamedTuple)
     """
     update value and policy functions
     """
 
     # unpack parameters
     @unpack a_size, a_grid = parameters
-    @unpack ν_size, ν_grid = parameters
     @unpack e_size, e_grid = parameters
-    @unpack β, σ, r_f, ι, η, w = parameters
+    @unpack t_size, t_grid = parameters
+    @unpack ν_size, ν_grid = parameters
+    @unpack β, σ, η, w, r_f, ι = parameters
 
     # loop over all states
-    for e_i = 1:e_size
+    for e_i = 1:e_size, t_i = 1:t_size
 
         # construct earning
-        @inbounds y = w * exp(e_grid[e_i])
+        @inbounds y = w * exp(e_grid[e_i] + t_grid[t_i])
 
         # extract risky borrowing limit and maximum discounted borrowing amount
         @inbounds @views rbl_a, rbl_qa = variables.rbl[e_i, :]
@@ -378,7 +387,7 @@ function value_and_policy_function!(V_d_p::Array{Float64,2}, V_nd_p::Array{Float
         qa_function_itp = Akima(a_grid, q_e .* a_grid)
 
         for ν_i = 1:ν_size
-            # println("e_i = $e_i and ν_i = $ν_i")
+            # println("e_i = $e_i and t_i = $t_i and ν_i = $ν_i")
 
             # extract preference
             @inbounds ν = ν_grid[ν_i]
@@ -395,10 +404,10 @@ function value_and_policy_function!(V_d_p::Array{Float64,2}, V_nd_p::Array{Float
             =#
 
             # compute defaulting value
-            @inbounds variables.V_d[e_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_itp(0.0)
+            @inbounds variables.V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_itp(0.0)
 
             # initialize policy function
-            @inbounds @views variables.policy_a[:, e_i, ν_i] .= -Inf
+            @inbounds @views variables.policy_a[:, e_i, t_i, ν_i] .= -Inf
 
             # compute non-defaulting value
             Threads.@threads for a_i = 1:a_size
@@ -411,30 +420,30 @@ function value_and_policy_function!(V_d_p::Array{Float64,2}, V_nd_p::Array{Float
                     #=
                     # monotonicity of policy function and if used Threads.@threads must be removed from the loop over current wealth
                     if a_i > 1
-                        if variables.policy_a[a_i-1, e_i, ν_i] != -Inf
-                            lb, ub = min_bounds_function(object_nd, variables.policy_a[a_i-1, e_i, ν_i] - eps(), CoH * (1 + r_f + ι); grid_length = 100)
+                        if variables.policy_a[a_i-1, e_i, t_i, ν_i] != -Inf
+                            lb, ub = min_bounds_function(object_nd, variables.policy_a[a_i-1, e_i, t_i, ν_i] - eps(), CoH * (1 + r_f + ι); grid_length = 20)
                         else
-                            lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH * (1 + r_f + ι); grid_length = 100)
+                            lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH * (1 + r_f + ι); grid_length = 20)
                         end
                     else
-                        lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH * (1 + r_f + ι); grid_length = 100)
+                        lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH * (1 + r_f + ι); grid_length = 20)
                     end
                     =#
                     lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH * (1 + r_f + ι); grid_length = 10)
                     res_nd = optimize(object_nd, lb, ub)
-                    @inbounds variables.V_nd[a_i, e_i, ν_i] = -Optim.minimum(res_nd)
-                    @inbounds variables.policy_a[a_i, e_i, ν_i] = Optim.minimizer(res_nd)
-                    if variables.V_nd[a_i, e_i, ν_i] > variables.V_d[e_i, ν_i]
+                    @inbounds variables.V_nd[a_i, e_i, t_i, ν_i] = -Optim.minimum(res_nd)
+                    @inbounds variables.policy_a[a_i, e_i, t_i, ν_i] = Optim.minimizer(res_nd)
+                    if variables.V_nd[a_i, e_i, t_i, ν_i] > variables.V_d[e_i, t_i, ν_i]
                         # repayment
-                        @inbounds variables.V[a_i, e_i, ν_i] = variables.V_nd[a_i, e_i, ν_i]
+                        @inbounds variables.V[a_i, e_i, t_i, ν_i] = variables.V_nd[a_i, e_i, t_i, ν_i]
                     else
                         # voluntary default
-                        @inbounds variables.V[a_i, e_i, ν_i] = variables.V_d[e_i, ν_i]
+                        @inbounds variables.V[a_i, e_i, t_i, ν_i] = variables.V_d[e_i, t_i, ν_i]
                     end
                 else
                     # involuntary default
-                    @inbounds variables.V_nd[a_i, e_i, ν_i] = utility_function(0.0, σ)
-                    @inbounds variables.V[a_i, e_i, ν_i] = variables.V_d[e_i, ν_i]
+                    @inbounds variables.V_nd[a_i, e_i, t_i, ν_i] = utility_function(0.0, σ)
+                    @inbounds variables.V[a_i, e_i, t_i, ν_i] = variables.V_d[e_i, t_i, ν_i]
                 end
             end
         end
@@ -447,34 +456,34 @@ function threshold_function!(variables::MutableVariables, parameters::NamedTuple
     """
 
     # unpack parameters
-    @unpack ν_size, e_size, e_grid, a_size, a_grid, w = parameters
+    @unpack ν_size, t_size, t_grid, e_size, e_grid, a_size, a_grid, w = parameters
 
-    for ν_i = 1:ν_size
+    for ν_i = 1:ν_size, t_i = 1:t_size
 
         # defaulting thresholds in wealth (a)
         for e_i = 1:e_size
-            @inbounds @views V_nd_Non_Inf = findall(variables.V_nd[:, e_i, ν_i] .!= -Inf)
+            @inbounds @views V_nd_Non_Inf = findall(variables.V_nd[:, e_i, t_i, ν_i] .!= -Inf)
             @inbounds @views a_grid_itp = a_grid[V_nd_Non_Inf]
-            @inbounds @views V_nd_grid_itp = variables.V_nd[V_nd_Non_Inf, e_i, ν_i]
+            @inbounds @views V_nd_grid_itp = variables.V_nd[V_nd_Non_Inf, e_i, t_i, ν_i]
             V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
-            @inbounds V_diff_itp(a) = V_nd_itp(a) - variables.V_d[e_i, ν_i]
-            if minimum(variables.V_nd[:, e_i, ν_i]) > variables.V_d[e_i, ν_i]
-                @inbounds variables.threshold_a[e_i, ν_i] = -Inf
+            @inbounds V_diff_itp(a) = V_nd_itp(a) - variables.V_d[e_i, t_i, ν_i]
+            if minimum(variables.V_nd[:, e_i, t_i, ν_i]) > variables.V_d[e_i, t_i, ν_i]
+                @inbounds variables.threshold_a[e_i, t_i, ν_i] = -Inf
             else
-                @inbounds V_diff_lb, V_diff_ub = zero_bounds_function(variables.V_d[e_i, ν_i], variables.V_nd[:, e_i, ν_i], a_grid)
-                @inbounds variables.threshold_a[e_i, ν_i] = find_zero(a -> V_diff_itp(a), (V_diff_lb, V_diff_ub), Bisection())
+                @inbounds V_diff_lb, V_diff_ub = zero_bounds_function(variables.V_d[e_i, t_i, ν_i], variables.V_nd[:, e_i, t_i, ν_i], a_grid)
+                @inbounds variables.threshold_a[e_i, t_i, ν_i] = find_zero(a -> V_diff_itp(a), (V_diff_lb, V_diff_ub), Bisection())
             end
         end
 
         # defaulting thresholds in endowment (e)
-        @inbounds @views thres_a_Non_Inf = findall(variables.threshold_a[:, ν_i] .!= -Inf)
-        @inbounds @views thres_a_grid_itp = -variables.threshold_a[thres_a_Non_Inf, ν_i]
-        earning_grid_itp = w * exp.(e_grid[thres_a_Non_Inf])
+        @inbounds @views thres_a_Non_Inf = findall(variables.threshold_a[:, t_i, ν_i] .!= -Inf)
+        @inbounds @views thres_a_grid_itp = -variables.threshold_a[thres_a_Non_Inf, t_i, ν_i]
+        earning_grid_itp = w * exp.(e_grid[thres_a_Non_Inf] .+ t_grid[t_i])
         threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k = 1, bc = "extrapolate")
         for a_i = 1:a_size
             @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
-            e_thres = earning_thres > 0.0 ? log(earning_thres / w) : -Inf
-            @inbounds variables.threshold_e[a_i, ν_i] = e_thres
+            e_thres = earning_thres > 0.0 ? log(earning_thres / w) - t_grid[t_i] : -Inf
+            @inbounds variables.threshold_e[a_i, t_i, ν_i] = e_thres
         end
     end
 end
@@ -485,35 +494,22 @@ function pricing_and_rbl_function!(variables::MutableVariables, parameters::Name
     """
 
     # unpack parameters
-    @unpack r_f, ι, a_size, a_grid, e_size, e_grid, e_ρ, e_σ, ν_size, ν_Γ, η = parameters
+    @unpack r_f, ι, a_size_neg, a_grid, e_size, e_grid, t_size, t_Γ, ν_size, ν_Γ = parameters
 
     # initialization
-    variables.p .= 0.0
-    variables.q .= 0.0
+    variables.R .= 0.0
+    variables.q .= 1.0 / (1.0 + r_f + ι)
 
     # loop over states
     for e_i = 1:e_size
 
-        # extract endowment
-        @inbounds e = e_grid[e_i]
-        e_μ = e_ρ * e
-
         # repayment probability and pricing funciton
-        Threads.@threads for a_p_i = 1:a_size
-
-            # extract asset choice
+        Threads.@threads for a_p_i = 1:(a_size_neg-1)
             @inbounds a_p = a_grid[a_p_i]
-
-            if a_p < 0.0
-                for ν_p_i = 1:ν_size
-                    @inbounds variables.p[a_p_i, e_i] += ν_Γ[ν_p_i] * (1.0 - cdf(Normal(e_μ, e_σ), variables.threshold_e[a_p_i, ν_p_i]))
-                    @inbounds variables.p[a_p_i, e_i] += ν_Γ[ν_p_i] * cdf(Normal(e_μ, e_σ), variables.threshold_e[a_p_i, ν_p_i]) * (η * exp(e) / -a_p)
-                end
-            else
-                @inbounds variables.p[a_p_i, e_i] = 1.0
+            for t_p_i = 1:t_size, ν_p_i = 1:ν_size
+                @inbounds variables.R[a_p_i, e_i] += ν_Γ[ν_p_i] * t_Γ[t_p_i] * repayment_function(e_i, a_p, variables.threshold_e[a_p_i, t_p_i, ν_p_i], parameters)
             end
-
-            @inbounds variables.q[a_p_i, e_i] = variables.p[a_p_i, e_i] / (1.0 + r_f + ι)
+            @inbounds variables.q[a_p_i, e_i] = variables.R[a_p_i, e_i] / ((-a_p) * (1.0 + r_f + ι))
         end
 
         # risky borrowing limit and maximum discounted borrwoing amount
@@ -618,7 +614,7 @@ function solve_stationary_distribution_function!(variables::MutableVariables, pa
     """
 
     # unpack parameters
-    @unpack e_size, e_Γ, ν_size, ν_Γ, a_grid, a_size_μ, a_grid_μ, a_ind_zero_μ = parameters
+    @unpack e_size, e_Γ, t_size, t_Γ, ν_size, ν_Γ, a_grid, a_size_μ, a_grid_μ, a_ind_zero_μ = parameters
 
     # initialize the iteration number and criterion
     iter = 0
@@ -636,7 +632,7 @@ function solve_stationary_distribution_function!(variables::MutableVariables, pa
         # initialization
         variables.μ .= 0.0
 
-        for e_i = 1:e_size, ν_i = 1:ν_size
+        for e_i = 1:e_size, t_i = 1:t_size, ν_i = 1:ν_size
 
             # interpolated decision rules
             @inbounds @views policy_a_Non_Inf = findall(variables.policy_a[:, e_i, ν_i] .!= -Inf)
@@ -797,7 +793,7 @@ end
 #================#
 e_label = round.(exp.(parameters.e_grid), digits = 2)'
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :], legend = :topleft, label = e_label)
-plot(parameters.a_grid, variables.q[1:parameters.a_size, :], legend = :topleft, label = e_label)
+# plot(parameters.a_grid, variables.q, legend = :topleft, label = e_label)
 
 e_plot_i = 1
 q_itp = Akima(parameters.a_grid, variables.q[:, e_plot_i])
@@ -822,13 +818,16 @@ plot!(parameters.a_grid[a_grid_plot], parameters.a_grid[a_grid_plot], lc = :blac
 hline!([0.0], lc = :black, label = "")
 vline!([0.0], lc = :black, label = "")
 
-plot(parameters.a_grid_neg, variables.V[1:parameters.a_ind_zero, :, 2], legend = :bottomleft, label = e_label)
-plot!(variables.threshold_a[:, 2], variables.V_d[:, 2], label = "defaulting debt level", seriestype = :scatter)
+
+t_plot_i = 1
+ν_plot_i = 2
+plot(parameters.a_grid_neg, variables.V[1:parameters.a_ind_zero, :, t_plot_i, ν_plot_i], legend = :bottomleft, label = e_label)
+plot!(variables.threshold_a[:, t_plot_i, ν_plot_i], variables.V_d[:, t_plot_i, ν_plot_i], label = "defaulting debt level", seriestype = :scatter)
 hline!([0.0], lc = :black, label = "")
 vline!([0.0], lc = :black, label = "")
 
-plot(parameters.a_grid, variables.V[:, :, 2], legend = :bottomleft, label = e_label)
-plot!(variables.threshold_a[:, 2], variables.V_d[:, 2], label = "defaulting debt level", seriestype = :scatter)
+plot(parameters.a_grid, variables.V[:, :, 2, 2], legend = :bottomleft, label = e_label)
+plot!(variables.threshold_a[:, 2, 2], variables.V_d[:, 2, 2], label = "defaulting debt level", seriestype = :scatter)
 hline!([0.0], lc = :black, label = "")
 vline!([0.0], lc = :black, label = "")
 

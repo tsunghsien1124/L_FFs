@@ -4,6 +4,7 @@
 using Dierckx
 using FLOWMath
 using Distributions
+using JLD2: @save, @load
 using LinearAlgebra: norm
 using Optim
 using Parameters: @unpack
@@ -21,31 +22,31 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 # Define functions #
 #==================#
 function parameters_function(;
-    β::Real = 0.92,                 # discount factor (households)
+    β::Real = 0.94,                 # discount factor (households)
     β_f::Real = 0.96,               # discount factor (bank)
     r_f::Real = 1.0 / β_f - 1.0,    # risk-free rate
     τ::Real = 0.04,                 # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.35,                 # garnishment rate
+    η::Real = 0.355,                # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 1.0 / 3.0,            # capital share
-    ψ::Real = 0.90,                 # exogenous dividend rate
+    ψ::Real = 0.972,                # exogenous retention ratio
     λ::Real = 0.00,                 # multiplier of incentive constraint
-    θ::Real = 0.40,                 # diverting fraction
-    e_ρ::Real = 0.95,               # AR(1) of persistent endowment shock
-    e_σ::Real = 0.10,               # s.d. of persistent endowment shock
+    θ::Real = 0.381,                # diverting fraction
+    e_ρ::Real = 0.9630,             # AR(1) of persistent endowment shock
+    e_σ::Real = 0.1300,             # s.d. of persistent endowment shock
     e_size::Integer = 9,            # number of persistent endowment shock
-    t_σ::Real = 0.20,               # s.d. of transitory endowment shock
+    t_σ::Real = 0.35,               # s.d. of transitory endowment shock
     t_size::Integer = 3,            # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.001,              # probability of patience
+    ν_p::Real = 0.01,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -4.0,             # min of asset holding
-    a_max::Real = 50.0,             # max of asset holding
-    a_size_neg::Integer = 801,      # number of grid of negative asset holding for VFI
+    a_min::Real = -3.0,             # min of asset holding
+    a_max::Real = 300.0,            # max of asset holding
+    a_size_neg::Integer = 301,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 51,       # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
-    a_size_pos_μ::Integer = 1001,   # number of grid of positive asset holding for distribution
+    a_size_pos_μ::Integer = 601,   # number of grid of positive asset holding for distribution
 )
     """
     contruct an immutable object containg all paramters
@@ -163,6 +164,7 @@ mutable struct MutableAggregateVariables
     L::Real
     D::Real
     N::Real
+    leverage_ratio::Real
     KL_to_D_ratio::Real
     debt_to_earning_ratio::Real
     share_of_filers::Real
@@ -317,13 +319,14 @@ function variables_function(parameters::NamedTuple)
     L = 0.0
     D = 0.0
     N = 0.0
+    leverage_ratio = 0.0
     KL_to_D_ratio = 0.0
     debt_to_earning_ratio = 0.0
     share_of_filers = 0.0
     share_in_debts = 0.0
     avg_loan_rate = 0.0
     avg_loan_rate_pw = 0.0
-    aggregate_variables = MutableAggregateVariables(L, D, N, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+    aggregate_variables = MutableAggregateVariables(L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     # return outputs
     variables = MutableVariables(R, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ, aggregate_variables)
@@ -433,10 +436,12 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
         @inbounds ν = ν_grid[ν_i]
 
         # compute the next-period discounted expected value funtions and interpolated functions
-        # V_hat_itp(a_p) = ν * β * EV_itp_function(a_p, e_i, V_d_p, V_nd_p, variables.threshold_a, parameters)
-        # V_hat = ν * β * EV_function(e_i, V_p, parameters)
-        # V_hat_itp = Akima(a_grid, V_hat)
-        EV_nd_hat =  EV_function(e_i, V_nd_p, parameters)
+        V_hat_itp(a_p) = ν * β * EV_itp_function(a_p, e_i, V_d_p, V_nd_p, variables.threshold_a, parameters)
+        V_hat = ν * β * EV_function(e_i, V_p, parameters)
+        V_hat_itp = Akima(a_grid, V_hat)
+
+        #=
+        EV_nd_hat = EV_function(e_i, V_nd_p, parameters)
         EV_d_hat = EV_function(e_i, V_d_p, parameters)
         EV_nd_hat_Non_Inf = findall(EV_nd_hat .!= -Inf)
         EV_nd_hat_itp = Akima(a_grid[EV_nd_hat_Non_Inf], EV_nd_hat[EV_nd_hat_Non_Inf])
@@ -448,6 +453,7 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
         end
         EV_hat_itp(a_p) = a_p >= threshold_a_p ? EV_nd_hat_itp(a_p) : EV_d_hat
         V_hat_itp(a_p) = ν * β * EV_hat_itp(a_p)
+        =#
 
         # compute defaulting value
         @inbounds variables.V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_itp(0.0)
@@ -466,6 +472,7 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
                 # define optimization problem
                 object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
 
+                #=
                 # monotonicity of policy function and if used Threads.@threads must be removed from the loop over current wealth
                 if a_i > 1
                     if variables.policy_a[a_i-1, e_i, t_i, ν_i] != -Inf
@@ -479,7 +486,9 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
                     lb = rbl_a - eps()
                     ub = CoH * (1 + r_f + ι)
                 end
+                =#
 
+                lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH)
                 res_nd = optimize(object_nd, lb, ub)
                 @inbounds variables.V_nd[a_i, e_i, t_i, ν_i] = -Optim.minimum(res_nd)
                 @inbounds variables.policy_a[a_i, e_i, t_i, ν_i] = Optim.minimizer(res_nd)
@@ -794,11 +803,11 @@ function solve_aggregate_variable_function!(variables::MutableVariables, paramet
                 @inbounds variables.aggregate_variables.L += -(variables.μ[a_μ_i, e_i, t_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
 
                 # average loan rate
-                avg_loan_rate_num += variables.μ[a_μ_i, e_i, t_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0) * 100
+                avg_loan_rate_num += variables.μ[a_μ_i, e_i, t_i, ν_i] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
                 avg_loan_rate_den += variables.μ[a_μ_i, e_i, t_i, ν_i] * (1.0 - policy_d_itp(a_μ))
 
                 # average loan rate (persons-weighted)
-                avg_loan_rate_pw_num += (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0) * 100
+                avg_loan_rate_pw_num += (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
                 avg_loan_rate_pw_den += 1
             else
                 # total deposits
@@ -807,7 +816,7 @@ function solve_aggregate_variable_function!(variables::MutableVariables, paramet
 
             if a_μ < 0.0
                 # share of filers
-                @inbounds variables.aggregate_variables.share_of_filers += (variables.μ[a_μ_i, e_i, t_i, ν_i] * policy_d_itp(a_μ)) * 100
+                @inbounds variables.aggregate_variables.share_of_filers += (variables.μ[a_μ_i, e_i, t_i, ν_i] * policy_d_itp(a_μ))
 
                 # debt-to-earning ratio
                 @inbounds variables.aggregate_variables.debt_to_earning_ratio += variables.μ[a_μ_i, e_i, t_i, ν_i] * (-a_μ / (w * exp(e_grid[e_i] + t_grid[t_i])))
@@ -822,14 +831,17 @@ function solve_aggregate_variable_function!(variables::MutableVariables, paramet
     # net worth
     variables.aggregate_variables.N = (K + variables.aggregate_variables.L) - variables.aggregate_variables.D
 
+    # leverage ratio
+    variables.aggregate_variables.leverage_ratio = (K + variables.aggregate_variables.L) / variables.aggregate_variables.N
+
     # capital-loan-to-deposit ratio
     variables.aggregate_variables.KL_to_D_ratio = (K + variables.aggregate_variables.L) / variables.aggregate_variables.D
 
     # share in debt
-    variables.aggregate_variables.share_in_debts = sum(variables.μ[1:(a_ind_zero_μ-1), :, :, :]) * 100
+    variables.aggregate_variables.share_in_debts = sum(variables.μ[1:(a_ind_zero_μ-1), :, :, :])
 end
 
-function solve_economy_function!(variables::MutableVariables, parameters::NamedTuple; tol_h::Real = 1E-5, tol_μ::Real = 1E-8)
+function solve_economy_function!(variables::MutableVariables, parameters::NamedTuple; tol_h::Real = 1E-6, tol_μ::Real = 1E-8)
     """
     solve the economy with given liquidity multiplier ι
     """
@@ -849,24 +861,239 @@ function solve_economy_function!(variables::MutableVariables, parameters::NamedT
     # printout results
     data_spec = Any[
         "Wage Garnishment Rate" parameters.η #=1=#
-        "Liquidity Multiplier" parameters.ι #=2=#
+        "Liquidity Multiplier" parameters.λ #=2=#
         "Asset-to-Debt Ratio (Demand)" variables.aggregate_variables.KL_to_D_ratio #=3=#
         "Asset-to-Debt Ratio (Supply)" parameters.KL_to_D_ratio  #=4=#
         "Difference" ED #=5=#
     ]
-
     pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [2, 4])
 
     # return excess demand
     return ED
 end
 
+function optimal_multiplier_function(η::Real; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-6, iter_max::Real = 500)
+    """
+    solve for optimal liquidity multiplier
+    """
+
+    # check the case of λ_min = 0.0
+    λ_min = 0.0
+    parameters_λ_min = parameters_function(η = η, λ = λ_min)
+    variables_λ_min = variables_function(parameters_λ_min)
+    ED_λ_min = solve_economy_function!(variables_λ_min, parameters_λ_min)
+    if ED_λ_min > 0.0
+        return parameters_λ_min, variables_λ_min, parameters_λ_min, variables_λ_min
+    end
+
+    # check the case of λ_max = 1-ψ^(1/2)
+    λ_max = 1.0 - sqrt(parameters_λ_min.ψ)
+    parameters_λ_max = parameters_function(η = η, λ = λ_max)
+    variables_λ_max = variables_function(parameters_λ_max)
+    ED_λ_max = solve_economy_function!(variables_λ_max, parameters_λ_max)
+    if ED_λ_max < 0.0
+        return parameters_λ_min, variables_λ_min, parameters_λ_max, variables_λ_max # meaning solution doesn't exist!
+    end
+
+    # fing the optimal λ using bisection
+    λ_lower = max(λ_min_adhoc, λ_min)
+    λ_upper = min(λ_max_adhoc, λ_max)
+
+    # initialization
+    iter = 0
+    crit = Inf
+    λ_optimal = 0.0
+    parameters_λ_optimal = []
+    variables_λ_optimal = []
+
+    # solve equlibrium multiplier by bisection
+    while crit > tol && iter < iter_max
+
+        # update the multiplier
+        λ_optimal = (λ_lower + λ_upper) / 2
+
+        # compute the associated results
+        parameters_λ_optimal = parameters_function(η = η, λ = λ_optimal)
+        variables_λ_optimal = variables_function(parameters_λ_optimal)
+        ED_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters_λ_optimal)
+
+        # update search region
+        if ED_λ_optimal > 0.0
+            λ_upper = λ_optimal
+        else
+            λ_lower = λ_optimal
+        end
+
+        # check convergence
+        crit = abs(ED_λ_optimal)
+
+        # update the iteration number
+        iter += 1
+
+    end
+
+    # return results
+    return parameters_λ_min, variables_λ_min, parameters_λ_optimal, variables_λ_optimal
+end
+
+
+function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
+    """
+    compute stationary equilibrium with various η
+    """
+
+    # initialize η grid
+    η_grid = collect(η_max:-η_step:η_min)
+    η_size = length(η_grid)
+
+    # initialize pparameters
+    parameters = parameters_function()
+    @unpack a_size, a_size_μ, e_size, t_size, ν_size = parameters
+
+    # initialize variables that will be saved
+    var_names = [
+        "Wage Garnishment Rate", #=1=#
+        "Rental Rate", #=2=#
+        "Liquidity Multiplier", #=3=#
+        "Liquidity Premium", #=4=#
+        "Capital", #=5=#
+        "Loans", #=6=#
+        "Deposits", #=7=#
+        "Net Worth", #=8=#
+        "Leverage Ratio", #=9=#
+        "Share of Filers", #=10=#
+        "Sahre in Debt", #=11=#
+        "Debt-to-Earning Ratio", #=12=#
+        "Average Loan Rate", #=13=#
+    ]
+    var_size = length(var_names)
+
+    # initialize containers
+    results_A_NFF = zeros(var_size, η_size)
+    results_V_NFF = zeros(a_size, e_size, t_size, ν_size, η_size)
+    results_μ_NFF = zeros(a_size_μ, e_size, t_size, ν_size, η_size)
+    results_A_FF = zeros(η_size, var_size)
+    results_V_FF = zeros(a_size, e_size, t_size, ν_size, η_size)
+    results_μ_FF = zeros(a_size_μ, e_size, t_size, ν_size, η_size)
+
+    # compute the optimal multipliers with different η
+    for η_i = 1:η_size
+
+        # if η_i > 1 then use previouse to narrow down searching area
+        if η_i == 1
+            parameters_NFF, variables_NFF, parameters_FF, variables_FF = optimal_multiplier_function(η_grid[η_i])
+        else
+            parameters_NFF, variables_NFF, parameters_FF, variables_FF = optimal_multiplier_function(η_grid[η_i]; λ_min_adhoc = results_A_FF[3, η_i-1])
+        end
+
+        # save results
+        results_A_NFF[1, η_i] = parameters_NFF.η
+        results_A_NFF[2, η_i] = parameters_NFF.r_k
+        results_A_NFF[3, η_i] = parameters_NFF.λ
+        results_A_NFF[4, η_i] = parameters_NFF.ι
+        results_A_NFF[5, η_i] = parameters_NFF.K
+        results_A_NFF[6, η_i] = variables_NFF.aggregate_variables.L
+        results_A_NFF[7, η_i] = variables_NFF.aggregate_variables.D
+        results_A_NFF[8, η_i] = variables_NFF.aggregate_variables.N
+        results_A_NFF[9, η_i] = variables_NFF.aggregate_variables.leverage_ratio
+        results_A_NFF[10, η_i] = variables_NFF.aggregate_variables.share_of_filers
+        results_A_NFF[11, η_i] = variables_NFF.aggregate_variables.share_in_debts
+        results_A_NFF[12, η_i] = variables_NFF.aggregate_variables.debt_to_earning_ratio
+        results_A_NFF[13, η_i] = variables_NFF.aggregate_variables.avg_loan_rate_pw
+        results_V_NFF[:, :, :, :, η_i] = variables_NFF.V
+        results_μ_NFF[:, :, :, :, η_i] = variables_NFF.μ
+
+        results_A_FF[1, η_i] = parameters_FF.η
+        results_A_FF[2, η_i] = parameters_FF.r_k
+        results_A_FF[3, η_i] = parameters_FF.λ
+        results_A_FF[4, η_i] = parameters_FF.ι
+        results_A_FF[5, η_i] = parameters_FF.K
+        results_A_FF[6, η_i] = variables_FF.aggregate_variables.L
+        results_A_FF[7, η_i] = variables_FF.aggregate_variables.D
+        results_A_FF[8, η_i] = variables_FF.aggregate_variables.N
+        results_A_FF[9, η_i] = variables_FF.aggregate_variables.leverage_ratio
+        results_A_FF[10, η_i] = variables_FF.aggregate_variables.share_of_filers
+        results_A_FF[11, η_i] = variables_FF.aggregate_variables.share_in_debts
+        results_A_FF[12, η_i] = variables_FF.aggregate_variables.debt_to_earning_ratio
+        results_A_FF[13, η_i] = variables_FF.aggregate_variables.avg_loan_rate_pw
+        results_V_FF[:, :, :, :, η_i] = variables_FF.V
+        results_μ_FF[:, :, :, :, η_i] = variables_FF.μ
+    end
+
+    # return results
+    return var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF
+end
+
+function results_CEV_function(results_V::Array{Float64,5})
+    """
+    compute consumption equivalent variation (CEV) with various η compared to the smallest η (most lenient policy)
+    """
+
+    # initialize pparameters
+    parameters = parameters_function()
+    @unpack a_size, a_size_μ, e_size, t_size, ν_size, σ = parameters
+
+    # initialize result matrix
+    η_size = size(results_V, 5)
+    results_CEV = zeros(a_size_μ, e_size, ν_size, η_size)
+
+    # compute CEV for different η compared to the smallest η
+    for η_i = 1:η_size, e_i = 1:e_size, t_i = 1:t_size, ν_i = 1:ν_size
+        @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_i, t_i, ν_i, η_i])
+        @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_i, t_i, ν_i, end])
+        for a_μ_i = 1:a_size_μ
+            @inbounds a_μ = a_grid_μ[a_μ_i]
+            @inbounds results_CEV[a_μ_i, e_i, t_i, ν_i, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1 / (1 - σ)) - 1
+        end
+    end
+
+    # return results
+    return parameters, results_CEV
+end
+
 #=================#
 # Solve the model #
 #=================#
-parameters = parameters_function(λ = 0.00)
+parameters = parameters_function()
 variables = variables_function(parameters)
 solve_economy_function!(variables, parameters)
+parameters_λ_min, variables_λ_min, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η)
+
+#======================================================#
+# Solve the model with different bankruptcy strictness #
+#======================================================#
+var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.05)
+@save "06062021_results_eta.jld2" var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #==================#
 # Checking moments #
@@ -888,6 +1115,8 @@ end
 #================#
 e_label = round.(exp.(parameters.e_grid), digits = 2)'
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :], legend = :topleft, label = e_label)
+e_label = round.(exp.(parameters_λ_optimal.e_grid), digits = 2)'
+plot(parameters_λ_optimal.a_grid_neg, variables_λ_optimal.q[1:parameters_λ_optimal.a_size_neg, :], legend = :topleft, label = e_label)
 # plot(parameters.a_grid, variables.q, legend = :topleft, label = e_label)
 
 e_plot_i = 1
@@ -896,9 +1125,12 @@ a_grid_plot = findall(-0.7 .<= parameters.a_grid .<= 0.0)
 plot(parameters.a_grid[a_grid_plot], q_itp.(parameters.a_grid[a_grid_plot]), legend = :topleft, label = "e = $(parameters.e_grid[e_plot_i])")
 plot!(parameters.a_grid[a_grid_plot], variables.q[a_grid_plot, e_plot_i], seriestype = :scatter, label = "")
 
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :] .* parameters.a_grid_neg, legend = :left, label = e_label)
-plot!(variables.rbl[:, 1], variables.rbl[:, 2], label = "rbl", seriestype = :scatter)
-plot!(parameters.a_grid_neg, parameters.a_grid_neg, lc = :black, label = "")
+# plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :] .* parameters.a_grid_neg, legend = :left, label = e_label)
+# plot!(variables.rbl[:, 1], variables.rbl[:, 2], label = "rbl", seriestype = :scatter)
+# plot!(parameters.a_grid_neg, parameters.a_grid_neg, lc = :black, label = "")
+plot(parameters_λ_optimal.a_grid_neg, variables_λ_optimal.q[1:parameters_λ_optimal.a_size_neg, :] .* parameters_λ_optimal.a_grid_neg, legend = :left, label = e_label)
+plot!(variables_λ_optimal.rbl[:, 1], variables_λ_optimal.rbl[:, 2], label = "rbl", seriestype = :scatter)
+plot!(parameters_λ_optimal.a_grid_neg, parameters_λ_optimal.a_grid_neg, lc = :black, label = "")
 
 plot(parameters.a_grid, variables.q .* parameters.a_grid, legend = :bottomright, label = e_label)
 plot!(variables.rbl[:, 1], variables.rbl[:, 2], label = "rbl", seriestype = :scatter)
@@ -913,8 +1145,8 @@ plot!(parameters.a_grid[a_grid_plot], parameters.a_grid[a_grid_plot], lc = :blac
 hline!([0.0], lc = :black, label = "")
 vline!([0.0], lc = :black, label = "")
 
-t_plot_i = 3
-ν_plot_i = 1
+t_plot_i = 1
+ν_plot_i = 2
 plot(parameters.a_grid_neg, variables.V[1:parameters.a_ind_zero, :, t_plot_i, ν_plot_i], legend = :bottomleft, label = e_label)
 plot!(variables.threshold_a[:, t_plot_i, ν_plot_i], variables.V_d[:, t_plot_i, ν_plot_i], label = "defaulting debt level", seriestype = :scatter)
 hline!([0.0], lc = :black, label = "")

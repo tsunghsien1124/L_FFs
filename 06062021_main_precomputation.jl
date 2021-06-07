@@ -8,6 +8,7 @@ using LinearAlgebra: norm
 using Optim
 using Parameters: @unpack
 using Plots
+using PrettyTables
 using ProgressMeter
 using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions
 using Roots
@@ -31,15 +32,15 @@ function parameters_function(;
     ψ::Real = 0.90,                 # exogenous dividend rate
     λ::Real = 0.00,                 # multiplier of incentive constraint
     θ::Real = 0.40,                 # diverting fraction
-    e_ρ::Real = 0.90,               # AR(1) of persistent endowment shock
+    e_ρ::Real = 0.95,               # AR(1) of persistent endowment shock
     e_σ::Real = 0.10,               # s.d. of persistent endowment shock
     e_size::Integer = 9,            # number of persistent endowment shock
     t_σ::Real = 0.20,               # s.d. of transitory endowment shock
     t_size::Integer = 3,            # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.01,               # probability of patience
+    ν_p::Real = 0.001,              # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -2.0,             # min of asset holding
+    a_min::Real = -4.0,             # min of asset holding
     a_max::Real = 50.0,             # max of asset holding
     a_size_neg::Integer = 801,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 51,       # number of grid of positive asset holding for VFI
@@ -187,7 +188,7 @@ mutable struct MutableVariables
     aggregate_variables::MutableAggregateVariables
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 20, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 50, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """
@@ -292,7 +293,7 @@ function variables_function(parameters::NamedTuple)
 
         qa_funcion_itp = Akima(a_grid, q[:, e_i] .* a_grid)
         qa_funcion(a_p) = qa_funcion_itp(a_p)
-        @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0; grid_length = 20)
+        @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
         res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
         @inbounds rbl[e_i, 1] = Optim.minimizer(res_rbl)
         @inbounds rbl[e_i, 2] = Optim.minimum(res_rbl)
@@ -360,9 +361,9 @@ function EV_itp_function(a_p::Real, e_i::Integer, V_d_p::Array{Float64,3}, V_nd_
     return EV
 end
 
-function EV_function(e_i::Integer, V_p::Array{Float64,4}, parameters::NamedTuple)
+function EV_function(e_i::Integer, V_nd_p::Array{Float64,4}, parameters::NamedTuple)
     """
-    construct expected value function
+    construct expected non-defaulting value function
     """
 
     # unpack parameters
@@ -373,7 +374,30 @@ function EV_function(e_i::Integer, V_p::Array{Float64,4}, parameters::NamedTuple
 
     # update expected value
     for e_p_i = 1:e_size, t_p_i = 1:t_size, ν_p_i = 1:ν_size
-        @inbounds @views EV += ν_Γ[ν_p_i] * t_Γ[t_p_i] * e_Γ[e_i, e_p_i] * V_p[:, e_p_i, t_p_i, ν_p_i]
+        @inbounds @views EV += ν_Γ[ν_p_i] * t_Γ[t_p_i] * e_Γ[e_i, e_p_i] * V_nd_p[:, e_p_i, t_p_i, ν_p_i]
+    end
+
+    # repalce NaN with -Inf
+    replace!(EV, NaN => -Inf)
+
+    # return value
+    return EV
+end
+
+function EV_function(e_i::Integer, V_d_p::Array{Float64,3}, parameters::NamedTuple)
+    """
+    construct expected defaulting value
+    """
+
+    # unpack parameters
+    @unpack a_size, e_size, e_Γ, t_size, t_Γ, ν_size, ν_Γ = parameters
+
+    # construct container
+    EV = 0.0
+
+    # update expected value
+    for e_p_i = 1:e_size, t_p_i = 1:t_size, ν_p_i = 1:ν_size
+        @inbounds @views EV += ν_Γ[ν_p_i] * t_Γ[t_p_i] * e_Γ[e_i, e_p_i] * V_d_p[e_p_i, t_p_i, ν_p_i]
     end
 
     # return value
@@ -405,15 +429,25 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
         @inbounds @views qa = variables.q[:, e_i] .* a_grid
         qa_function_itp = Akima(a_grid, qa)
 
-        # println("e_i = $e_i and t_i = $t_i and ν_i = $ν_i")
-
         # extract preference
         @inbounds ν = ν_grid[ν_i]
 
         # compute the next-period discounted expected value funtions and interpolated functions
         # V_hat_itp(a_p) = ν * β * EV_itp_function(a_p, e_i, V_d_p, V_nd_p, variables.threshold_a, parameters)
-        V_hat = ν * β * EV_function(e_i, V_p, parameters)
-        V_hat_itp = Akima(a_grid, V_hat)
+        # V_hat = ν * β * EV_function(e_i, V_p, parameters)
+        # V_hat_itp = Akima(a_grid, V_hat)
+        EV_nd_hat =  EV_function(e_i, V_nd_p, parameters)
+        EV_d_hat = EV_function(e_i, V_d_p, parameters)
+        EV_nd_hat_Non_Inf = findall(EV_nd_hat .!= -Inf)
+        EV_nd_hat_itp = Akima(a_grid[EV_nd_hat_Non_Inf], EV_nd_hat[EV_nd_hat_Non_Inf])
+        EV_hat_diff_itp(a_p) = EV_nd_hat_itp(a_p) - EV_d_hat
+        threshold_a_p = -Inf
+        if minimum(EV_nd_hat_Non_Inf) < EV_d_hat
+            EV_hat_diff_lb, EV_hat_diff_ub = zero_bounds_function(EV_d_hat, EV_nd_hat, a_grid)
+            threshold_a_p = find_zero(a -> EV_hat_diff_itp(a), (EV_hat_diff_lb, EV_hat_diff_ub), Bisection())
+        end
+        EV_hat_itp(a_p) = a_p >= threshold_a_p ? EV_nd_hat_itp(a_p) : EV_d_hat
+        V_hat_itp(a_p) = ν * β * EV_hat_itp(a_p)
 
         # compute defaulting value
         @inbounds variables.V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_itp(0.0)
@@ -490,7 +524,7 @@ function threshold_function!(variables::MutableVariables, parameters::NamedTuple
             @inbounds @views V_nd_grid_itp = variables.V_nd[V_nd_Non_Inf, e_i, t_i, ν_i]
             V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
             @inbounds V_diff_itp(a) = V_nd_itp(a) - variables.V_d[e_i, t_i, ν_i]
-            if minimum(variables.V_nd[:, e_i, t_i, ν_i]) > variables.V_d[e_i, t_i, ν_i]
+            if minimum(V_nd_grid_itp) > variables.V_d[e_i, t_i, ν_i]
                 @inbounds variables.threshold_a[e_i, t_i, ν_i] = -Inf
             else
                 @inbounds V_diff_lb, V_diff_ub = zero_bounds_function(variables.V_d[e_i, t_i, ν_i], variables.V_nd[:, e_i, t_i, ν_i], a_grid)
@@ -539,7 +573,7 @@ function pricing_and_rbl_function!(variables::MutableVariables, parameters::Name
         @inbounds @views q_e = variables.q[:, e_i]
         qa_function_itp = Akima(a_grid, q_e .* a_grid)
         qa_function(x) = qa_function_itp(x)
-        rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid[1], 0.0; grid_length = 20)
+        rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid[1], 0.0)
         res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
         @inbounds variables.rbl[e_i, 1] = Optim.minimizer(res_rbl)
         @inbounds variables.rbl[e_i, 2] = Optim.minimum(res_rbl)
@@ -795,14 +829,44 @@ function solve_aggregate_variable_function!(variables::MutableVariables, paramet
     variables.aggregate_variables.share_in_debts = sum(variables.μ[1:(a_ind_zero_μ-1), :, :, :]) * 100
 end
 
+function solve_economy_function!(variables::MutableVariables, parameters::NamedTuple; tol_h::Real = 1E-5, tol_μ::Real = 1E-8)
+    """
+    solve the economy with given liquidity multiplier ι
+    """
+
+    # solve household and banking problems
+    solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, figure_track = false, slow_updating = 1.0)
+
+    # solve the cross-sectional distribution
+    solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
+
+    # compute aggregate variables
+    solve_aggregate_variable_function!(variables, parameters)
+
+    # compute the difference between demand and supply sides
+    ED = variables.aggregate_variables.KL_to_D_ratio - parameters.KL_to_D_ratio
+
+    # printout results
+    data_spec = Any[
+        "Wage Garnishment Rate" parameters.η #=1=#
+        "Liquidity Multiplier" parameters.ι #=2=#
+        "Asset-to-Debt Ratio (Demand)" variables.aggregate_variables.KL_to_D_ratio #=3=#
+        "Asset-to-Debt Ratio (Supply)" parameters.KL_to_D_ratio  #=4=#
+        "Difference" ED #=5=#
+    ]
+
+    pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [2, 4])
+
+    # return excess demand
+    return ED
+end
+
 #=================#
 # Solve the model #
 #=================#
-parameters = parameters_function()
+parameters = parameters_function(λ = 0.00)
 variables = variables_function(parameters)
-solve_value_and_pricing_function!(variables, parameters; tol = 1E-8, iter_max = 500, figure_track = false, slow_updating = 0.5)
-solve_stationary_distribution_function!(variables, parameters; tol = 1E-10, iter_max = 1000)
-solve_aggregate_variable_function!(variables, parameters)
+solve_economy_function!(variables, parameters)
 
 #==================#
 # Checking moments #
@@ -849,8 +913,8 @@ plot!(parameters.a_grid[a_grid_plot], parameters.a_grid[a_grid_plot], lc = :blac
 hline!([0.0], lc = :black, label = "")
 vline!([0.0], lc = :black, label = "")
 
-t_plot_i = 1
-ν_plot_i = 2
+t_plot_i = 3
+ν_plot_i = 1
 plot(parameters.a_grid_neg, variables.V[1:parameters.a_ind_zero, :, t_plot_i, ν_plot_i], legend = :bottomleft, label = e_label)
 plot!(variables.threshold_a[:, t_plot_i, ν_plot_i], variables.V_d[:, t_plot_i, ν_plot_i], label = "defaulting debt level", seriestype = :scatter)
 hline!([0.0], lc = :black, label = "")
@@ -868,13 +932,7 @@ plot(-variables.threshold_a[:, t_plot_i, ν_plot_i], parameters.w * exp.(paramet
 plot(parameters.a_grid_neg, variables.threshold_e[1:parameters.a_ind_zero, t_plot_i, ν_plot_i], legend = :none, xlabel = "debt level", ylabel = "defaulting e level")
 plot!(variables.threshold_a[:, t_plot_i, ν_plot_i], parameters.e_grid, seriestype = :scatter)
 
-plot(
-    parameters.a_grid_neg,
-    parameters.w .* exp.(variables.threshold_e[1:parameters.a_ind_zero, t_plot_i, ν_plot_i]),
-    legend = :none,
-    xlabel = "debt level",
-    ylabel = "defaulting w*exp(e) level",
-)
+plot(parameters.a_grid_neg, parameters.w .* exp.(variables.threshold_e[1:parameters.a_ind_zero, t_plot_i, ν_plot_i]), legend = :none, xlabel = "debt level", ylabel = "defaulting w*exp(e) level")
 plot!(variables.threshold_a[:, t_plot_i, ν_plot_i], parameters.w * exp.(parameters.e_grid), seriestype = :scatter)
 
 plot(parameters.a_grid, parameters.w .* exp.(variables.threshold_e[:, t_plot_i, ν_plot_i]), legend = :none, xlabel = "debt level", ylabel = "defaulting w*exp(e) level")

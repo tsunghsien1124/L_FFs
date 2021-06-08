@@ -41,12 +41,12 @@ function parameters_function(;
     ν_s::Real = 0.00,               # scale of patience
     ν_p::Real = 0.01,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -3.0,             # min of asset holding
+    a_min::Real = -8.0,             # min of asset holding
     a_max::Real = 300.0,            # max of asset holding
-    a_size_neg::Integer = 301,      # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 401,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 51,       # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
-    a_size_pos_μ::Integer = 601,   # number of grid of positive asset holding for distribution
+    a_size_pos_μ::Integer = 1501,   # number of grid of positive asset holding for distribution
 )
     """
     contruct an immutable object containg all paramters
@@ -972,7 +972,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
     results_A_NFF = zeros(var_size, η_size)
     results_V_NFF = zeros(a_size, e_size, t_size, ν_size, η_size)
     results_μ_NFF = zeros(a_size_μ, e_size, t_size, ν_size, η_size)
-    results_A_FF = zeros(η_size, var_size)
+    results_A_FF = zeros(var_size, η_size)
     results_V_FF = zeros(a_size, e_size, t_size, ν_size, η_size)
     results_μ_FF = zeros(a_size_μ, e_size, t_size, ν_size, η_size)
 
@@ -1062,8 +1062,8 @@ parameters_λ_min, variables_λ_min, parameters_λ_optimal, variables_λ_optimal
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.05)
-@save "06062021_results_eta.jld2" var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF
+var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF = results_η_function(η_min = 0.75, η_max = 0.80, η_step = 0.05)
+@save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
 
 
 
@@ -1125,9 +1125,9 @@ a_grid_plot = findall(-0.7 .<= parameters.a_grid .<= 0.0)
 plot(parameters.a_grid[a_grid_plot], q_itp.(parameters.a_grid[a_grid_plot]), legend = :topleft, label = "e = $(parameters.e_grid[e_plot_i])")
 plot!(parameters.a_grid[a_grid_plot], variables.q[a_grid_plot, e_plot_i], seriestype = :scatter, label = "")
 
-# plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :] .* parameters.a_grid_neg, legend = :left, label = e_label)
-# plot!(variables.rbl[:, 1], variables.rbl[:, 2], label = "rbl", seriestype = :scatter)
-# plot!(parameters.a_grid_neg, parameters.a_grid_neg, lc = :black, label = "")
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :] .* parameters.a_grid_neg, legend = :left, label = e_label)
+plot!(variables.rbl[:, 1], variables.rbl[:, 2], label = "rbl", seriestype = :scatter)
+plot!(parameters.a_grid_neg, parameters.a_grid_neg, lc = :black, label = "")
 plot(parameters_λ_optimal.a_grid_neg, variables_λ_optimal.q[1:parameters_λ_optimal.a_size_neg, :] .* parameters_λ_optimal.a_grid_neg, legend = :left, label = e_label)
 plot!(variables_λ_optimal.rbl[:, 1], variables_λ_optimal.rbl[:, 2], label = "rbl", seriestype = :scatter)
 plot!(parameters_λ_optimal.a_grid_neg, parameters_λ_optimal.a_grid_neg, lc = :black, label = "")

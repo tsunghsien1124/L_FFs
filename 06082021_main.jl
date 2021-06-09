@@ -1086,6 +1086,3 @@ solve_economy_function!(variables_NFF, parameters_NFF)
 var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF = results_η_function(η_min = 0.20, η_max = 0.80, η_step = 0.10)
 @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
 @load "C:/Users/User/Desktop/results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
-
-parameters_CEV, results_CEV_NFF = results_CEV_function(results_V_NFF)
-parameters_CEV, results_CEV_FF = results_CEV_function(results_V_FF)

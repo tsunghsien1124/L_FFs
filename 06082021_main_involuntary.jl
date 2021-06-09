@@ -799,6 +799,7 @@ function solve_aggregate_variable_function!(variables::MutableVariables, paramet
     variables.aggregate_variables.L = 0.0
     variables.aggregate_variables.D = 0.0
     variables.aggregate_variables.share_of_filers = 0.0
+    variables.aggregate_variables.share_of_involuntary_filers = 0.0
     variables.aggregate_variables.debt_to_earning_ratio = 0.0
 
     # construct auxiliary variables

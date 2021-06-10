@@ -23,10 +23,10 @@ plot_q = plot(
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
-    variables.q[plot_q_index, 1],
+    variables.q[plot_q_index, 2],
     linecolor = :blue,
     linewidth = 3,
-    label = "\$ \\textrm{Low Endowment } (e_p = $(round(parameters.e_grid[1],digits=1))) \$",
+    label = "\$ \\textrm{Low Endowment } (e_p = $(round(parameters.e_grid[2],digits=1))) \$",
     margin = 4mm,
 )
 plot_q = plot!(
@@ -40,10 +40,10 @@ plot_q = plot!(
 
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
-    variables.q[plot_q_index, end],
+    variables.q[plot_q_index, end-1],
     linecolor = :black,
     linewidth = 3,
-    label = "\$ \\textrm{High Endowment } (e_p = $(round(parameters.e_grid[end],digits=1))) \$",
+    label = "\$ \\textrm{High Endowment } (e_p = $(round(parameters.e_grid[end-1],digits=1))) \$",
     margin = 4mm,
 )
 plot_q
@@ -59,8 +59,8 @@ plot_qa = plot(
     size = (plot_col * 800, plot_row * 500),
     box = :on,
     legend = :none,
-    ylimit = [-1.5, 0.0],
-    yticks = -1.5:0.3:0.0,
+    ylimit = [-1.0, 0.0],
+    yticks = -1.0:0.2:0.0,
     xtickfont = font(12, "Computer Modern", :black),
     ytickfont = font(12, "Computer Modern", :black),
     titlefont = font(18, "Computer Modern", :black),
@@ -71,13 +71,13 @@ plot_qa = plot(
 )
 plot_qa = plot!(
     parameters.a_grid[plot_qa_index],
-    variables.q[plot_qa_index, 1] .* parameters.a_grid[plot_qa_index],
+    variables.q[plot_qa_index, 2] .* parameters.a_grid[plot_qa_index],
     linecolor = :blue,
     linewidth = 3,
-    label = "\$ \\textrm{High Endowment } (e_p = $(round(parameters.e_grid[1],digits=1))) \$",
+    label = "\$ \\textrm{High Endowment } (e_p = $(round(parameters.e_grid[2],digits=1))) \$",
     margin = 4mm,
 )
-plot_qa = vline!([variables.rbl[1, 1]], linecolor = :blue, linewidth = 2, linestyle = :dot, label = "")
+plot_qa = vline!([variables.rbl[2, 1]], linecolor = :blue, linewidth = 2, linestyle = :dot, label = "")
 plot_qa = plot!(
     parameters.a_grid[plot_qa_index],
     variables.q[plot_qa_index, 5] .* parameters.a_grid[plot_qa_index],
@@ -89,13 +89,13 @@ plot_qa = plot!(
 plot_qa = vline!([variables.rbl[5, 1]], linecolor = :red, linewidth = 2, linestyle = :dot, label = "")
 plot_qa = plot!(
     parameters.a_grid[plot_qa_index],
-    variables.q[plot_qa_index, end] .* parameters.a_grid[plot_qa_index],
+    variables.q[plot_qa_index, end-1] .* parameters.a_grid[plot_qa_index],
     linecolor = :black,
     linewidth = 3,
-    label = "\$ \\textrm{Low Endowment } (e_p = $(round(parameters.e_grid[end],digits=1))) \$",
+    label = "\$ \\textrm{Low Endowment } (e_p = $(round(parameters.e_grid[end-1],digits=1))) \$",
     margin = 4mm,
 )
-plot_qa = vline!([variables.rbl[end, 1]], linecolor = :black, linewidth = 2, linestyle = :dot, label = "")
+plot_qa = vline!([variables.rbl[end-1, 1]], linecolor = :black, linewidth = 2, linestyle = :dot, label = "")
 plot_qa
 savefig(plot_qa, "figures/plot_qa.pdf")
 

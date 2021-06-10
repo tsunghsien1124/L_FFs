@@ -1069,9 +1069,9 @@ end
 #=================#
 # Solve the model #
 #=================#
-parameters_FF = parameters_function(λ = 0.0034137294588653328)
-variables_FF = variables_function(parameters_FF)
-solve_economy_function!(variables_FF, parameters_FF)
+parameters = parameters_function(λ = 0.0034137294588653328)
+variables = variables_function(parameters)
+solve_economy_function!(variables, parameters)
 
 parameters_NFF = parameters_function(λ = 0.0)
 variables_NFF = variables_function(parameters_NFF)

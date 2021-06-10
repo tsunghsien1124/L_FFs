@@ -19,6 +19,7 @@ plot_q = plot(
     guidefont = font(16, "Computer Modern", :black),
     legendfont = font(14, "Computer Modern", :black),
     title = "\$ q(a',e) \$",
+    xlabel = "\$ \\textrm{Loan Choice } (a'<0)\$"
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
@@ -66,6 +67,7 @@ plot_qa = plot(
     guidefont = font(16, "Computer Modern", :black),
     legendfont = font(12, "Computer Modern", :black),
     title = "\$ q(a',e) \\cdot a'\$",
+    xlabel = "\$ \\textrm{Loan Choice } (a'<0)\$"
 )
 plot_qa = plot!(
     parameters.a_grid[plot_qa_index],

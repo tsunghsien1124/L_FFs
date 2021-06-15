@@ -1,5 +1,6 @@
 using Measures
 using Plots
+using LaTeXStrings
 
 #========================================#
 # Bond price across persistent endowment #
@@ -106,7 +107,6 @@ savefig(plot_qa, "figures/plot_qa.pdf")
 plot(parameters.a_grid_neg, parameters.w * exp.(variables.threshold_e[1:parameters.a_ind_zero, 2, 2] .+ parameters.t_grid[2]))
 plot(variables.rbl[], parameters.e_grid)
 
-
 parameters_NFF_η_20 = parameters_function(λ = 0.0, η = 0.20)
 variables_NFF_η_20 = variables_function(parameters_NFF_η_20)
 solve_economy_function!(variables_NFF_η_20, parameters_NFF_η_20)
@@ -142,7 +142,7 @@ variables_FF.aggregate_variables.share_of_involuntary_filers
 # Checking plots #
 #================#
 e_label = round.(exp.(parameters.e_grid), digits = 2)'
-a_plot_index = findall(-16.0 .<= parameters.a_grid .<= 0.0)
+a_plot_index = findall(-0.5 .<= parameters.a_grid .<= 0.0)
 plot(parameters.a_grid[a_plot_index], variables.q[a_plot_index, :], legend = :topleft, label = e_label)
 # plot(parameters.a_grid, variables.q, legend = :topleft, label = e_label)
 

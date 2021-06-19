@@ -1108,301 +1108,309 @@ end
 # variables_NFF = variables_function(parameters_NFF)
 # solve_economy_function!(variables_NFF, parameters_NFF)
 
-parameters = parameters_function()
-parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η; λ_min_adhoc = 0.00341238, λ_max_adhoc = 0.00341239)
-λ_optimal = variables_λ_optimal.aggregate_prices.λ
+# parameters = parameters_function()
+# parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η; λ_min_adhoc = 0.00341238, λ_max_adhoc = 0.00341239)
+# λ_optimal = variables_λ_optimal.aggregate_prices.λ
 
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
 # var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF = results_η_function(η_min = 0.20, η_max = 0.80, η_step = 0.10)
 # @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
-# @load "C:/Users/User/Desktop/results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
+@load "C:/Users/User/Dropbox/20210608/results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
 
 #=============================#
 # Solve transitional dynamics #
 #=============================#
-mutable struct Mutable_Aggregate_Prices_T
-    """
-    construct a type for mutable aggregate prices of periods T
-    """
-    λ::Array{Float64,1}
-    ξ::Array{Float64,1}
-    Λ::Array{Float64,1}
-    leverage_ratio_λ::Array{Float64,1}
-    KL_to_D_ratio_λ::Array{Float64,1}
-    ι::Array{Float64,1}
-    r_k::Array{Float64,1}
-    K_λ::Array{Float64,1}
-    w::Array{Float64,1}
-end
-
-mutable struct Mutable_Aggregate_Variables_T
-    """
-    construct a type for mutable aggregate variables of periods T
-    """
-    K::Array{Float64,1}
-    L::Array{Float64,1}
-    D::Array{Float64,1}
-    N::Array{Float64,1}
-    leverage_ratio::Array{Float64,1}
-    KL_to_D_ratio::Array{Float64,1}
-    debt_to_earning_ratio::Array{Float64,1}
-    share_of_filers::Array{Float64,1}
-    share_of_involuntary_filers::Array{Float64,1}
-    share_in_debts::Array{Float64,1}
-    avg_loan_rate::Array{Float64,1}
-    avg_loan_rate_pw::Array{Float64,1}
-end
-
-mutable struct Mutable_Variables_T
-    """
-    construct a type for mutable variables of periods T
-    """
-    aggregate_prices::Mutable_Aggregate_Prices_T
-    aggregate_variables::Mutable_Aggregate_Variables_T
-    R::Array{Float64,3}
-    q::Array{Float64,3}
-    rbl::Array{Float64,3}
-    V::Array{Float64,5}
-    V_d::Array{Float64,4}
-    V_nd::Array{Float64,5}
-    policy_a::Array{Float64,5}
-    threshold_a::Array{Float64,4}
-    threshold_e::Array{Float64,4}
-    μ::Array{Float64,5}
-end
-
-function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer)
-    """
-    construct a mutable object containing endogenous variables of periods T
-    """
-
-    # unapcl parameters from new steady state
-    @unpack a_size, a_size_neg, a_size_μ, e_size, t_size, ν_size = parameters_new
-    @unpack θ, β_f, ψ, r_f, E, δ, α = parameters_new
-
-    # adjust periods considered
-    T_size = T_size + 2
-
-    # define aggregate prices
-    leverage_ratio_λ = collect(range(variables_old.aggregate_prices.leverage_ratio_λ, variables_new.aggregate_prices.leverage_ratio_λ, length = T_size))
-    # leverage_ratio_λ = collect(range(variables_old.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
-    # leverage_ratio_λ = collect(range(variables_new.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
-    ξ = θ .* leverage_ratio_λ
-    Λ = β_f .* (1.0 .- ψ .+ ψ .* ξ)
-    KL_to_D_ratio_λ = leverage_ratio_λ ./ (leverage_ratio_λ .- 1.0)
-    λ = zeros(T_size)
-    λ[1] = 1.0 - ((1.0 - ψ + ψ*ξ[1]) / ξ[1])
-    λ[end] = 1.0 - ((1.0 - ψ + ψ*ξ[end]) / ξ[end])
-    ι = zeros(T_size)
-    ι[1] = λ[1] * θ / Λ[1]
-    ι[end] = λ[end] * θ / Λ[end]
-    for T_i = 2:(T_size-1)
-        λ[T_i] = 1.0 - ((1.0 - ψ + ψ*ξ[T_i+1]) / ξ[T_i])
-        ι[T_i] = λ[T_i] * θ / Λ[T_i+1]
-    end
-    r_k = r_f .+ ι
-    K_λ = E .* ((r_k .+ δ) ./ α).^(1.0 / (α - 1.0))
-    w = (1.0 - α) .* ((K_λ ./ E).^α)
-    aggregate_prices = Mutable_Aggregate_Prices_T(λ, ξ, Λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι, r_k, K_λ, w)
-
-    # define aggregate variables
-    K = zeros(T_size)
-    K[1] = K_λ[1]
-    K[end] = K_λ[end]
-    L = zeros(T_size)
-    L[1] = variables_old.aggregate_variables.L
-    L[end] = variables_new.aggregate_variables.L
-    D = zeros(T_size)
-    D[1] = variables_old.aggregate_variables.D
-    D[end] = variables_new.aggregate_variables.D
-    N = zeros(T_size)
-    N[1] = variables_old.aggregate_variables.N
-    N[end] = variables_new.aggregate_variables.N
-    leverage_ratio = zeros(T_size)
-    leverage_ratio[1] = variables_old.aggregate_variables.leverage_ratio
-    leverage_ratio[end] = variables_new.aggregate_variables.leverage_ratio
-    KL_to_D_ratio = zeros(T_size)
-    KL_to_D_ratio[1] = variables_old.aggregate_variables.KL_to_D_ratio
-    KL_to_D_ratio[end] = variables_new.aggregate_variables.KL_to_D_ratio
-    debt_to_earning_ratio = zeros(T_size)
-    debt_to_earning_ratio[1] = variables_old.aggregate_variables.debt_to_earning_ratio
-    debt_to_earning_ratio[end] = variables_new.aggregate_variables.debt_to_earning_ratio
-    share_of_filers = zeros(T_size)
-    share_of_filers[1] = variables_old.aggregate_variables.share_of_filers
-    share_of_filers[end] = variables_new.aggregate_variables.share_of_filers
-    share_of_involuntary_filers = zeros(T_size)
-    share_of_involuntary_filers[1] = variables_old.aggregate_variables.share_of_involuntary_filers
-    share_of_involuntary_filers[end] = variables_new.aggregate_variables.share_of_involuntary_filers
-    share_in_debts = zeros(T_size)
-    share_in_debts[1] = variables_old.aggregate_variables.share_in_debts
-    share_in_debts[end] = variables_new.aggregate_variables.share_in_debts
-    avg_loan_rate = zeros(T_size)
-    avg_loan_rate[1] = variables_old.aggregate_variables.avg_loan_rate
-    avg_loan_rate[end] = variables_new.aggregate_variables.avg_loan_rate
-    avg_loan_rate_pw = zeros(T_size)
-    avg_loan_rate_pw[1] = variables_old.aggregate_variables.avg_loan_rate_pw
-    avg_loan_rate_pw[end] = variables_new.aggregate_variables.avg_loan_rate_pw
-    aggregate_variables = Mutable_Aggregate_Variables_T(K, L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
-
-    # define repayment probability, pricing function, and risky borrowing limit
-    R = zeros(a_size_neg, e_size, T_size)
-    R[:,:,1] = variables_old.R
-    R[:,:,(end-1):end] .= variables_new.R
-    q = ones(a_size, e_size, T_size) ./ (1.0 + r_f)
-    q[:,:,1] = variables_old.q
-    q[:,:,(end-1):end] .= variables_new.q
-    rbl = zeros(e_size, 2, T_size)
-    rbl[:,:,1] = variables_old.rbl
-    rbl[:,:,(end-1):end] .= variables_new.rbl
-
-    # define value and policy functions
-    V = zeros(a_size, e_size, t_size, ν_size, T_size)
-    V[:,:,:,:,1] = variables_old.V
-    V[:,:,:,:,end] = variables_new.V
-    V_d = zeros(e_size, t_size, ν_size, T_size)
-    V_d[:,:,:,1] = variables_old.V_d
-    V_d[:,:,:,end] = variables_new.V_d
-    V_nd = zeros(a_size, e_size, t_size, ν_size, T_size)
-    V_nd[:,:,:,:,1] = variables_old.V_nd
-    V_nd[:,:,:,:,end] = variables_new.V_nd
-    policy_a = zeros(a_size, e_size, t_size, ν_size, T_size)
-    policy_a[:,:,:,:,1] = variables_old.policy_a
-    policy_a[:,:,:,:,end] = variables_new.policy_a
-
-    # define thresholds conditional on endowment or asset
-    threshold_a = zeros(e_size, t_size, ν_size, T_size)
-    threshold_a[:,:,:,1] = variables_old.threshold_a
-    threshold_a[:,:,:,end] = variables_new.threshold_a
-    threshold_e = zeros(a_size, t_size, ν_size, T_size)
-    threshold_e[:,:,:,1] = variables_old.threshold_e
-    threshold_e[:,:,:,end] = variables_new.threshold_e
-
-    # define cross-sectional distribution
-    μ_size = a_size_μ * e_size * t_size * ν_size
-    μ = ones(a_size_μ, e_size, t_size, ν_size, T_size) ./ μ_size
-    μ[:,:,:,:,1] = variables_old.μ
-    μ[:,:,:,:,end] = variables_new.μ
-
-    # return outputs
-    variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ)
-    return variables_T
-end
-
-function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, parameters_new::NamedTuple; tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = true)
-    """
-    solve transitional dynamics of periods T from initial to new steady states
-    """
-
-    # unpack parameters
-    @unpack θ, ψ, β_f, r_f, E, δ, α = parameters_new
-
-    # initialize the iteration number and criterion
-    iter = 0
-    crit = Inf
-
-    # obtain number of periods
-    T_size = length(variables_T.aggregate_prices.leverage_ratio_λ)
-
-    # construct container
-    leverage_ratio_λ_p = similar(variables_T.aggregate_prices.leverage_ratio_λ)
-
-    while crit > tol && iter < iter_max
-
-        # copy previous value
-        copyto!(leverage_ratio_λ_p, variables_T.aggregate_prices.leverage_ratio_λ)
-
-        # solve individual-level problems backward
-        println("Solving individual-level problems backward...")
-        for T_i = (T_size-1):(-1):2
-            # pricing function and borrowing risky limit
-            variables_T.R[:,:,T_i], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i] = pricing_and_rbl_function(variables_T.threshold_e[:,:,:,T_i+1], variables_T.aggregate_prices.ι[T_i], parameters)
-
-            # value and policy functions
-            variables_T.V[:,:,:,:,T_i], variables_T.V_d[:,:,:,T_i], variables_T.V_nd[:,:,:,:,T_i], variables_T.policy_a[:,:,:,:,T_i] = value_and_policy_function(variables_T.V[:,:,:,:,T_i+1], variables_T.V_d[:,:,:,T_i+1], variables_T.V_nd[:,:,:,:,T_i+1], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i], variables_T.aggregate_prices.w[T_i], parameters)
-
-            # thresholds
-            variables_T.threshold_a[:,:,:,T_i], variables_T.threshold_e[:,:,:,T_i] = threshold_function(variables_T.V_d[:,:,:,T_i], variables_T.V_nd[:,:,:,:,T_i], variables_T.aggregate_prices.w[T_i], parameters)
-        end
-
-        # solve distribution forward and update aggregate variables and prices
-        println("Solving distribution and aggregate variables/prices forward...")
-        for T_i = 2:(T_size-1)
-            # update stationary distribution
-            variables_T.μ[:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,T_i], variables_T.threshold_a[:,:,:,T_i], parameters_new)
-
-            # compute aggregate variables
-            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,T_i], variables_T.threshold_a[:,:,:,T_i], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i], variables_T.μ[:,:,:,:,T_i], variables_T.aggregate_prices.K_λ[T_i], variables_T.aggregate_prices.w[T_i], parameters_new)
-            variables_T.aggregate_variables.K[T_i] = aggregate_variables.K
-            variables_T.aggregate_variables.L[T_i] = aggregate_variables.L
-            variables_T.aggregate_variables.D[T_i] = aggregate_variables.D
-            variables_T.aggregate_variables.N[T_i] = aggregate_variables.N
-            variables_T.aggregate_variables.leverage_ratio[T_i] = aggregate_variables.leverage_ratio
-            variables_T.aggregate_variables.KL_to_D_ratio[T_i] = aggregate_variables.KL_to_D_ratio
-            variables_T.aggregate_variables.debt_to_earning_ratio[T_i] = aggregate_variables.debt_to_earning_ratio
-            variables_T.aggregate_variables.share_of_filers[T_i] = aggregate_variables.share_of_filers
-            variables_T.aggregate_variables.share_of_involuntary_filers[T_i] = aggregate_variables.share_of_involuntary_filers
-            variables_T.aggregate_variables.share_in_debts[T_i] = aggregate_variables.share_in_debts
-            variables_T.aggregate_variables.avg_loan_rate[T_i] = aggregate_variables.avg_loan_rate
-            variables_T.aggregate_variables.avg_loan_rate_pw[T_i] = aggregate_variables.avg_loan_rate_pw
-        end
-
-        # check convergence
-        crit = norm(variables_T.aggregate_variables.leverage_ratio .- leverage_ratio_λ_p, Inf)
-
-        # update the iteration number
-        iter += 1
-
-        # manually report convergence progress
-        println("Solving transitional dynamics: iter = $iter and crit = $crit > tol = $tol")
-
-        # update leverage ratio
-        variables_T.aggregate_prices.leverage_ratio_λ = slow_updating * leverage_ratio_λ_p + (1.0 - slow_updating) * variables_T.aggregate_variables.leverage_ratio
-
-        # update aggregate prices
-        variables_T.aggregate_prices.ξ = θ .* variables_T.aggregate_prices.leverage_ratio_λ
-        variables_T.aggregate_prices.Λ = β_f .* (1.0 .- ψ .+ ψ .* variables_T.aggregate_prices.ξ)
-        variables_T.aggregate_prices.KL_to_D_ratio_λ = variables_T.aggregate_prices.leverage_ratio_λ ./ (variables_T.aggregate_prices.leverage_ratio_λ .- 1.0)
-        for T_i = 2:(T_size-1)
-            variables_T.aggregate_prices.λ[T_i] = 1.0 - (1.0 - ψ + ψ*variables_T.aggregate_prices.ξ[T_i+1]) / variables_T.aggregate_prices.ξ[T_i]
-            variables_T.aggregate_prices.ι[T_i] = variables_T.aggregate_prices.λ[T_i] * θ / variables_T.aggregate_prices.Λ[T_i+1]
-        end
-        variables_T.aggregate_prices.r_k = r_f .+ variables_T.aggregate_prices.ι
-        variables_T.aggregate_prices.K_λ = E .* ((variables_T.aggregate_prices.r_k .+ δ) ./ α).^(1.0 / (α - 1.0))
-        variables_T.aggregate_prices.w = (1.0 - α) .* ((variables_T.aggregate_prices.K_λ ./ E).^α)
-
-        # tracking figures
-        if figure_track == true
-            println()
-            plt_LR = lineplot(
-                collect(2:(T_size-1)),
-                variables_T.aggregate_variables.leverage_ratio[2:(T_size-1)],
-                name = "updated",
-                title = "leverage ratio",
-                xlim = [0.0, T_size],
-                width = 50,
-                height = 10,
-            )
-            lineplot!(plt_LR, collect(2:(T_size-1)), leverage_ratio_λ_p[2:(T_size-1)], name = "initial")
-            lineplot!(plt_LR, collect(2:(T_size-1)), variables_T.aggregate_prices.leverage_ratio_λ[2:(T_size-1)], name = "slow updating")
-            println(plt_LR)
-        end
-    end
-end
-
-# old stationary equilibrium
-println("Solving initial steady state...")
-parameters_old = parameters_function()
-variables_old = variables_function(parameters_old; λ = λ_optimal)
-solve_economy_function!(variables_old, parameters_old)
-
-# new stationary equilibrium
-println("Solving new steady state...")
-parameters_new = parameters_function()
-variables_new = variables_function(parameters_new; λ = λ_optimal)
-solve_economy_function!(variables_new, parameters_new)
-
-# solve transitional dynamics
-variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 30)
-transitional_dynamic_λ_function!(variables_T, parameters_new; iter_max = 10, slow_updating = 0.2)
+# mutable struct Mutable_Aggregate_Prices_T
+#     """
+#     construct a type for mutable aggregate prices of periods T
+#     """
+#     λ::Array{Float64,1}
+#     ξ::Array{Float64,1}
+#     Λ::Array{Float64,1}
+#     leverage_ratio_λ::Array{Float64,1}
+#     KL_to_D_ratio_λ::Array{Float64,1}
+#     ι::Array{Float64,1}
+#     r_k::Array{Float64,1}
+#     K_λ::Array{Float64,1}
+#     w::Array{Float64,1}
+# end
+#
+# mutable struct Mutable_Aggregate_Variables_T
+#     """
+#     construct a type for mutable aggregate variables of periods T
+#     """
+#     K::Array{Float64,1}
+#     L::Array{Float64,1}
+#     D::Array{Float64,1}
+#     N::Array{Float64,1}
+#     leverage_ratio::Array{Float64,1}
+#     KL_to_D_ratio::Array{Float64,1}
+#     debt_to_earning_ratio::Array{Float64,1}
+#     share_of_filers::Array{Float64,1}
+#     share_of_involuntary_filers::Array{Float64,1}
+#     share_in_debts::Array{Float64,1}
+#     avg_loan_rate::Array{Float64,1}
+#     avg_loan_rate_pw::Array{Float64,1}
+# end
+#
+# mutable struct Mutable_Variables_T
+#     """
+#     construct a type for mutable variables of periods T
+#     """
+#     aggregate_prices::Mutable_Aggregate_Prices_T
+#     aggregate_variables::Mutable_Aggregate_Variables_T
+#     R::Array{Float64,3}
+#     q::Array{Float64,3}
+#     rbl::Array{Float64,3}
+#     V::Array{Float64,5}
+#     V_d::Array{Float64,4}
+#     V_nd::Array{Float64,5}
+#     policy_a::Array{Float64,5}
+#     threshold_a::Array{Float64,4}
+#     threshold_e::Array{Float64,4}
+#     μ::Array{Float64,5}
+# end
+#
+# function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer)
+#     """
+#     construct a mutable object containing endogenous variables of periods T
+#     """
+#
+#     # unapcl parameters from new steady state
+#     @unpack a_size, a_size_neg, a_size_μ, e_size, t_size, ν_size = parameters_new
+#     @unpack θ, β_f, ψ, r_f, E, δ, α = parameters_new
+#
+#     # adjust periods considered
+#     T_size = T_size + 2
+#
+#     # leverage_ratio_λ = collect(range(variables_new.aggregate_prices.leverage_ratio_λ, variables_new.aggregate_prices.leverage_ratio_λ, length = T_size))
+#     # leverage_ratio_λ = collect(range(variables_old.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
+#     leverage_ratio_λ = collect(range(variables_new.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
+#     ξ = θ .* leverage_ratio_λ
+#     Λ = β_f .* (1.0 .- ψ .+ ψ .* ξ)
+#     KL_to_D_ratio_λ = leverage_ratio_λ ./ (leverage_ratio_λ .- 1.0)
+#     λ = zeros(T_size)
+#     λ[1] = 1.0 - ((1.0 - ψ + ψ*ξ[1]) / ξ[1])
+#     λ[end] = 1.0 - ((1.0 - ψ + ψ*ξ[end]) / ξ[end])
+#     ι = zeros(T_size)
+#     ι[1] = λ[1] * θ / Λ[1]
+#     ι[end] = λ[end] * θ / Λ[end]
+#     r_k = zeros(T_size)
+#     r_k[1] = variables_old.aggregate_prices.r_k
+#     r_k[end] = variables_new.aggregate_prices.r_k
+#     K_λ = zeros(T_size)
+#     K_λ[1] = variables_old.aggregate_prices.K_λ
+#     K_λ[end] = variables_new.aggregate_prices.K_λ
+#     w  = zeros(T_size)
+#     w[1] = variables_old.aggregate_prices.w
+#     w[end] = variables_new.aggregate_prices.w
+#     for T_i = (T_size-1):(-1):2
+#         λ[T_i] = 1.0 - ((1.0 - ψ + ψ*ξ[T_i+1]) / ξ[T_i])
+#         ι[T_i] = λ[T_i] * θ / Λ[T_i+1]
+#         r_k[T_i] = r_f + ι[T_i]
+#         K_λ[T_i] = E .* ((r_k[T_i] .+ δ) ./ α).^(1.0 / (α - 1.0))
+#         w[T_i] = (1.0 - α) .* ((K_λ[T_i] ./ E).^α)
+#     end
+#     aggregate_prices = Mutable_Aggregate_Prices_T(λ, ξ, Λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι, r_k, K_λ, w)
+#
+#     # define aggregate variables
+#     K = zeros(T_size)
+#     K[1] = K_λ[1]
+#     K[end] = K_λ[end]
+#     L = zeros(T_size)
+#     L[1] = variables_old.aggregate_variables.L
+#     L[end] = variables_new.aggregate_variables.L
+#     D = zeros(T_size)
+#     D[1] = variables_old.aggregate_variables.D
+#     D[end] = variables_new.aggregate_variables.D
+#     N = zeros(T_size)
+#     N[1] = variables_old.aggregate_variables.N
+#     N[end] = variables_new.aggregate_variables.N
+#     leverage_ratio = zeros(T_size)
+#     leverage_ratio[1] = variables_old.aggregate_variables.leverage_ratio
+#     leverage_ratio[end] = variables_new.aggregate_variables.leverage_ratio
+#     KL_to_D_ratio = zeros(T_size)
+#     KL_to_D_ratio[1] = variables_old.aggregate_variables.KL_to_D_ratio
+#     KL_to_D_ratio[end] = variables_new.aggregate_variables.KL_to_D_ratio
+#     debt_to_earning_ratio = zeros(T_size)
+#     debt_to_earning_ratio[1] = variables_old.aggregate_variables.debt_to_earning_ratio
+#     debt_to_earning_ratio[end] = variables_new.aggregate_variables.debt_to_earning_ratio
+#     share_of_filers = zeros(T_size)
+#     share_of_filers[1] = variables_old.aggregate_variables.share_of_filers
+#     share_of_filers[end] = variables_new.aggregate_variables.share_of_filers
+#     share_of_involuntary_filers = zeros(T_size)
+#     share_of_involuntary_filers[1] = variables_old.aggregate_variables.share_of_involuntary_filers
+#     share_of_involuntary_filers[end] = variables_new.aggregate_variables.share_of_involuntary_filers
+#     share_in_debts = zeros(T_size)
+#     share_in_debts[1] = variables_old.aggregate_variables.share_in_debts
+#     share_in_debts[end] = variables_new.aggregate_variables.share_in_debts
+#     avg_loan_rate = zeros(T_size)
+#     avg_loan_rate[1] = variables_old.aggregate_variables.avg_loan_rate
+#     avg_loan_rate[end] = variables_new.aggregate_variables.avg_loan_rate
+#     avg_loan_rate_pw = zeros(T_size)
+#     avg_loan_rate_pw[1] = variables_old.aggregate_variables.avg_loan_rate_pw
+#     avg_loan_rate_pw[end] = variables_new.aggregate_variables.avg_loan_rate_pw
+#     aggregate_variables = Mutable_Aggregate_Variables_T(K, L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+#
+#     # define repayment probability, pricing function, and risky borrowing limit
+#     R = zeros(a_size_neg, e_size, T_size)
+#     R[:,:,1] = variables_old.R
+#     R[:,:,(end-1):end] .= variables_new.R
+#     q = ones(a_size, e_size, T_size) ./ (1.0 + r_f)
+#     q[:,:,1] = variables_old.q
+#     q[:,:,(end-1):end] .= variables_new.q
+#     rbl = zeros(e_size, 2, T_size)
+#     rbl[:,:,1] = variables_old.rbl
+#     rbl[:,:,(end-1):end] .= variables_new.rbl
+#
+#     # define value and policy functions
+#     V = zeros(a_size, e_size, t_size, ν_size, T_size)
+#     V[:,:,:,:,1] = variables_old.V
+#     V[:,:,:,:,end] = variables_new.V
+#     V_d = zeros(e_size, t_size, ν_size, T_size)
+#     V_d[:,:,:,1] = variables_old.V_d
+#     V_d[:,:,:,end] = variables_new.V_d
+#     V_nd = zeros(a_size, e_size, t_size, ν_size, T_size)
+#     V_nd[:,:,:,:,1] = variables_old.V_nd
+#     V_nd[:,:,:,:,end] = variables_new.V_nd
+#     policy_a = zeros(a_size, e_size, t_size, ν_size, T_size)
+#     policy_a[:,:,:,:,1] = variables_old.policy_a
+#     policy_a[:,:,:,:,end] = variables_new.policy_a
+#
+#     # define thresholds conditional on endowment or asset
+#     threshold_a = zeros(e_size, t_size, ν_size, T_size)
+#     threshold_a[:,:,:,1] = variables_old.threshold_a
+#     threshold_a[:,:,:,end] = variables_new.threshold_a
+#     threshold_e = zeros(a_size, t_size, ν_size, T_size)
+#     threshold_e[:,:,:,1] = variables_old.threshold_e
+#     threshold_e[:,:,:,end] = variables_new.threshold_e
+#
+#     # define cross-sectional distribution
+#     μ_size = a_size_μ * e_size * t_size * ν_size
+#     μ = ones(a_size_μ, e_size, t_size, ν_size, T_size) ./ μ_size
+#     μ[:,:,:,:,1] = variables_old.μ
+#     μ[:,:,:,:,end] = variables_new.μ
+#
+#     # return outputs
+#     variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ)
+#     return variables_T
+# end
+#
+# function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, parameters_new::NamedTuple; tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = true)
+#     """
+#     solve transitional dynamics of periods T from initial to new steady states
+#     """
+#
+#     # unpack parameters
+#     @unpack θ, ψ, β_f, r_f, E, δ, α = parameters_new
+#
+#     # initialize the iteration number and criterion
+#     iter = 0
+#     crit = Inf
+#
+#     # obtain number of periods
+#     T_size = length(variables_T.aggregate_prices.leverage_ratio_λ)
+#
+#     # construct container
+#     leverage_ratio_λ_p = similar(variables_T.aggregate_prices.leverage_ratio_λ)
+#
+#     while crit > tol && iter < iter_max
+#
+#         # copy previous value
+#         copyto!(leverage_ratio_λ_p, variables_T.aggregate_prices.leverage_ratio_λ)
+#
+#         # solve individual-level problems backward
+#         println("Solving individual-level problems backward...")
+#         for T_i = (T_size-1):(-1):2
+#             # pricing function and borrowing risky limit
+#             variables_T.R[:,:,T_i], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i] = pricing_and_rbl_function(variables_T.threshold_e[:,:,:,T_i+1], variables_T.aggregate_prices.ι[T_i], parameters)
+#
+#             # value and policy functions
+#             variables_T.V[:,:,:,:,T_i], variables_T.V_d[:,:,:,T_i], variables_T.V_nd[:,:,:,:,T_i], variables_T.policy_a[:,:,:,:,T_i] = value_and_policy_function(variables_T.V[:,:,:,:,T_i+1], variables_T.V_d[:,:,:,T_i+1], variables_T.V_nd[:,:,:,:,T_i+1], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i], variables_T.aggregate_prices.w[T_i], parameters)
+#
+#             # thresholds
+#             variables_T.threshold_a[:,:,:,T_i], variables_T.threshold_e[:,:,:,T_i] = threshold_function(variables_T.V_d[:,:,:,T_i], variables_T.V_nd[:,:,:,:,T_i], variables_T.aggregate_prices.w[T_i], parameters)
+#         end
+#
+#         # solve distribution forward and update aggregate variables and prices
+#         println("Solving distribution and aggregate variables/prices forward...")
+#         for T_i = 2:(T_size-1)
+#             # update stationary distribution
+#             variables_T.μ[:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,T_i], variables_T.threshold_a[:,:,:,T_i], parameters_new)
+#
+#             # compute aggregate variables
+#             aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,T_i], variables_T.threshold_a[:,:,:,T_i], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i], variables_T.μ[:,:,:,:,T_i], variables_T.aggregate_prices.K_λ[T_i], variables_T.aggregate_prices.w[T_i], parameters_new)
+#             variables_T.aggregate_variables.K[T_i] = aggregate_variables.K
+#             variables_T.aggregate_variables.L[T_i] = aggregate_variables.L
+#             variables_T.aggregate_variables.D[T_i] = aggregate_variables.D
+#             variables_T.aggregate_variables.N[T_i] = aggregate_variables.N
+#             variables_T.aggregate_variables.leverage_ratio[T_i] = aggregate_variables.leverage_ratio
+#             variables_T.aggregate_variables.KL_to_D_ratio[T_i] = aggregate_variables.KL_to_D_ratio
+#             variables_T.aggregate_variables.debt_to_earning_ratio[T_i] = aggregate_variables.debt_to_earning_ratio
+#             variables_T.aggregate_variables.share_of_filers[T_i] = aggregate_variables.share_of_filers
+#             variables_T.aggregate_variables.share_of_involuntary_filers[T_i] = aggregate_variables.share_of_involuntary_filers
+#             variables_T.aggregate_variables.share_in_debts[T_i] = aggregate_variables.share_in_debts
+#             variables_T.aggregate_variables.avg_loan_rate[T_i] = aggregate_variables.avg_loan_rate
+#             variables_T.aggregate_variables.avg_loan_rate_pw[T_i] = aggregate_variables.avg_loan_rate_pw
+#         end
+#
+#         # check convergence
+#         crit = norm(variables_T.aggregate_variables.leverage_ratio .- leverage_ratio_λ_p, Inf)
+#
+#         # update the iteration number
+#         iter += 1
+#
+#         # manually report convergence progress
+#         println("Solving transitional dynamics: iter = $iter and crit = $crit > tol = $tol")
+#
+#         # update leverage ratio
+#         variables_T.aggregate_prices.leverage_ratio_λ = slow_updating * leverage_ratio_λ_p + (1.0 - slow_updating) * variables_T.aggregate_variables.leverage_ratio
+#
+#         # update aggregate prices
+#         variables_T.aggregate_prices.ξ = θ .* variables_T.aggregate_prices.leverage_ratio_λ
+#         variables_T.aggregate_prices.Λ = β_f .* (1.0 .- ψ .+ ψ .* variables_T.aggregate_prices.ξ)
+#         variables_T.aggregate_prices.KL_to_D_ratio_λ = variables_T.aggregate_prices.leverage_ratio_λ ./ (variables_T.aggregate_prices.leverage_ratio_λ .- 1.0)
+#         for T_i = 2:(T_size-1)
+#             variables_T.aggregate_prices.λ[T_i] = 1.0 - (1.0 - ψ + ψ*variables_T.aggregate_prices.ξ[T_i+1]) / variables_T.aggregate_prices.ξ[T_i]
+#             variables_T.aggregate_prices.ι[T_i] = variables_T.aggregate_prices.λ[T_i] * θ / variables_T.aggregate_prices.Λ[T_i+1]
+#         end
+#         variables_T.aggregate_prices.r_k = r_f .+ variables_T.aggregate_prices.ι
+#         variables_T.aggregate_prices.K_λ = E .* ((variables_T.aggregate_prices.r_k .+ δ) ./ α).^(1.0 / (α - 1.0))
+#         variables_T.aggregate_prices.w = (1.0 - α) .* ((variables_T.aggregate_prices.K_λ ./ E).^α)
+#
+#         # tracking figures
+#         if figure_track == true
+#             println()
+#             plt_LR = lineplot(
+#                 collect(2:(T_size-1)),
+#                 variables_T.aggregate_variables.leverage_ratio[2:(T_size-1)],
+#                 name = "updated",
+#                 title = "leverage ratio",
+#                 xlim = [0.0, T_size],
+#                 width = 50,
+#                 height = 10,
+#             )
+#             lineplot!(plt_LR, collect(2:(T_size-1)), leverage_ratio_λ_p[2:(T_size-1)], name = "initial")
+#             lineplot!(plt_LR, collect(2:(T_size-1)), variables_T.aggregate_prices.leverage_ratio_λ[2:(T_size-1)], name = "slow updating")
+#             println(plt_LR)
+#         end
+#     end
+# end
+#
+# # old stationary equilibrium
+# println("Solving initial steady state...")
+# parameters_old = parameters_function()
+# variables_old = variables_function(parameters_old; λ = 0.0)
+# solve_economy_function!(variables_old, parameters_old)
+#
+# # new stationary equilibrium
+# println("Solving new steady state...")
+# parameters_new = parameters_function()
+# variables_new = variables_function(parameters_new; λ = λ_optimal)
+# solve_economy_function!(variables_new, parameters_new)
+#
+# # solve transitional dynamics
+# variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 240)
+# transitional_dynamic_λ_function!(variables_T, parameters_new; iter_max = 4, slow_updating = 0.5)

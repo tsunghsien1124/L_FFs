@@ -262,7 +262,8 @@ savefig(plot_welfare, "figures/plot_welfare.pdf")
 plot_row = 2
 plot_col = 2
 plot_size = plot_row * plot_col
-plot_ordering = [4, 2, 9, 5]
+# plot_ordering = [4, 2, 9, 5]
+plot_ordering = [13, 7, 9, 4]
 plot_title = [var_names[i] for i in plot_ordering]
 plot_equilibria = plot(
     layout = (plot_row, plot_col),
@@ -308,14 +309,136 @@ for sp_i = 1:plot_size
         margin = 4mm,
     )
     if sp_i > (plot_row - 1) * plot_col
-        plot_equilibria = plot!(subplot = sp_i, xlabel = "\$ \\textrm{garnishment rate } (\\eta) \$")
+        plot_equilibria = plot!(subplot = sp_i, xlabel = "\$ \\textrm{wage garnishment rate } (\\eta) \$")
     end
     if sp_i == plot_row * plot_col
-        plot_equilibria = plot!(subplot = sp_i, legend = :bottomright)
+        plot_equilibria = plot!(subplot = sp_i, legend = :topright)
     end
 end
 plot_equilibria
 savefig(plot_equilibria, "figures/plot_equilibria.pdf")
+
+#===============================#
+# Premium and average loan rate #
+#===============================#
+plot_row = 2
+plot_col = 1
+plot_size = plot_row * plot_col
+plot_ordering = [4, 13]
+plot_title = [var_names[i] for i in plot_ordering]
+plot_leverage = plot(
+    layout = (plot_row, plot_col),
+    size = (plot_col * 700, plot_row * 400),
+    box = :on,
+    xlimit = [0.1, 0.8],
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(12, "Computer Modern", :black),
+    ytickfont = font(12, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(16, "Computer Modern", :black),
+    legendfont = font(14, "Computer Modern", :black),
+)
+for sp_i = 1:plot_size
+    plot_index = plot_ordering[sp_i]
+    plot_leverage = plot!(
+        subplot = sp_i,
+        η_grid,
+        results_A_NFF[plot_index, :],
+        markershapes = :circle,
+        markercolor = :blue,
+        markersize = 7,
+        markerstrokecolor = :blue,
+        linecolor = :blue,
+        linewidth = 4,
+        label = "Without Financial Frictions",
+        legend = :none,
+        margin = 8mm,
+    )
+    plot_leverage = plot!(
+        subplot = sp_i,
+        η_grid,
+        results_A_FF[plot_index, :],
+        title = plot_title[sp_i],
+        markershapes = :square,
+        markercolor = :red,
+        markersize = 5,
+        markerstrokecolor = :red,
+        linecolor = :red,
+        linewidth = 3,
+        label = "With Financial Frictions",
+        legend = :none,
+        margin = 4mm,
+    )
+    if sp_i > (plot_row - 1) * plot_col
+        plot_leverage = plot!(subplot = sp_i, xlabel = "\$ \\textrm{wage garnishment rate } (\\eta) \$")
+    end
+    if sp_i == plot_row * plot_col
+        plot_leverage = plot!(subplot = sp_i, legend = :topright)
+    end
+end
+plot_leverage
+savefig(plot_leverage, "figures/plot_leverage.pdf")
+
+#=========================#
+# Rental rate and capital #
+#=========================#
+plot_row = 2
+plot_col = 1
+plot_size = plot_row * plot_col
+plot_ordering = [2, 5]
+plot_title = [var_names[i] for i in plot_ordering]
+plot_divestment = plot(
+    layout = (plot_row, plot_col),
+    size = (plot_col * 700, plot_row * 400),
+    box = :on,
+    xlimit = [0.1, 0.8],
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(12, "Computer Modern", :black),
+    ytickfont = font(12, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(16, "Computer Modern", :black),
+    legendfont = font(14, "Computer Modern", :black),
+)
+for sp_i = 1:plot_size
+    plot_index = plot_ordering[sp_i]
+    plot_divestment = plot!(
+        subplot = sp_i,
+        η_grid,
+        results_A_NFF[plot_index, :],
+        markershapes = :circle,
+        markercolor = :blue,
+        markersize = 7,
+        markerstrokecolor = :blue,
+        linecolor = :blue,
+        linewidth = 4,
+        label = "Without Financial Frictions",
+        legend = :none,
+        margin = 8mm,
+    )
+    plot_divestment = plot!(
+        subplot = sp_i,
+        η_grid,
+        results_A_FF[plot_index, :],
+        title = plot_title[sp_i],
+        markershapes = :square,
+        markercolor = :red,
+        markersize = 5,
+        markerstrokecolor = :red,
+        linecolor = :red,
+        linewidth = 3,
+        label = "With Financial Frictions",
+        legend = :none,
+        margin = 4mm,
+    )
+    if sp_i > (plot_row - 1) * plot_col
+        plot_divestment = plot!(subplot = sp_i, xlabel = "\$ \\textrm{wage garnishment rate } (\\eta) \$")
+    end
+    if sp_i == plot_row * plot_col
+        plot_divestment = plot!(subplot = sp_i, legend = :bottomright)
+    end
+end
+plot_divestment
+savefig(plot_divestment, "figures/plot_divestment.pdf")
 
 #==========#
 # Deposits #

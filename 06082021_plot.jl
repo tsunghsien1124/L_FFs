@@ -1,6 +1,11 @@
-using Measures
+using JLD2
 using Plots
 using LaTeXStrings
+using Measures
+using LatexPrint
+using Dierckx
+using StatsPlots
+using Parameters
 
 #========================================#
 # Bond price across persistent endowment #
@@ -14,11 +19,11 @@ plot_q = plot(
     legend = :topleft,
     ylimit = [0.0, 1.0],
     yticks = 0.0:0.2:1.0,
-    xtickfont = font(12, "Computer Modern", :black),
-    ytickfont = font(12, "Computer Modern", :black),
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
     titlefont = font(18, "Computer Modern", :black),
-    guidefont = font(16, "Computer Modern", :black),
-    legendfont = font(14, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
     title = "\$ q(a',e) \$",
     xlabel = "\$ \\textrm{Loan Choice } (a'<0)\$"
 )
@@ -219,11 +224,11 @@ plot_welfare = plot(
     ylimit = [0.0, 0.01],
     yticks = 0.0:0.0025:0.01,
     xticks = 0.1:0.1:0.8,
-    xtickfont = font(12, "Computer Modern", :black),
-    ytickfont = font(12, "Computer Modern", :black),
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
     titlefont = font(18, "Computer Modern", :black),
-    guidefont = font(16, "Computer Modern", :black),
-    legendfont = font(14, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
 )
 plot_welfare = plot!(
     η_grid,
@@ -234,11 +239,10 @@ plot_welfare = plot!(
     markerstrokecolor = :blue,
     linecolor = :blue,
     linewidth = 3,
-    label = "Without Financial Frictions",
+    label = L"\textrm{Without Financial Frictions}",
     margin = 4mm,
 )
 plot_welfare = vline!([η_grid[argmax(CEV_comparison_NFF)]], linecolor = :blue, linewidth = 3, linestyle = :dot, label = "")
-
 plot_welfare = plot!(
     η_grid,
     CEV_comparison_FF,
@@ -249,11 +253,12 @@ plot_welfare = plot!(
     linecolor = :red,
     linewidth = 3,
     label = "With Financial Frictions",
-    xlabel = "\$ \\textrm{wage garnishment rate } (\\eta) \$",
+    xlabel = "\$ \\textrm{wage\\ garnishment\\ rate\\} (\\eta) \$",
     title = "Welfare (CEV)",
     margin = 4mm,
 )
 plot_welfare = vline!([η_grid[argmax(CEV_comparison_FF)]], linecolor = :red, linewidth = 3, linestyle = :dot, label = "")
+
 savefig(plot_welfare, "figures/plot_welfare.pdf")
 
 #============#

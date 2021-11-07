@@ -12,45 +12,51 @@ using Parameters
 #========================================#
 plot_col = 1
 plot_row = 1
-plot_q_index = findall(-8.0 .<= parameters.a_grid .<= 0.0)
+plot_q_index = findall(-4.0 .<= parameters.a_grid .<= 0.0)
 plot_q = plot(
     size = (plot_col * 800, plot_row * 500),
     box = :on,
     legend = :topleft,
     ylimit = [0.0, 1.0],
     yticks = 0.0:0.2:1.0,
+    # xlimit = [-6.0, 0.0],
     xtickfont = font(18, "Computer Modern", :black),
     ytickfont = font(18, "Computer Modern", :black),
     titlefont = font(18, "Computer Modern", :black),
     guidefont = font(18, "Computer Modern", :black),
     legendfont = font(18, "Computer Modern", :black),
-    title = "\$ q(a',e) \$",
-    xlabel = "\$ \\textrm{Loan Choice } (a'<0)\$"
+    ylabel = "\$ q(b',e) \$",
+    xlabel = "\$ \\textrm{Loan\\ choice\\ } b'<0 \$"
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
     variables.q[plot_q_index, 2],
     linecolor = :blue,
     linewidth = 3,
-    label = "\$ \\textrm{Low Endowment } (e_p = $(round(parameters.e_grid[2],digits=1))) \$",
+    label = "\$ \\textrm{Low\\ persistent\\ productivity}\$",
     margin = 4mm,
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
     variables.q[plot_q_index, 5],
     linecolor = :red,
+    linestyle = :dash,
     linewidth = 3,
-    label = "\$ \\textrm{Median Endowment } (e_p = $(round(parameters.e_grid[5],digits=1))) \$",
+    label = "\$ \\textrm{Median\\ persistent\\ productivity} \$",
     margin = 4mm,
 )
-
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
     variables.q[plot_q_index, end-1],
     linecolor = :black,
+    linestyle = :dashdot,
     linewidth = 3,
-    label = "\$ \\textrm{High Endowment } (e_p = $(round(parameters.e_grid[end-1],digits=1))) \$",
+    label = "\$ \\textrm{High\\ persistent\\ productivity} \$",
     margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
 )
 plot_q
 savefig(plot_q, "figures/plot_q.pdf")
@@ -65,43 +71,49 @@ plot_qa = plot(
     size = (plot_col * 800, plot_row * 500),
     box = :on,
     legend = :none,
-    ylimit = [-1.0, 0.0],
-    yticks = -1.0:0.2:0.0,
-    xtickfont = font(12, "Computer Modern", :black),
-    ytickfont = font(12, "Computer Modern", :black),
+    ylimit = [0.0, 1.1],
+    yticks = 0.0:0.2:2.0,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
     titlefont = font(18, "Computer Modern", :black),
-    guidefont = font(16, "Computer Modern", :black),
-    legendfont = font(12, "Computer Modern", :black),
-    title = "\$ q(a',e) \\cdot a'\$",
-    xlabel = "\$ \\textrm{Loan Choice } (a'<0)\$"
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+    ylabel = "\$ q(b',e) \\cdot b'\$",
+    xlabel = "\$ \\textrm{Loan\\ choice\\ } b'<0 \$"
 )
 plot_qa = plot!(
     parameters.a_grid[plot_qa_index],
-    variables.q[plot_qa_index, 2] .* parameters.a_grid[plot_qa_index],
+    - variables.q[plot_qa_index, 2] .* parameters.a_grid[plot_qa_index],
     linecolor = :blue,
     linewidth = 3,
     label = "\$ \\textrm{High Endowment } (e_p = $(round(parameters.e_grid[2],digits=1))) \$",
     margin = 4mm,
 )
-plot_qa = vline!([variables.rbl[2, 1]], linecolor = :blue, linewidth = 2, linestyle = :dot, label = "")
+# plot_qa = vline!([variables.rbl[2, 1]], linecolor = :blue, linewidth = 2, linestyle = :dot, label = "")
 plot_qa = plot!(
     parameters.a_grid[plot_qa_index],
-    variables.q[plot_qa_index, 5] .* parameters.a_grid[plot_qa_index],
+    - variables.q[plot_qa_index, 5] .* parameters.a_grid[plot_qa_index],
     linecolor = :red,
+    linestyle = :dash,
     linewidth = 3,
     label = "\$ \\textrm{Median Endowment } (e_p = $(round(parameters.e_grid[5],digits=1))) \$",
     margin = 4mm,
 )
-plot_qa = vline!([variables.rbl[5, 1]], linecolor = :red, linewidth = 2, linestyle = :dot, label = "")
+# plot_qa = vline!([variables.rbl[5, 1]], linecolor = :red, linewidth = 2, linestyle = :dot, label = "")
 plot_qa = plot!(
     parameters.a_grid[plot_qa_index],
-    variables.q[plot_qa_index, end-1] .* parameters.a_grid[plot_qa_index],
+    - variables.q[plot_qa_index, end-1] .* parameters.a_grid[plot_qa_index],
     linecolor = :black,
+    linestyle = :dashdot,
     linewidth = 3,
     label = "\$ \\textrm{Low Endowment } (e_p = $(round(parameters.e_grid[end-1],digits=1))) \$",
     margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
 )
-plot_qa = vline!([variables.rbl[end-1, 1]], linecolor = :black, linewidth = 2, linestyle = :dot, label = "")
+# plot_qa = vline!([variables.rbl[end-1, 1]], linecolor = :black, linewidth = 2, linestyle = :dot, label = "")
 plot_qa
 savefig(plot_qa, "figures/plot_qa.pdf")
 
@@ -200,7 +212,331 @@ plot!(variables.threshold_a[:, 1], parameters.w * exp.(parameters.e_grid), serie
 plot(parameters.a_grid, parameters.w .* exp.(variables.threshold_e[:, 1]), legend = :none, xlabel = "debt level", ylabel = "defaulting w*exp(e) level")
 plot!(variables.threshold_a[:, 1], parameters.w * exp.(parameters.e_grid), seriestype = :scatter)
 
+#====================#
+# Average loanb rate #
+#====================#
+plot_col = 1
+plot_row = 1
+plot_loan_rate = plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :topleft,
+    # ylimit = [0.0,1.0],
+    # yticks = 0.0:0.25:1.0,
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_loan_rate = plot!(
+    η_grid,
+    results_A_NFF[end, :] * 100,
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    linecolor = :blue,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\% \$"
+)
+savefig(plot_loan_rate, "figures/plot_loan_rate.pdf")
 
+#===========================#
+# Agreegate unsecured loans #
+#===========================#
+plot_col = 1
+plot_row = 1
+plot_aggregate_loan = plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :topleft,
+    # ylimit = [0.0,1.0],
+    # yticks = 0.0:0.25:1.0,
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_aggregate_loan = plot!(
+    η_grid,
+    results_A_NFF[6, :],
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    linecolor = :blue,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\textrm{Amount} \$"
+)
+savefig(plot_aggregate_loan, "figures/plot_aggregate_loan.pdf")
+
+#====================#
+# Agreegate deposits #
+#====================#
+plot_col = 1
+plot_row = 1
+plot_deposit= plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :topleft,
+    # ylimit = [0.0,1.0],
+    # yticks = 0.0:0.25:1.0,
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_deposit = plot!(
+    η_grid,
+    results_A_NFF[7, :],
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    linecolor = :blue,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\textrm{Amount} \$"
+)
+savefig(plot_deposit, "figures/plot_deposit.pdf")
+
+#================#
+# Leverage ratio #
+#================#
+plot_col = 1
+plot_row = 1
+plot_leverage_ratio= plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :topleft,
+    # ylimit = [0.0,1.0],
+    # yticks = 0.0:0.25:1.0,
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_leverage_ratio = plot!(
+    η_grid,
+    results_A_NFF[9, :],
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    linecolor = :blue,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\textrm{Ratio} \$"
+)
+savefig(plot_leverage_ratio, "figures/plot_leverage_ratio.pdf")
+
+#==================#
+# Leverage premium #
+#==================#
+plot_col = 1
+plot_row = 1
+plot_leverage_premium = plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :topleft,
+    # ylimit = [0.0,1.0],
+    # yticks = 0.0:0.25:1.0,
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_leverage_premium = plot!(
+    η_grid,
+    results_A_NFF[4, :] * 100,
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    linecolor = :blue,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "\$ \\textrm{Without\\ financial\\ frictions} \$",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\% \$"
+)
+plot_leverage_premium = plot!(
+    η_grid,
+    results_A_FF[4, :] * 100,
+    markershapes = :square,
+    markercolor = :red,
+    markersize = 6,
+    markerstrokecolor = :red,
+    linecolor = :red,
+    linestyle = :dash,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "\$ \\textrm{With\\ financial\\ frictions} \$",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\% \$"
+)
+savefig(plot_leverage_premium, "figures/plot_leverage_premium.pdf")
+
+#=============#
+# Rental rate #
+#=============#
+plot_col = 1
+plot_row = 1
+plot_renta_rate = plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :topleft,
+    # ylimit = [0.0,1.0],
+    # yticks = 0.0:0.25:1.0,
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_renta_rate = plot!(
+    η_grid,
+    results_A_NFF[2, :] * 100,
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    linecolor = :blue,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "\$ \\textrm{Without\\ financial\\ frictions} \$",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\% \$"
+)
+plot_renta_rate = plot!(
+    η_grid,
+    results_A_FF[2, :] * 100,
+    markershapes = :square,
+    markercolor = :red,
+    markersize = 6,
+    markerstrokecolor = :red,
+    linecolor = :red,
+    linestyle = :dash,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "\$ \\textrm{With\\ financial\\ frictions} \$",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\% \$"
+)
+savefig(plot_renta_rate, "figures/plot_renta_rate.pdf")
+
+#==================#
+# Physical capital #
+#==================#
+plot_col = 1
+plot_row = 1
+plot_capital = plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :topleft,
+    # ylimit = [0.0,1.0],
+    # yticks = 0.0:0.25:1.0,
+    xticks = 0.1:0.1:0.8,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_capital = plot!(
+    η_grid,
+    results_A_NFF[5, :],
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    linecolor = :blue,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :topright,
+    label = "\$ \\textrm{Without\\ financial\\ frictions} \$",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\% \$"
+)
+plot_capital = plot!(
+    η_grid,
+    results_A_FF[5, :],
+    markershapes = :square,
+    markercolor = :red,
+    markersize = 6,
+    markerstrokecolor = :red,
+    linecolor = :red,
+    linestyle = :dash,
+    linewidth = 3,
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+    legend = :bottomright,
+    label = "\$ \\textrm{With\\ financial\\ frictions} \$",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\% \$"
+)
+savefig(plot_capital, "figures/plot_capital.pdf")
 
 #==========================#
 # Welfare comparison (CEV) #
@@ -212,17 +548,17 @@ parameters_CEV, results_CEV_FF = results_CEV_function(results_V_FF)
 CEV_comparison_NFF = zeros(η_size)
 CEV_comparison_FF = zeros(η_size)
 for η_i = 1:η_size
-    @inbounds CEV_comparison_NFF[η_i] = sum(results_CEV_NFF[:, :, :, :, η_i] .* results_μ_NFF[:, :, :, :, η_i])
-    @inbounds CEV_comparison_FF[η_i] = sum(results_CEV_FF[:, :, :, :, η_i] .* results_μ_FF[:, :, :, :, η_i])
+    @inbounds CEV_comparison_NFF[η_i] = sum(results_CEV_NFF[:, :, :, :, η_i] .* results_μ_NFF[:, :, :, :, η_i]) *100
+    @inbounds CEV_comparison_FF[η_i] = sum(results_CEV_FF[:, :, :, :, η_i] .* results_μ_FF[:, :, :, :, η_i]) * 100
 end
 plot_col = 1
 plot_row = 1
 plot_welfare = plot(
-    size = (plot_col * 700, plot_row * 500),
+    size = (plot_col * 800, plot_row * 500),
     box = :on,
     legend = :topleft,
-    ylimit = [0.0, 0.01],
-    yticks = 0.0:0.0025:0.01,
+    ylimit = [0.0,1.0],
+    yticks = 0.0:0.25:1.0,
     xticks = 0.1:0.1:0.8,
     xtickfont = font(18, "Computer Modern", :black),
     ytickfont = font(18, "Computer Modern", :black),
@@ -239,7 +575,9 @@ plot_welfare = plot!(
     markerstrokecolor = :blue,
     linecolor = :blue,
     linewidth = 3,
-    label = L"\textrm{Without Financial Frictions}",
+    label = "\$ \\textrm{Without\\ financial\\ frictions} \$",
+    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    ylabel = "\$ \\% \$",
     margin = 4mm,
 )
 plot_welfare = vline!([η_grid[argmax(CEV_comparison_NFF)]], linecolor = :blue, linewidth = 3, linestyle = :dot, label = "")
@@ -248,14 +586,18 @@ plot_welfare = plot!(
     CEV_comparison_FF,
     markershapes = :square,
     markercolor = :red,
-    markersize = 5,
+    markersize = 6,
     markerstrokecolor = :red,
     linecolor = :red,
+    linestyle = :dash,
     linewidth = 3,
-    label = "With Financial Frictions",
-    xlabel = "\$ \\textrm{wage\\ garnishment\\ rate\\} (\\eta) \$",
-    title = "Welfare (CEV)",
+    label = "\$ \\textrm{With\\ financial\\ frictions} \$",
+    # title = "Welfare (CEV)",
     margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
 )
 plot_welfare = vline!([η_grid[argmax(CEV_comparison_FF)]], linecolor = :red, linewidth = 3, linestyle = :dot, label = "")
 

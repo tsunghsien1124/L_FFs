@@ -347,63 +347,66 @@ function value_and_policy_function(
     @unpack e_size, e_grid = parameters
     @unpack z_size, t_grid = parameters
     @unpack ν_size, ν_grid = parameters
-    @unpack β, σ, η, r_f = parameters
+    @unpack β, σ, η, r_f, p_h = parameters
 
     # construct containers
-    V = zeros(a_size, e_size, z_size, ν_size)
-    V_d = zeros(e_size, z_size, ν_size)
-    V_nd = zeros(a_size, e_size, z_size, ν_size)
-    policy_a = ones(a_size, e_size, z_size, ν_size) .* (-Inf)
+    V_good = zeros(a_size, e_size, z_size)
+    V_good_repay = zeros(a_size, e_size, z_size)
+    V_good_default = zeros(e_size, z_size)
+    V_bad = zeros(a_size_pos, e_size, z_size)
+    policy_good_a = ones(a_size, e_size, z_size) .* (-Inf)
+    policy_good_d = ones(a_size, e_size, z_size) .* (-Inf)
+    policy_bad_a = ones(a_size_pos, e_size, z_size) .* (-Inf)
 
     # loop over all states
-    for e_i = 1:e_size, t_i = 1:z_size, ν_i = 1:ν_size
+    for e_i = 1:e_size
 
-        # construct earning
-        @inbounds y = w * exp(e_grid[e_i] + t_grid[t_i])
+        for z_i = 1:z_size
 
-        # extract risky borrowing limit and maximum discounted borrowing amount
-        @inbounds @views rbl_a, rbl_qa = rbl[e_i, :]
+            # construct earning
+            @inbounds y = w * e_grid[e_i] * z_grid[z_i])
 
-        # construct interpolated discounted borrowing amount functions
-        @inbounds @views qa = q[:, e_i] .* a_grid
-        qa_function_itp = Akima(a_grid, qa)
+            # extract risky borrowing limit and maximum discounted borrowing amount
+            @inbounds @views rbl_a, rbl_qa = rbl[e_i, :]
 
-        # extract preference
-        @inbounds ν = ν_grid[ν_i]
+            # construct interpolated discounted borrowing amount functions
+            @inbounds @views qa = q[:, e_i] .* a_grid
+            qa_function_itp = Akima(a_grid, qa)
 
-        # compute the next-period discounted expected value funtions and interpolated functions
-        V_hat = ν * β * EV_function(e_i, V_p, parameters)
-        V_hat_itp = Akima(a_grid, V_hat)
+            # compute the next-period discounted expected value funtions and interpolated functions
+            V_hat = β * EV_function(e_i, V_p, parameters)
+            V_hat_itp = Akima(a_grid, V_hat)
 
-        # compute defaulting value
-        @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_itp(0.0)
+            # compute defaulting value
+            @inbounds V_good_default[e_i, z_i] = utility_function((1 - η) * y, σ) + V_hat_itp(0.0)
 
-        # compute non-defaulting value
-        Threads.@threads for a_i = 1:a_size
+            # compute non-defaulting value
+            Threads.@threads for a_i = 1:a_size
 
-            # cash on hand
-            @inbounds CoH = y + a_grid[a_i]
+                # cash on hand
+                @inbounds CoH = y + a_grid[a_i]
 
-            if (CoH - rbl_qa) >= 0.0
+                if (CoH - rbl_qa) >= 0.0
 
-                # define optimization problem
-                object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
-                lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH)
-                res_nd = optimize(object_nd, lb, ub)
-                @inbounds V_nd[a_i, e_i, t_i, ν_i] = -Optim.minimum(res_nd)
-                @inbounds policy_a[a_i, e_i, t_i, ν_i] = Optim.minimizer(res_nd)
+                    # define optimization problem
+                    object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
+                    lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH)
+                    res_nd = optimize(object_nd, lb, ub)
+                    @inbounds V_nd[a_i, e_i, t_i, ν_i] = -Optim.minimum(res_nd)
+                    @inbounds policy_a[a_i, e_i, t_i, ν_i] = Optim.minimizer(res_nd)
 
-                if V_nd[a_i, e_i, t_i, ν_i] > V_d[e_i, t_i, ν_i]
-                    # repayment
-                    @inbounds V[a_i, e_i, t_i, ν_i] = V_nd[a_i, e_i, t_i, ν_i]
+                    if V_nd[a_i, e_i, t_i, ν_i] > V_d[e_i, t_i, ν_i]
+                        # repayment
+                        @inbounds V[a_i, e_i, t_i, ν_i] = V_nd[a_i, e_i, t_i, ν_i]
+                    else
+                        # voluntary default
+                        @inbounds V[a_i, e_i, t_i, ν_i] = V_d[e_i, t_i, ν_i]
+                    end
                 else
-                    # voluntary default
+                    # involuntary default
+                    @inbounds V_nd[a_i, e_i, t_i, ν_i] = utility_function(0.0, σ)
                     @inbounds V[a_i, e_i, t_i, ν_i] = V_d[e_i, t_i, ν_i]
                 end
-            else
-                # involuntary default
-                @inbounds V_nd[a_i, e_i, t_i, ν_i] = utility_function(0.0, σ)
-                @inbounds V[a_i, e_i, t_i, ν_i] = V_d[e_i, t_i, ν_i]
             end
         end
     end
@@ -484,9 +487,6 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         # value and policy functions
         variables.V, variables.V_d, variables.V_nd, variables.policy_a =
             value_and_policy_function(V_p, V_d_p, V_nd_p, variables.q, variables.rbl, variables.aggregate_prices.w, parameters; slow_updating = slow_updating)
-
-        # thresholds
-        variables.threshold_a, variables.threshold_e = threshold_function(variables.V_d, variables.V_nd, variables.aggregate_prices.w, parameters)
 
         # pricing function and borrowing risky limit
         variables.R, variables.q, variables.rbl = pricing_and_rbl_function(variables.threshold_e, variables.aggregate_prices.ι, parameters)
@@ -740,7 +740,7 @@ function solve_aggregate_variable_function(
     KL_to_D_ratio = (K + L) / D
 
     # share in debt
-    share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, :])
+    share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, 1])
 
     # return results
     aggregate_variables =

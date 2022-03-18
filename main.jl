@@ -25,7 +25,7 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 #==================#
 function parameters_function(;
     ρ::Real = 0.975,                # survival rate
-    β::Real = 0.94,                 # discount factor (households)
+    β::Real = 0.96,                 # discount factor (households)
     β_f::Real = 1.0/1.04,           # discount factor (bank)
     r_f::Real = 0.04,               # risk-free rate
     τ::Real = 0.04,                 # transaction cost
@@ -33,23 +33,23 @@ function parameters_function(;
     η::Real = 0.35,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
-    ψ::Real = 0.972,                # exogenous retention ratio
-    θ::Real = 0.381,                # diverting fraction
+    ψ::Real = 0.90,                 # exogenous retention ratio
+    θ::Real = 0.75,                 # diverting fraction
     p_h::Real = 1.0/10,             # prob. of history erased
     e_ρ::Real = 0.9136,             # AR(1) of persistent endowment shock
     e_σ::Real = sqrt(0.0426),       # s.d. of persistent endowment shock
-    e_size::Integer = 3,            # number of persistent endowment shock
+    e_size::Integer = 5,            # number of persistent endowment shock
     t_σ::Real = sqrt(0.0421),       # s.d. of transitory endowment shock
     t_size::Integer = 3,            # number oftransitory endowment shock
-    ν_s::Real = 0.90,               # scale of patience
-    ν_p::Real = 0.05,               # probability of patience
+    ν_s::Real = 0.00,               # scale of patience
+    ν_p::Real = 0.04,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -4.5,             # min of asset holding
+    a_min::Real = -8.0,             # min of asset holding
     a_max::Real = 300.0,            # max of asset holding
-    a_size_neg::Integer = 151,      # number of grid of negative asset holding for VFI
-    a_size_pos::Integer = 151,      # number of grid of positive asset holding for VFI
+    a_size_neg::Integer = 401,      # number of grid of negative asset holding for VFI
+    a_size_pos::Integer = 301,      # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
-    a_size_pos_μ::Integer = 151,    # number of grid of positive asset holding for distribution
+    a_size_pos_μ::Integer = 301,    # number of grid of positive asset holding for distribution
     )
     """
     contruct an immutable object containg all paramters
@@ -63,9 +63,37 @@ function parameters_function(;
     e_SS = sum(e_SD .* e_grid)
 
     # transitory endowment shock
-    t_bar = sqrt((t_size / (t_size - 1)) * (t_σ^2))
-    t_grid = [-t_bar 0 t_bar]
-    t_Γ = [1.0 / t_size for i = 1:t_size]
+    # t_bar = sqrt((t_size / (t_size - 1)) * (t_σ^2))
+    # t_grid = [-t_bar 0 t_bar]
+    # t_Γ = [1.0 / t_size for i = 1:t_size]
+    # t_SS = sum(t_Γ .* t_grid)
+
+    function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real = 0.0)
+        """
+        Approximation of an autoregression process with a Markov chain proposed by Adda and Cooper (2003)
+        """
+
+        σ_ϵ = σ / sqrt(1.0 - ρ^2.0)
+        ϵ = σ_ϵ .* quantile.(Normal(), [i / N for i = 0:N]) .+ μ
+        z = zeros(N)
+        for i = 1:N
+            if i != (N + 1) / 2
+                z[i] = N * σ_ϵ * (pdf(Normal(), (ϵ[i] - μ) / σ_ϵ) - pdf(Normal(), (ϵ[i+1] - μ) / σ_ϵ)) + μ
+            end
+        end
+        Π = zeros(N, N)
+        if ρ == 0.0
+            Π .= 1.0 / N
+        else
+            for i = 1:N, j = 1:N
+                f(u) = exp(-(u - μ)^2.0 / (2.0 * σ_ϵ^2.0)) * (cdf(Normal(), (ϵ[j+1] - μ * (1.0 - ρ) - ρ * u) / σ) - cdf(Normal(), (ϵ[j] - μ * (1.0 - ρ) - ρ * u) / σ))
+                integral, err = quadgk(u -> f(u), ϵ[i], ϵ[i+1])
+                Π[i, j] = (N / sqrt(2.0 * π * σ_ϵ^2.0)) * integral
+            end
+        end
+        return z, Π
+    end
+    t_grid, t_Γ = adda_cooper(t_size, 0.0, t_σ)
     t_SS = sum(t_Γ .* t_grid)
 
     # aggregate labor endowment
@@ -733,7 +761,7 @@ function stationary_distribution_function(
     """
 
     # unpack parameters
-    @unpack e_size, e_Γ, t_size, t_Γ, ν_size, ν_Γ, a_grid, a_size_μ, a_grid_μ, a_ind_zero_μ, p_h = parameters
+    @unpack e_size, e_Γ, t_size, t_Γ, ν_size, ν_Γ, a_grid, a_grid_pos, a_size_μ, a_grid_μ, a_ind_zero_μ, p_h = parameters
 
     # construct container
     μ = zeros(a_size_μ, e_size, t_size, ν_size, 2)
@@ -961,7 +989,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, figure_track = false, slow_updating = 1.0)
 
     # solve the cross-sectional distribution
-    solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
+    solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 2000)
 
     # compute aggregate variables
     variables.aggregate_variables = solve_aggregate_variable_function(variables.policy_a, variables.policy_pos_a, variables.threshold_a, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w, parameters)
@@ -1161,16 +1189,29 @@ end
 #=================#
 # Solve the model #
 #=================#
-parameters = parameters_function()
-variables = variables_function(parameters; λ = 0.0)
-solve_economy_function!(variables, parameters)
-
-variables_max = variables_function(parameters; λ = 1 - sqrt(parameters.ψ))
-solve_economy_function!(variables_max, parameters)
-
 # parameters = parameters_function()
+# variables = variables_function(parameters; λ = 0.0)
+# solve_economy_function!(variables, parameters)
+#
+# variables_max = variables_function(parameters; λ = 1 - sqrt(parameters.ψ))
+# solve_economy_function!(variables_max, parameters)
+
+parameters = parameters_function()
 # parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η; λ_min_adhoc = 0.00341238, λ_max_adhoc = 0.00341239)
-# λ_optimal = variables_λ_optimal.aggregate_prices.λ
+parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η)
+λ_optimal = variables_λ_optimal.aggregate_prices.λ
+
+calibration_results = [   parameters_λ_optimal.θ,
+    parameters_λ_optimal.ν_p,
+    λ_optimal,
+    variables_λ_optimal.aggregate_variables.KL_to_D_ratio,
+    variables_λ_optimal.aggregate_variables.share_of_filers * 100,
+    variables_λ_optimal.aggregate_variables.D / variables_λ_optimal.aggregate_variables.L,
+    variables_λ_optimal.aggregate_variables.share_in_debts * 100,
+    variables_λ_optimal.aggregate_variables.avg_loan_rate * 100
+    ]
+
+plot(parameters_λ_optimal.a_grid_neg, variables_λ_optimal.q[1:parameters_λ_optimal.a_size_neg,:], legend=:none)
 
 #======================================================#
 # Solve the model with different bankruptcy strictness #

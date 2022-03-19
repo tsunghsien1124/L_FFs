@@ -25,7 +25,7 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 #==================#
 function parameters_function(;
     ρ::Real = 0.975,                # survival rate
-    β::Real = 0.95,                 # discount factor (households)
+    β::Real = 0.96,                 # discount factor (households)
     β_f::Real = 1.0/1.04,           # discount factor (bank)
     r_f::Real = 0.04,               # risk-free rate
     τ::Real = 0.04,                 # transaction cost
@@ -1203,6 +1203,9 @@ parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_opt
 λ_optimal = variables_λ_optimal.aggregate_prices.λ
 
 calibration_results = [
+    parameters_λ_optimal.β,
+    parameters_λ_optimal.δ,
+    parameters_λ_optimal.ν_s,
     parameters_λ_optimal.η,
     parameters_λ_optimal.θ,
     parameters_λ_optimal.ν_p,

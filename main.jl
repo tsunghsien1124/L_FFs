@@ -25,13 +25,13 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 #==================#
 function parameters_function(;
     ρ::Real = 0.975,                # survival rate
-    β::Real = 0.96,                 # discount factor (households)
+    β::Real = 0.95,                 # discount factor (households)
     β_f::Real = 1.0/1.04,           # discount factor (bank)
     r_f::Real = 0.04,               # risk-free rate
     τ::Real = 0.04,                 # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
     η::Real = 0.35,                 # garnishment rate
-    δ::Real = 0.08,                 # depreciation rate
+    δ::Real = 0.10,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.90,                 # exogenous retention ratio
     θ::Real = 0.75,                 # diverting fraction
@@ -42,7 +42,7 @@ function parameters_function(;
     t_σ::Real = sqrt(0.0421),       # s.d. of transitory endowment shock
     t_size::Integer = 3,            # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.04,               # probability of patience
+    ν_p::Real = 0.05,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -8.0,             # min of asset holding
     a_max::Real = 300.0,            # max of asset holding
@@ -936,7 +936,8 @@ function solve_aggregate_variable_function(
                 avg_loan_rate_pw_den += 1
             else
                 # total deposits
-                @inbounds D += (μ[a_μ_i, e_i, t_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
+                # @inbounds D += (μ[a_μ_i, e_i, t_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
+                @inbounds D += (μ[a_μ_i, e_i, t_i, ν_i, 1] * qa_function_itp(a_p))
             end
 
             if a_μ >= 0.0
@@ -1201,16 +1202,20 @@ parameters = parameters_function()
 parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η)
 λ_optimal = variables_λ_optimal.aggregate_prices.λ
 
-calibration_results = [   parameters_λ_optimal.θ,
+calibration_results = [
+    parameters_λ_optimal.η,
+    parameters_λ_optimal.θ,
     parameters_λ_optimal.ν_p,
     λ_optimal,
     variables_λ_optimal.aggregate_variables.KL_to_D_ratio,
     variables_λ_optimal.aggregate_variables.share_of_filers * 100,
     variables_λ_optimal.aggregate_variables.D / variables_λ_optimal.aggregate_variables.L,
     variables_λ_optimal.aggregate_variables.share_in_debts * 100,
+    variables_λ_optimal.aggregate_variables.debt_to_earning_ratio * 100,
     variables_λ_optimal.aggregate_variables.avg_loan_rate * 100
     ]
 
+using Plots
 plot(parameters_λ_optimal.a_grid_neg, variables_λ_optimal.q[1:parameters_λ_optimal.a_size_neg,:], legend=:none)
 
 #======================================================#

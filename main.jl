@@ -34,7 +34,7 @@ function parameters_function(;
     δ::Real = 0.10,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.90,                 # exogenous retention ratio
-    θ::Real = 0.72,                 # diverting fraction
+    θ::Real = 0.7125,                 # diverting fraction
     p_h::Real = 1.0/10,             # prob. of history erased
     e_ρ::Real = 0.9136,             # AR(1) of persistent endowment shock
     e_σ::Real = sqrt(0.0426),       # s.d. of persistent endowment shock
@@ -42,7 +42,7 @@ function parameters_function(;
     t_σ::Real = sqrt(0.0421),       # s.d. of transitory endowment shock
     t_size::Integer = 3,            # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.0358,               # probability of patience
+    ν_p::Real = 0.035425,           # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -8.0,             # min of asset holding
     a_max::Real = 300.0,            # max of asset holding
@@ -517,6 +517,7 @@ function value_and_policy_function(V_p::Array{Float64,4}, V_d_p::Array{Float64,3
         V_hat_pos_itp = Akima(a_grid_pos, p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos)
 
         # compute defaulting value
+        # @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
         @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_pos[1]
 
         # compute non-defaulting value

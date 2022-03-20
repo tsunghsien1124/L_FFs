@@ -7,10 +7,8 @@ using Distributions
 using QuadGK
 using JLD2: @save, @load
 using LinearAlgebra: norm
-# using Measures
 using Optim
 using Parameters: @unpack
-# using Plots
 using PrettyTables
 using ProgressMeter
 using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions
@@ -34,7 +32,7 @@ function parameters_function(;
     δ::Real = 0.10,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.90,                 # exogenous retention ratio
-    θ::Real = 0.7125,                 # diverting fraction
+    θ::Real = 0.7125,               # diverting fraction
     p_h::Real = 1.0/10,             # prob. of history erased
     e_ρ::Real = 0.9136,             # AR(1) of persistent endowment shock
     e_σ::Real = sqrt(0.0426),       # s.d. of persistent endowment shock
@@ -1085,7 +1083,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
     # initialize pparameters
     parameters = parameters_function()
-    @unpack a_size, a_size_μ, e_size, t_size, ν_size = parameters
+    @unpack a_size, a_size_pos, a_size_μ, e_size, t_size, ν_size = parameters
 
     # initialize variables that will be saved
     var_names = [
@@ -1108,10 +1106,12 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
     # initialize containers
     results_A_NFF = zeros(var_size, η_size)
     results_V_NFF = zeros(a_size, e_size, t_size, ν_size, η_size)
-    results_μ_NFF = zeros(a_size_μ, e_size, t_size, ν_size, η_size)
+    results_V_pos_NFF = zeros(a_size_pos, e_size, t_size, ν_size, η_size)
+    results_μ_NFF = zeros(a_size_μ, e_size, t_size, ν_size, 2, η_size)
     results_A_FF = zeros(var_size, η_size)
     results_V_FF = zeros(a_size, e_size, t_size, ν_size, η_size)
-    results_μ_FF = zeros(a_size_μ, e_size, t_size, ν_size, η_size)
+    results_V_pos_FF = zeros(a_size_pos, e_size, t_size, ν_size, η_size)
+    results_μ_FF = zeros(a_size_μ, e_size, t_size, ν_size, 2, η_size)
 
     # compute the optimal multipliers with different η
     for η_i = 1:η_size
@@ -1120,15 +1120,15 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         if η_i == 1
             parameters_NFF, variables_NFF, parameters_FF, variables_FF = optimal_multiplier_function(η_grid[η_i])
         else
-            parameters_NFF, variables_NFF, parameters_FF, variables_FF = optimal_multiplier_function(η_grid[η_i]; λ_min_adhoc = results_A_FF[3, η_i-1])
+            parameters_NFF, variables_NFF, parameters_FF, variables_FF = optimal_multiplier_function(η_grid[η_i])
         end
 
         # save results
         results_A_NFF[1, η_i] = parameters_NFF.η
-        results_A_NFF[2, η_i] = parameters_NFF.r_k
-        results_A_NFF[3, η_i] = parameters_NFF.λ
-        results_A_NFF[4, η_i] = parameters_NFF.ι
-        results_A_NFF[5, η_i] = parameters_NFF.K
+        results_A_NFF[2, η_i] = variables_NFF.aggregate_prices.r_k
+        results_A_NFF[3, η_i] = variables_NFF.aggregate_prices.λ
+        results_A_NFF[4, η_i] = variables_NFF.aggregate_prices.ι
+        results_A_NFF[5, η_i] = variables_NFF.aggregate_variables.K
         results_A_NFF[6, η_i] = variables_NFF.aggregate_variables.L
         results_A_NFF[7, η_i] = variables_NFF.aggregate_variables.D
         results_A_NFF[8, η_i] = variables_NFF.aggregate_variables.N
@@ -1138,13 +1138,14 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_A_NFF[12, η_i] = variables_NFF.aggregate_variables.debt_to_earning_ratio
         results_A_NFF[13, η_i] = variables_NFF.aggregate_variables.avg_loan_rate_pw
         results_V_NFF[:, :, :, :, η_i] = variables_NFF.V
-        results_μ_NFF[:, :, :, :, η_i] = variables_NFF.μ
+        results_V_pos_NFF[:, :, :, :, η_i] = variables_NFF.V_pos
+        results_μ_NFF[:, :, :, :, :, η_i] = variables_NFF.μ
 
         results_A_FF[1, η_i] = parameters_FF.η
-        results_A_FF[2, η_i] = parameters_FF.r_k
-        results_A_FF[3, η_i] = parameters_FF.λ
-        results_A_FF[4, η_i] = parameters_FF.ι
-        results_A_FF[5, η_i] = parameters_FF.K
+        results_A_FF[2, η_i] = variables_FF.aggregate_prices.r_k
+        results_A_FF[3, η_i] = variables_FF.aggregate_prices.λ
+        results_A_FF[4, η_i] = variables_FF.aggregate_prices.ι
+        results_A_FF[5, η_i] = variables_FF.aggregate_variables.K
         results_A_FF[6, η_i] = variables_FF.aggregate_variables.L
         results_A_FF[7, η_i] = variables_FF.aggregate_variables.D
         results_A_FF[8, η_i] = variables_FF.aggregate_variables.N
@@ -1154,11 +1155,12 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_A_FF[12, η_i] = variables_FF.aggregate_variables.debt_to_earning_ratio
         results_A_FF[13, η_i] = variables_FF.aggregate_variables.avg_loan_rate_pw
         results_V_FF[:, :, :, :, η_i] = variables_FF.V
-        results_μ_FF[:, :, :, :, η_i] = variables_FF.μ
+        results_V_pos_FF[:, :, :, :, η_i] = variables_FF.V_pos
+        results_μ_FF[:, :, :, :, :, η_i] = variables_FF.μ
     end
 
     # return results
-    return var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF
+    return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
 end
 
 function results_CEV_function(results_V::Array{Float64,5})
@@ -1194,39 +1196,39 @@ end
 # parameters = parameters_function()
 # variables = variables_function(parameters; λ = 0.0)
 # solve_economy_function!(variables, parameters)
-#
 # variables_max = variables_function(parameters; λ = 1 - sqrt(parameters.ψ))
 # solve_economy_function!(variables_max, parameters)
 
-parameters = parameters_function()
-# parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η; λ_min_adhoc = 0.00341238, λ_max_adhoc = 0.00341239)
-parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η)
-λ_optimal = variables_λ_optimal.aggregate_prices.λ
+# parameters = parameters_function()
+# parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η)
+# λ_optimal = variables_λ_optimal.aggregate_prices.λ
+#
+# calibration_results = [
+#     parameters_λ_optimal.β,
+#     parameters_λ_optimal.δ,
+#     parameters_λ_optimal.ν_s,
+#     parameters_λ_optimal.η,
+#     parameters_λ_optimal.θ,
+#     parameters_λ_optimal.ν_p,
+#     λ_optimal,
+#     variables_λ_optimal.aggregate_variables.KL_to_D_ratio,
+#     variables_λ_optimal.aggregate_variables.share_of_filers * 100,
+#     variables_λ_optimal.aggregate_variables.D / variables_λ_optimal.aggregate_variables.L,
+#     variables_λ_optimal.aggregate_variables.share_in_debts * 100,
+#     variables_λ_optimal.aggregate_variables.debt_to_earning_ratio * 100,
+#     variables_λ_optimal.aggregate_variables.avg_loan_rate * 100
+#     ]
 
-calibration_results = [
-    parameters_λ_optimal.β,
-    parameters_λ_optimal.δ,
-    parameters_λ_optimal.ν_s,
-    parameters_λ_optimal.η,
-    parameters_λ_optimal.θ,
-    parameters_λ_optimal.ν_p,
-    λ_optimal,
-    variables_λ_optimal.aggregate_variables.KL_to_D_ratio,
-    variables_λ_optimal.aggregate_variables.share_of_filers * 100,
-    variables_λ_optimal.aggregate_variables.D / variables_λ_optimal.aggregate_variables.L,
-    variables_λ_optimal.aggregate_variables.share_in_debts * 100,
-    variables_λ_optimal.aggregate_variables.debt_to_earning_ratio * 100,
-    variables_λ_optimal.aggregate_variables.avg_loan_rate * 100
-    ]
-
-using Plots
-plot(parameters_λ_optimal.a_grid_neg, variables_λ_optimal.q[1:parameters_λ_optimal.a_size_neg,:], legend=:none)
+# parameters = parameters_function()
+# variables = variables_function(parameters; λ = 0.02496311756496223)
+# solve_economy_function!(variables, parameters)
 
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-# var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF = results_η_function(η_min = 0.20, η_max = 0.80, η_step = 0.10)
-# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
+var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.30, η_max = 0.40, η_step = 0.05)
+cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+@save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 # @load "C:/Users/User/Dropbox/20210608/results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
 
 #=============================#

@@ -14,6 +14,8 @@ using ProgressMeter
 using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions
 using Roots
 using UnicodePlots
+using CSV
+using Tables
 
 # print out the number of threads
 println("Julia is running with $(Threads.nthreads()) threads...")
@@ -28,11 +30,11 @@ function parameters_function(;
     r_f::Real = 0.04,               # risk-free rate
     τ::Real = 0.04,                 # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.35,                 # garnishment rate
-    δ::Real = 0.10,                 # depreciation rate
+    η::Real = 0.40,                 # garnishment rate
+    δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.90,                 # exogenous retention ratio
-    θ::Real = 0.7125,               # diverting fraction
+    θ::Real = 0.02,                 # diverting fraction
     p_h::Real = 1.0/10,             # prob. of history erased
     e_ρ::Real = 0.9136,             # AR(1) of persistent endowment shock
     e_σ::Real = sqrt(0.0426),       # s.d. of persistent endowment shock
@@ -40,7 +42,7 @@ function parameters_function(;
     t_σ::Real = sqrt(0.0421),       # s.d. of transitory endowment shock
     t_size::Integer = 3,            # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.035425,           # probability of patience
+    ν_p::Real = 0.01,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -8.0,             # min of asset holding
     a_max::Real = 300.0,            # max of asset holding
@@ -515,8 +517,8 @@ function value_and_policy_function(V_p::Array{Float64,4}, V_d_p::Array{Float64,3
         V_hat_pos_itp = Akima(a_grid_pos, p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos)
 
         # compute defaulting value
-        # @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
-        @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_pos[1]
+        # @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_pos[1]
+        @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
 
         # compute non-defaulting value
         Threads.@threads for a_i = 1:a_size
@@ -1011,35 +1013,32 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     return ED
 end
 
-function optimal_multiplier_function(η::Real; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-6, iter_max::Real = 500)
+function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-6, iter_max::Real = 500)
     """
     solve for optimal liquidity multiplier
     """
 
     # check the case of λ_min = 0.0
     λ_lower = max(λ_min_adhoc, 0.0)
-    parameters_λ_lower = parameters_function(η = η)
-    variables_λ_lower = variables_function(parameters_λ_lower; λ = λ_lower)
-    ED_λ_lower = solve_economy_function!(variables_λ_lower, parameters_λ_lower)
+    variables_λ_lower = variables_function(parameters; λ = λ_lower)
+    ED_λ_lower = solve_economy_function!(variables_λ_lower, parameters)
     if ED_λ_lower > 0.0
-        return parameters_λ_lower, variables_λ_lower, parameters_λ_lower, variables_λ_lower
+        return variables_λ_lower, variables_λ_lower, 1
     end
 
     # check the case of λ_max = 1-ψ^(1/2)
-    λ_max = 1.0 - sqrt(parameters_λ_lower.ψ)
+    λ_max = 1.0 - sqrt(parameters.ψ)
     λ_upper = min(λ_max_adhoc, λ_max)
-    parameters_λ_upper = parameters_function(η = η)
-    variables_λ_upper = variables_function(parameters_λ_upper; λ = λ_upper)
-    ED_λ_upper = solve_economy_function!(variables_λ_upper, parameters_λ_upper)
+    variables_λ_upper = variables_function(parameters; λ = λ_upper)
+    ED_λ_upper = solve_economy_function!(variables_λ_upper, parameters)
     if ED_λ_upper < 0.0
-        return parameters_λ_lower, variables_λ_lower, parameters_λ_upper, variables_λ_upper # meaning solution doesn't exist!
+        return variables_λ_lower, variables_λ_upper, 2 # meaning solution doesn't exist!
     end
 
     # initialization
     iter = 0
     crit = Inf
     λ_optimal = 0.0
-    parameters_λ_optimal = []
     variables_λ_optimal = []
 
     # solve equlibrium multiplier by bisection
@@ -1049,9 +1048,8 @@ function optimal_multiplier_function(η::Real; λ_min_adhoc::Real = -Inf, λ_max
         λ_optimal = (λ_lower + λ_upper) / 2
 
         # compute the associated results
-        parameters_λ_optimal = parameters_function(η = η)
-        variables_λ_optimal = variables_function(parameters_λ_optimal; λ = λ_optimal)
-        ED_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters_λ_optimal)
+        variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
+        ED_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters)
 
         # update search region
         if ED_λ_optimal > 0.0
@@ -1069,7 +1067,7 @@ function optimal_multiplier_function(η::Real; λ_min_adhoc::Real = -Inf, λ_max
     end
 
     # return results
-    return parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal
+    return variables_λ_lower, variables_λ_optimal, 3
 end
 
 function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
@@ -1163,26 +1161,32 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
     return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
 end
 
-function results_CEV_function(results_V::Array{Float64,5})
+function results_CEV_function(results_V::Array{Float64,5}, results_V_pos::Array{Float64,5})
     """
     compute consumption equivalent variation (CEV) with various η compared to the smallest η (most lenient policy)
     """
 
     # initialize pparameters
     parameters = parameters_function()
-    @unpack a_grid, a_size, a_grid_μ, a_size_μ, e_size, t_size, ν_size, σ = parameters
+    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_size, t_size, ν_size, σ = parameters
 
     # initialize result matrix
     η_size = size(results_V, 5)
-    results_CEV = zeros(a_size_μ, e_size, t_size, ν_size, η_size)
+    results_CEV = zeros(a_size_μ, e_size, t_size, ν_size, 2, η_size)
 
     # compute CEV for different η compared to the smallest η
     for η_i = 1:η_size, e_i = 1:e_size, t_i = 1:t_size, ν_i = 1:ν_size
         @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_i, t_i, ν_i, η_i])
         @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_i, t_i, ν_i, end])
+        @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_i, t_i, ν_i, η_i])
+        @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_i, t_i, ν_i, end])
         for a_μ_i = 1:a_size_μ
             @inbounds a_μ = a_grid_μ[a_μ_i]
-            @inbounds results_CEV[a_μ_i, e_i, t_i, ν_i, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1 / (1 - σ)) - 1
+            @inbounds results_CEV[a_μ_i, e_i, t_i, ν_i, 1, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
+            if a_μ >= 0.0
+                a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
+                @inbounds results_CEV[a_pos_μ_i, e_i, t_i, ν_i, 2, η_i] = (V_pos_itp_new(a_μ) / V_pos_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
+            end
         end
     end
 
@@ -1210,7 +1214,7 @@ end
 #     parameters_λ_optimal.η,
 #     parameters_λ_optimal.θ,
 #     parameters_λ_optimal.ν_p,
-#     λ_optimal,
+#     variables_λ_optimal.aggregate_prices.λ,
 #     variables_λ_optimal.aggregate_variables.KL_to_D_ratio,
 #     variables_λ_optimal.aggregate_variables.share_of_filers * 100,
 #     variables_λ_optimal.aggregate_variables.D / variables_λ_optimal.aggregate_variables.L,
@@ -1223,13 +1227,50 @@ end
 # variables = variables_function(parameters; λ = 0.02496311756496223)
 # solve_economy_function!(variables, parameters)
 
+#=============#
+# Calibration #
+#=============#
+β_search = collect(0.90:0.005:0.96)
+η_search = collect(0.25:0.025:0.45)
+ν_p_search = collect(0.00:0.005:0.03)
+calibration_results = []
+
+for β_i in 1:length(β_search), η_i in 1:length(η_search), ν_p_i in 1:length(ν_p_search)
+    parameters = parameters_function(β = β_search[β_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
+    variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
+    results_temp = [
+        parameters.β,
+        parameters.δ,
+        parameters.ν_s,
+        parameters.η,
+        parameters.θ,
+        parameters.ν_p,
+        variables_λ_optimal.aggregate_prices.λ,
+        variables_λ_optimal.aggregate_variables.KL_to_D_ratio,
+        variables_λ_optimal.aggregate_variables.share_of_filers * 100,
+        variables_λ_optimal.aggregate_variables.D / variables_λ_optimal.aggregate_variables.L,
+        variables_λ_optimal.aggregate_variables.share_in_debts * 100,
+        variables_λ_optimal.aggregate_variables.debt_to_earning_ratio * 100,
+        variables_λ_optimal.aggregate_variables.avg_loan_rate * 100,
+        flag
+        ]
+    if calibration_results == []
+        calibration_results = results_temp
+    else
+        calibration_results = [calibration_results results_temp]
+    end
+end
+
+cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
+
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.05)
-cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-@save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
-# @load "C:/Users/User/Dropbox/20210608/results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
+# var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.05)
+# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+# @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
 #=============================#
 # Solve transitional dynamics #

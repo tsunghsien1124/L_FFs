@@ -25,16 +25,16 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 #==================#
 function parameters_function(;
     ρ::Real = 0.975,                # survival rate
-    β::Real = 0.94,                 # discount factor (households)
+    β::Real = 0.96,                 # discount factor (households)
     β_f::Real = 1.0/1.04,           # discount factor (bank)
     r_f::Real = 0.04,               # risk-free rate
     τ::Real = 0.04,                 # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.40,                 # garnishment rate
-    δ::Real = 0.08,                 # depreciation rate
+    η::Real = 0.32,                 # garnishment rate
+    δ::Real = 0.10,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.90,                 # exogenous retention ratio
-    θ::Real = 0.02,                 # diverting fraction
+    θ::Real = 0.05,                 # diverting fraction
     p_h::Real = 1.0/10,             # prob. of history erased
     e_ρ::Real = 0.9136,             # AR(1) of persistent endowment shock
     e_σ::Real = sqrt(0.0426),       # s.d. of persistent endowment shock
@@ -42,7 +42,7 @@ function parameters_function(;
     t_σ::Real = sqrt(0.0421),       # s.d. of transitory endowment shock
     t_size::Integer = 3,            # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.01,               # probability of patience
+    ν_p::Real = 0.045,              # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -8.0,             # min of asset holding
     a_max::Real = 300.0,            # max of asset holding
@@ -1204,23 +1204,23 @@ end
 # solve_economy_function!(variables_max, parameters)
 
 # parameters = parameters_function()
-# parameters_λ_lower, variables_λ_lower, parameters_λ_optimal, variables_λ_optimal = optimal_multiplier_function(parameters.η)
-# λ_optimal = variables_λ_optimal.aggregate_prices.λ
+# variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
 #
 # calibration_results = [
-#     parameters_λ_optimal.β,
-#     parameters_λ_optimal.δ,
-#     parameters_λ_optimal.ν_s,
-#     parameters_λ_optimal.η,
-#     parameters_λ_optimal.θ,
-#     parameters_λ_optimal.ν_p,
+#     parameters.β,
+#     parameters.δ,
+#     parameters.ν_s,
+#     parameters.η,
+#     parameters.θ,
+#     parameters.ν_p,
 #     variables_λ_optimal.aggregate_prices.λ,
 #     variables_λ_optimal.aggregate_variables.KL_to_D_ratio,
 #     variables_λ_optimal.aggregate_variables.share_of_filers * 100,
 #     variables_λ_optimal.aggregate_variables.D / variables_λ_optimal.aggregate_variables.L,
 #     variables_λ_optimal.aggregate_variables.share_in_debts * 100,
 #     variables_λ_optimal.aggregate_variables.debt_to_earning_ratio * 100,
-#     variables_λ_optimal.aggregate_variables.avg_loan_rate * 100
+#     variables_λ_optimal.aggregate_variables.avg_loan_rate * 100,
+#     flag
 #     ]
 
 # parameters = parameters_function()
@@ -1230,14 +1230,19 @@ end
 #=============#
 # Calibration #
 #=============#
-β_search = collect(0.90:0.005:0.96)
-η_search = collect(0.25:0.025:0.45)
-ν_p_search = collect(0.00:0.005:0.03)
+β_search = 0.97
+η_search = collect(0.25:0.05:0.40)
+θ_search = eps() # collect(0.04:0.01:0.07)
+ν_p_search = collect(0.0:0.01:0.05)
 calibration_results = []
 
-for β_i in 1:length(β_search), η_i in 1:length(η_search), ν_p_i in 1:length(ν_p_search)
-    parameters = parameters_function(β = β_search[β_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
-    variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
+for β_i in 1:length(β_search), θ_i in 1:length(θ_search), η_i in 1:length(η_search), ν_p_i in 1:length(ν_p_search)
+    parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
+    variables = variables_function(parameters; λ = 0.0)
+    solve_economy_function!(variables, parameters)
+    flag = 1
+    # variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
+
     results_temp = [
         parameters.β,
         parameters.δ,
@@ -1245,13 +1250,13 @@ for β_i in 1:length(β_search), η_i in 1:length(η_search), ν_p_i in 1:length
         parameters.η,
         parameters.θ,
         parameters.ν_p,
-        variables_λ_optimal.aggregate_prices.λ,
-        variables_λ_optimal.aggregate_variables.KL_to_D_ratio,
-        variables_λ_optimal.aggregate_variables.share_of_filers * 100,
-        variables_λ_optimal.aggregate_variables.D / variables_λ_optimal.aggregate_variables.L,
-        variables_λ_optimal.aggregate_variables.share_in_debts * 100,
-        variables_λ_optimal.aggregate_variables.debt_to_earning_ratio * 100,
-        variables_λ_optimal.aggregate_variables.avg_loan_rate * 100,
+        variables.aggregate_prices.λ,
+        variables.aggregate_variables.KL_to_D_ratio,
+        variables.aggregate_variables.share_of_filers * 100,
+        variables.aggregate_variables.D / variables.aggregate_variables.L,
+        variables.aggregate_variables.share_in_debts * 100,
+        variables.aggregate_variables.debt_to_earning_ratio * 100,
+        variables.aggregate_variables.avg_loan_rate * 100,
         flag
         ]
     if calibration_results == []

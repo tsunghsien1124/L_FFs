@@ -14,7 +14,7 @@ using ProgressMeter
 using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions
 using Roots
 using UnicodePlots
-using CSV
+# using CSV
 using Tables
 
 # print out the number of threads
@@ -40,15 +40,15 @@ function parameters_function(;
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
     e_2_σ::Real = 0.129,            # s.d. of persistent endowment shock
-    e_2_size::Integer = 9,          # number of persistent endowment shock
+    e_2_size::Integer = 5,          # number of persistent endowment shock
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
     ν_p::Real = 0.00,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -8.0,             # min of asset holding
+    a_min::Real = -5.0,             # min of asset holding
     a_max::Real = 300.0,            # max of asset holding
-    a_size_neg::Integer = 401,      # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 501,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 301,      # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     a_size_pos_μ::Integer = 301,    # number of grid of positive asset holding for distribution
@@ -207,18 +207,18 @@ mutable struct Mutable_Variables
     """
     aggregate_prices::Mutable_Aggregate_Prices
     aggregate_variables::Mutable_Aggregate_Variables
-    R::Array{Float64,2}
-    q::Array{Float64,2}
-    rbl::Array{Float64,2}
-    V::Array{Float64,4}
-    V_d::Array{Float64,3}
-    V_nd::Array{Float64,4}
-    V_pos::Array{Float64,4}
-    policy_a::Array{Float64,4}
-    policy_pos_a::Array{Float64,4}
-    threshold_a::Array{Float64,3}
-    threshold_e::Array{Float64,3}
-    μ::Array{Float64,5}
+    R::Array{Float64,3}
+    q::Array{Float64,3}
+    rbl::Array{Float64,3}
+    V::Array{Float64,5}
+    V_d::Array{Float64,4}
+    V_nd::Array{Float64,5}
+    V_pos::Array{Float64,5}
+    policy_a::Array{Float64,5}
+    policy_pos_a::Array{Float64,5}
+    threshold_a::Array{Float64,4}
+    threshold_e::Array{Float64,4}
+    μ::Array{Float64,6}
 end
 
 function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 50, obj_range::Integer = 1)
@@ -277,26 +277,30 @@ function log_function(threshold_e::Real)
     end
 end
 
-function repayment_function(e_i::Integer, a_p::Real, threshold::Real, parameters::NamedTuple; wage_garnishment::Bool = true)
+function repayment_function(e_1_i::Integer, e_2_i::Integer, e_3_i::Integer, ν_i::Integer, a_p::Real, threshold::Real, w::Real, parameters::NamedTuple; wage_garnishment::Bool = true)
     """
-    evaluate repayment analytically with and without wage garnishment for a given defaulting threshold in e'
+    evaluate repayment analytically with and without wage garnishment for a given defaulting threshold in e'_2
     """
 
     # unpack parameters
-    @unpack e_grid, e_ρ, e_σ, η = parameters
+    @unpack e_1_grid, e_2_grid, e_3_grid, e_2_ρ, e_2_σ, η = parameters
+
+    # permanent and transitory components
+    e_1 = e_1_grid[e_1_i]
+    e_3 = e_3_grid[e_3_i]
 
     # compute expected repayment amount
-    @inbounds e_μ = e_ρ * e_grid[e_i]
+    @inbounds e_2_μ = e_2_ρ * e_2_grid[e_2_i]
 
     # (1) not default
-    default_prob = cdf(Normal(e_μ, e_σ), threshold)
+    default_prob = cdf(Normal(e_2_μ, e_2_σ), threshold)
     amount_repay = -a_p * (1.0 - default_prob)
 
     # (2) default and reclaiming wage garnishment is enabled
     amount_default = 0.0
     if wage_garnishment == true
-        default_adjusted_prob = cdf(Normal(e_μ + e_σ^2.0, e_σ), threshold)
-        amount_default = η * exp(e_μ + e_σ^2.0 / 2.0) * default_adjusted_prob
+        default_adjusted_prob = cdf(Normal(e_2_μ + e_2_σ^2.0, e_2_σ), threshold)
+        amount_default = η * w * exp(e_1 + e_3) * exp(e_2_μ + e_2_σ^2.0 / 2.0) * default_adjusted_prob
     end
 
     return total_amount = amount_repay + amount_default
@@ -312,12 +316,12 @@ function aggregate_prices_λ_funtion(parameters::NamedTuple; λ::Real)
     Λ_λ = β_f * (1.0 - ψ + ψ * ξ_λ)
     leverage_ratio_λ = ξ_λ / θ
     KL_to_D_ratio_λ = leverage_ratio_λ / (leverage_ratio_λ - 1.0)
-    ι_λ = λ_λ * θ / Λ_λ
+    ι_λ = λ * θ / Λ_λ
     r_k_λ = r_f + ι_λ
     K_λ = E * ((r_k_λ + δ) / α)^(1.0 / (α - 1.0))
     w_λ = (1.0 - α) * (K_λ / E)^α
 
-    return ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ_λ, w_λ
+    return ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ
 end
 
 function variables_function(parameters::NamedTuple; λ::Real)
@@ -326,7 +330,7 @@ function variables_function(parameters::NamedTuple; λ::Real)
     """
 
     # unpack parameters
-    @unpack a_size, a_grid, a_size_pos, a_size_neg, a_grid_neg, a_size_μ, e_size, e_grid, t_size, t_grid, t_Γ, e_ρ, e_σ, ν_size = parameters
+    @unpack a_size, a_grid, a_size_pos, a_size_neg, a_grid_neg, a_size_μ, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_2_ρ, e_2_σ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ = parameters
     @unpack r_f, τ = parameters
 
     # define aggregate prices and variables
@@ -347,25 +351,25 @@ function variables_function(parameters::NamedTuple; λ::Real)
     aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     # define repayment probability, pricing function, and risky borrowing limit
-    R = zeros(a_size_neg, e_size)
-    q = ones(a_size, e_size) ./ (1.0 + r_f)
-    rbl = zeros(e_size, 2)
-    for e_i = 1:e_size
+    R = zeros(a_size_neg, e_1_size, e_2_size)
+    q = ones(a_size, e_1_size, e_2_size) ./ (1.0 + r_f)
+    rbl = zeros(e_1_size, e_2_size, 2)
+    for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
         for a_p_i = 1:(a_size_neg-1)
             @inbounds a_p = a_grid_neg[a_p_i]
-            for t_p_i = 1:t_size
-                @inbounds threshold = log_function(-a_p / w) - t_grid[t_p_i]
-                @inbounds R[a_p_i, e_i] += t_Γ[t_p_i] * repayment_function(e_i, a_p, threshold, parameters)
+            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size, e_1_p_i = 1:e_1_size
+                @inbounds threshold = log_function(-a_p / w_λ) - e_1_grid[e_1_p_i] - e_3_grid[e_3_p_i]
+                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, a_p, threshold, w_λ, parameters)
             end
-            @inbounds q[a_p_i, e_i] = R[a_p_i, e_i] / ((-a_p) * (1.0 + r_f + τ + ι))
+            @inbounds q[a_p_i, e_1_i, e_2_i] = R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + r_f + τ + ι_λ))
         end
 
-        qa_funcion_itp = Akima(a_grid, q[:, e_i] .* a_grid)
+        qa_funcion_itp = Akima(a_grid, q[:, e_1_i, e_2_i] .* a_grid)
         qa_funcion(a_p) = qa_funcion_itp(a_p)
         @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
         res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
-        @inbounds rbl[e_i, 1] = Optim.minimizer(res_rbl)
-        @inbounds rbl[e_i, 2] = Optim.minimum(res_rbl)
+        @inbounds rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
+        @inbounds rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
     end
 
     # define value and policy functions
@@ -389,52 +393,21 @@ function variables_function(parameters::NamedTuple; λ::Real)
     return variables
 end
 
-function EV_itp_function(a_p::Real, e_i::Integer, V_d_p::Array{Float64,3}, V_nd_p::Array{Float64,4}, threshold_a::Array{Float64,3}, parameters::NamedTuple)
+function EV_function(e_1_i::Integer, e_2_i::Integer, V_p::Array{Float64,5}, parameters::NamedTuple)
     """
-    construct interpolated expected value function
-    """
-
-    # unpack parameters
-    @unpack a_grid, e_size, e_Γ, t_size, t_Γ, ν_size, ν_Γ = parameters
-
-    # construct container
-    EV = 0.0
-
-    # loop nested functions
-    for e_p_i = 1:e_size, t_p_i = 1:t_size, ν_p_i = 1:ν_size
-
-        # interpolated non-defaulting value function
-        @inbounds @views V_nd_p_Non_Inf = findall(V_nd_p[:, e_p_i, t_p_i, ν_p_i] .!= -Inf)
-        @inbounds @views a_grid_itp = a_grid[V_nd_p_Non_Inf]
-        @inbounds @views V_nd_p_grid_itp = V_nd_p[V_nd_p_Non_Inf, e_p_i, t_p_i, ν_p_i]
-        V_nd_p_itp = Akima(a_grid_itp, V_nd_p_grid_itp)
-
-        # interpolated value function based on defaulting threshold
-        @inbounds V_p_itp(a_p) = a_p >= threshold_a[e_p_i, t_p_i, ν_p_i] ? V_nd_p_itp(a_p) : V_d_p[e_p_i, t_p_i, ν_p_i]
-
-        # update expected value
-        @inbounds EV += ν_Γ[ν_p_i] * t_Γ[t_p_i] * e_Γ[e_i, e_p_i] * V_p_itp(a_p)
-    end
-
-    # return value
-    return EV
-end
-
-function EV_function(e_i::Integer, V_nd_p::Array{Float64,4}, parameters::NamedTuple)
-    """
-    construct expected non-defaulting value function
+    construct expected value function
     """
 
     # unpack parameters
-    @unpack e_size, e_Γ, t_size, t_Γ, ν_size, ν_Γ = parameters
+    @unpack e_1_size, e_1_Γ, e_2_size, e_2_Γ, e_3_size, e_3_Γ, ν_size, ν_Γ = parameters
 
     # construct container
-    a_size_ = size(V_nd_p)[1]
+    a_size_ = size(V_p)[1]
     EV = zeros(a_size_)
 
     # update expected value
-    for e_p_i = 1:e_size, t_p_i = 1:t_size, ν_p_i = 1:ν_size
-        @inbounds @views EV += ν_Γ[ν_p_i] * t_Γ[t_p_i] * e_Γ[e_i, e_p_i] * V_nd_p[:, e_p_i, t_p_i, ν_p_i]
+    for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size, e_1_p_i = 1:e_1_size
+        @inbounds @views EV += e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * V_p[:, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i]
     end
 
     # repalce NaN with -Inf
@@ -444,73 +417,49 @@ function EV_function(e_i::Integer, V_nd_p::Array{Float64,4}, parameters::NamedTu
     return EV
 end
 
-function EV_function(e_i::Integer, V_d_p::Array{Float64,3}, parameters::NamedTuple)
-    """
-    construct expected defaulting value
-    """
-
-    # unpack parameters
-    @unpack a_size, e_size, e_Γ, t_size, t_Γ, ν_size, ν_Γ = parameters
-
-    # construct container
-    EV = 0.0
-
-    # update expected value
-    for e_p_i = 1:e_size, t_p_i = 1:t_size, ν_p_i = 1:ν_size
-        @inbounds @views EV += ν_Γ[ν_p_i] * t_Γ[t_p_i] * e_Γ[e_i, e_p_i] * V_d_p[e_p_i, t_p_i, ν_p_i]
-    end
-
-    # return value
-    return EV
-end
-
-function value_and_policy_function(V_p::Array{Float64,4}, V_d_p::Array{Float64,3}, V_nd_p::Array{Float64,4}, V_pos_p::Array{Float64,4}, q::Array{Float64,2}, rbl::Array{Float64,2}, w::Real, parameters::NamedTuple; slow_updating::Real = 1.0)
+function value_and_policy_function(V_p::Array{Float64,5}, V_d_p::Array{Float64,4}, V_nd_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, q::Array{Float64,3}, rbl::Array{Float64,3}, w::Real, parameters::NamedTuple; slow_updating::Real = 1.0)
     """
     one-step update of value and policy functions
     """
 
     # unpack parameters
-    @unpack a_size, a_grid = parameters
-    @unpack a_size_pos, a_grid_pos = parameters
-    @unpack a_ind_zero = parameters
-    @unpack e_size, e_grid = parameters
-    @unpack t_size, t_grid = parameters
-    @unpack ν_size, ν_grid = parameters
+    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero = parameters
+    @unpack e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_grid, ν_Γ = parameters
     @unpack β, σ, η, r_f, p_h = parameters
 
     # construct containers
-    V = zeros(a_size, e_size, t_size, ν_size)
-    V_d = zeros(e_size, t_size, ν_size)
-    V_nd = zeros(a_size, e_size, t_size, ν_size)
-    V_pos = zeros(a_size_pos, e_size, t_size, ν_size)
-    policy_a = ones(a_size, e_size, t_size, ν_size) .* (-Inf)
-    policy_pos_a = ones(a_size_pos, e_size, t_size, ν_size) .* (-Inf)
+    V = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
+    V_d = zeros(e_1_size, e_2_size, e_3_size, ν_size)
+    V_nd = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
+    V_pos = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
+    policy_a = ones(a_size, e_1_size, e_2_size, e_3_size, ν_size) .* (-Inf)
+    policy_pos_a = ones(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size) .* (-Inf)
 
     # loop over all states
-    for e_i = 1:e_size, t_i = 1:t_size, ν_i = 1:ν_size
+    for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
 
         # construct earning
-        @inbounds y = w * exp(e_grid[e_i] + t_grid[t_i])
+        @inbounds y = w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i])
 
         # extract risky borrowing limit and maximum discounted borrowing amount
-        @inbounds @views rbl_a, rbl_qa = rbl[e_i, :]
+        @inbounds @views rbl_a, rbl_qa = rbl[e_1_i, e_2_i, :]
 
         # construct interpolated discounted borrowing amount functions
-        @inbounds @views qa = q[:, e_i] .* a_grid
+        @inbounds @views qa = q[:, e_1_i, e_2_i] .* a_grid
         qa_function_itp = Akima(a_grid, qa)
 
         # extract preference
         @inbounds ν = ν_grid[ν_i]
 
         # compute the next-period discounted expected value funtions and interpolated functions
-        V_hat = ν * β * EV_function(e_i, V_p, parameters)
-        V_hat_pos = ν * β * EV_function(e_i, V_pos_p, parameters)
+        V_hat = ν * β * EV_function(e_1_i, e_2_i, V_p, parameters)
+        V_hat_pos = ν * β * EV_function(e_1_i, e_2_i, V_pos_p, parameters)
         V_hat_itp = Akima(a_grid, V_hat)
         V_hat_pos_itp = Akima(a_grid_pos, p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos)
 
         # compute defaulting value
-        @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_pos[1]
-        # @inbounds V_d[e_i, t_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
+        @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_pos[1]
+        # @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
 
         # compute non-defaulting value
         Threads.@threads for a_i = 1:a_size
@@ -524,20 +473,20 @@ function value_and_policy_function(V_p::Array{Float64,4}, V_d_p::Array{Float64,3
                 object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
                 lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH)
                 res_nd = optimize(object_nd, lb, ub)
-                @inbounds V_nd[a_i, e_i, t_i, ν_i] = -Optim.minimum(res_nd)
-                @inbounds policy_a[a_i, e_i, t_i, ν_i] = Optim.minimizer(res_nd)
+                @inbounds V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)
+                @inbounds policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_nd)
 
-                if V_nd[a_i, e_i, t_i, ν_i] > V_d[e_i, t_i, ν_i]
+                if V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] > V_d[e_1_i, e_2_i, e_3_i, ν_i]
                     # repayment
-                    @inbounds V[a_i, e_i, t_i, ν_i] = V_nd[a_i, e_i, t_i, ν_i]
+                    @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
                 else
                     # voluntary default
-                    @inbounds V[a_i, e_i, t_i, ν_i] = V_d[e_i, t_i, ν_i]
+                    @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
                 end
             else
                 # involuntary default
-                @inbounds V_nd[a_i, e_i, t_i, ν_i] = utility_function(0.0, σ)
-                @inbounds V[a_i, e_i, t_i, ν_i] = V_d[e_i, t_i, ν_i]
+                @inbounds V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = utility_function(0.0, σ)
+                @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
             end
 
             # bad credit history
@@ -546,8 +495,8 @@ function value_and_policy_function(V_p::Array{Float64,4}, V_d_p::Array{Float64,3
                 object_pos(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
                 lb, ub = min_bounds_function(object_pos, 0.0, CoH)
                 res_pos = optimize(object_pos, lb, ub)
-                @inbounds V_pos[a_pos_i, e_i, t_i, ν_i] = -Optim.minimum(res_pos)
-                @inbounds policy_pos_a[a_pos_i, e_i, t_i, ν_i] = Optim.minimizer(res_pos)
+                @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
+                @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
             end
         end
     end
@@ -596,7 +545,7 @@ function threshold_function(V_d::Array{Float64,4}, V_nd::Array{Float64,5}, w::Re
         # defaulting thresholds in persistent endowment (e_2)
         @inbounds @views thres_a_Non_Inf = findall(threshold_a[e_1_i, :, e_3_i, ν_i] .!= -Inf)
         @inbounds @views thres_a_grid_itp = -threshold_a[e_1_i, thres_a_Non_Inf, e_3_i, ν_i]
-        earning_grid_itp = w * exp.(e_1_grid[e_1_i] .+ e_2_grid[thres_a_Non_Inf] .+ e_3_grid[e_3_i])
+        @inbounds @views earning_grid_itp = w * exp.(e_1_grid[e_1_i] .+ e_2_grid[thres_a_Non_Inf] .+ e_3_grid[e_3_i])
         threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k = 1, bc = "extrapolate")
         Threads.@threads for a_i = 1:a_size
             @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
@@ -609,39 +558,38 @@ function threshold_function(V_d::Array{Float64,4}, V_nd::Array{Float64,5}, w::Re
     return threshold_a, threshold_e
 end
 
-function pricing_and_rbl_function(threshold_e::Array{Float64,4}, ι::Real, parameters::NamedTuple)
+function pricing_and_rbl_function(threshold_e::Array{Float64,4}, w::Real, ι::Real, parameters::NamedTuple)
     """
     update pricing function and borrowing risky limit
     """
 
     # unpack parameters
-    @unpack r_f, τ, a_size, a_size_neg, a_grid, e_size, e_grid, e_3_size, e_3_Γ, ν_size, ν_Γ = parameters
+    @unpack r_f, τ, a_size, a_grid, a_size_neg, a_grid_neg, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ = parameters
 
     # contruct containers
-    R = zeros(a_size_neg, e_size)
-    q = ones(a_size, e_size) ./ (1.0 + r_f)
-    rbl = zeros(e_size, 2)
+    R = zeros(a_size_neg, e_1_size, e_2_size)
+    q = ones(a_size, e_1_size, e_2_size) ./ (1.0 + r_f)
+    rbl = zeros(e_1_size, e_2_size, 2)
 
     # loop over states
-    for e_i = 1:e_size
+    for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
 
         # repayment probability and pricing funciton
         Threads.@threads for a_p_i = 1:(a_size_neg-1)
             @inbounds a_p = a_grid[a_p_i]
-            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size
-                @inbounds R[a_p_i, e_i] += ν_Γ[ν_p_i] * t_Γ[t_p_i] * repayment_function(e_i, a_p, threshold_e[a_p_i, t_p_i, ν_p_i], parameters)
+            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size, e_1_p_i = 1:e_1_size
+                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, a_p, threshold_e[a_p_i, e_1_p_i, e_3_p_i, ν_p_i], w, parameters)
             end
-            @inbounds q[a_p_i, e_i] = R[a_p_i, e_i] / ((-a_p) * (1.0 + r_f + τ + ι))
+            @inbounds q[a_p_i, e_1_i, e_2_i] = R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + r_f + τ + ι))
         end
 
         # risky borrowing limit and maximum discounted borrwoing amount
-        @inbounds @views q_e = q[:, e_i]
-        qa_function_itp = Akima(a_grid, q_e .* a_grid)
-        qa_function(x) = qa_function_itp(x)
-        rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid[1], 0.0)
-        res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
-        @inbounds rbl[e_i, 1] = Optim.minimizer(res_rbl)
-        @inbounds rbl[e_i, 2] = Optim.minimum(res_rbl)
+        qa_funcion_itp = Akima(a_grid, q[:, e_1_i, e_2_i] .* a_grid)
+        qa_funcion(a_p) = qa_funcion_itp(a_p)
+        @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
+        res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
+        @inbounds rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
+        @inbounds rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
     end
 
     # return results
@@ -674,27 +622,19 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         copyto!(q_p, variables.q)
 
         # value and policy functions
-        variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_pos_a = value_and_policy_function(V_p, V_d_p, V_nd_p, V_pos_p, variables.q, variables.rbl, variables.aggregate_prices.w, parameters; slow_updating = slow_updating)
+        variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_pos_a = value_and_policy_function(V_p, V_d_p, V_nd_p, V_pos_p, variables.q, variables.rbl, variables.aggregate_prices.w_λ, parameters; slow_updating = slow_updating)
 
         # thresholds
-        variables.threshold_a, variables.threshold_e = threshold_function(variables.V_d, variables.V_nd, variables.aggregate_prices.w, parameters)
+        variables.threshold_a, variables.threshold_e = threshold_function(variables.V_d, variables.V_nd, variables.aggregate_prices.w_λ, parameters)
 
         # pricing function and borrowing risky limit
-        variables.R, variables.q, variables.rbl = pricing_and_rbl_function(variables.threshold_e, variables.aggregate_prices.ι, parameters)
+        variables.R, variables.q, variables.rbl = pricing_and_rbl_function(variables.threshold_e, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
         # check convergence
         V_crit = norm(variables.V .- V_p, Inf)
         V_pos_crit = norm(variables.V_pos .- V_pos_p, Inf)
         q_crit = norm(variables.q .- q_p, Inf)
         crit = max(V_crit, V_pos_crit, q_crit)
-
-        #=
-        V_crit_index = findall(abs.(variables.V .- V_p) .== V_crit)
-        println("")
-        println("V_crit = $V_crit")
-        println("V_crit_max happends at $V_crit_index")
-        println("q_crit = $q_crit")
-        =#
 
         # update the iteration number
         iter += 1

@@ -6,7 +6,7 @@ using FLOWMath
 using Distributions
 using QuadGK
 using JLD2: @save, @load
-using LinearAlgebra: norm
+using LinearAlgebra
 using Optim
 using Parameters: @unpack
 using PrettyTables
@@ -25,17 +25,17 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 #==================#
 function parameters_function(;
     ρ::Real = 0.975,                # survival rate
-    β::Real = 0.96,                 # discount factor (households)
+    β::Real = 0.94,                 # discount factor (households)
     β_f::Real = 1.0/1.04,           # discount factor (bank)
     r_f::Real = 0.04,               # risk-free rate
     τ::Real = 0.04,                 # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.25,                 # garnishment rate
+    η::Real = 0.35,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.90,                 # exogenous retention ratio
     θ::Real = 0.05,                 # diverting fraction
-    p_h::Real = 1.0/10,             # prob. of history erased
+    p_h::Real = 1.0/10.0,           # prob. of history erased
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -44,12 +44,12 @@ function parameters_function(;
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.00,               # probability of patience
+    ν_p::Real = 0.01,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -5.0,             # min of asset holding
-    a_max::Real = 300.0,            # max of asset holding
-    a_size_neg::Integer = 501,      # number of grid of negative asset holding for VFI
-    a_size_pos::Integer = 301,      # number of grid of positive asset holding for VFI
+    a_min::Real = -8.0,             # min of asset holding
+    a_max::Real = 400.0,            # max of asset holding
+    a_size_neg::Integer = 401,      # number of grid of negative asset holding for VFI
+    a_size_pos::Integer = 201,      # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     a_size_pos_μ::Integer = 301,    # number of grid of positive asset holding for distribution
     )
@@ -84,7 +84,7 @@ function parameters_function(;
         return z, Π
     end
     e_1_grid, e_1_Γ = adda_cooper(e_1_size, 0.0, e_1_σ)
-    e_1_Γ = [1.0 0.0; 0.0 1.0]
+    e_1_Γ = Matrix(1.0I, e_1_size, e_1_size)
 
     # persistent endowment shock
     e_2_MC = tauchen(e_2_size, e_2_ρ, e_2_σ, 0.0, 3)
@@ -221,7 +221,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 50, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 40, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """
@@ -277,17 +277,17 @@ function log_function(threshold_e::Real)
     end
 end
 
-function repayment_function(e_1_i::Integer, e_2_i::Integer, e_3_i::Integer, ν_i::Integer, a_p::Real, threshold::Real, w::Real, parameters::NamedTuple; wage_garnishment::Bool = true)
+function repayment_function(e_1_p_i::Integer, e_2_i::Integer, e_3_p_i::Integer, a_p::Real, threshold::Real, w::Real, parameters::NamedTuple; wage_garnishment::Bool = true)
     """
-    evaluate repayment analytically with and without wage garnishment for a given defaulting threshold in e'_2
+    evaluate repayment analytically with and without wage garnishment
     """
 
     # unpack parameters
     @unpack e_1_grid, e_2_grid, e_3_grid, e_2_ρ, e_2_σ, η = parameters
 
     # permanent and transitory components
-    e_1 = e_1_grid[e_1_i]
-    e_3 = e_3_grid[e_3_i]
+    e_1 = e_1_grid[e_1_p_i]
+    e_3 = e_3_grid[e_3_p_i]
 
     # compute expected repayment amount
     @inbounds e_2_μ = e_2_ρ * e_2_grid[e_2_i]
@@ -357,9 +357,9 @@ function variables_function(parameters::NamedTuple; λ::Real)
     for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
         for a_p_i = 1:(a_size_neg-1)
             @inbounds a_p = a_grid_neg[a_p_i]
-            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size, e_1_p_i = 1:e_1_size
+            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_1_p_i = 1:e_1_size
                 @inbounds threshold = log_function(-a_p / w_λ) - e_1_grid[e_1_p_i] - e_3_grid[e_3_p_i]
-                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, a_p, threshold, w_λ, parameters)
+                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_i, e_3_p_i, a_p, threshold, w_λ, parameters)
             end
             @inbounds q[a_p_i, e_1_i, e_2_i] = R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + r_f + τ + ι_λ))
         end
@@ -455,10 +455,10 @@ function value_and_policy_function(V_p::Array{Float64,5}, V_d_p::Array{Float64,4
         V_hat = ν * β * EV_function(e_1_i, e_2_i, V_p, parameters)
         V_hat_pos = ν * β * EV_function(e_1_i, e_2_i, V_pos_p, parameters)
         V_hat_itp = Akima(a_grid, V_hat)
-        V_hat_pos_itp = Akima(a_grid_pos, p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos)
+        V_hat_pos_itp = Akima(a_grid_pos, (p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos))
 
         # compute defaulting value
-        @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1 - η) * y, σ) + V_hat_pos[1]
+        @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1.0 - η) * y, σ) + V_hat_pos[1]
         # @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
 
         # compute non-defaulting value
@@ -577,8 +577,8 @@ function pricing_and_rbl_function(threshold_e::Array{Float64,4}, w::Real, ι::Re
         # repayment probability and pricing funciton
         Threads.@threads for a_p_i = 1:(a_size_neg-1)
             @inbounds a_p = a_grid[a_p_i]
-            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size, e_1_p_i = 1:e_1_size
-                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, a_p, threshold_e[a_p_i, e_1_p_i, e_3_p_i, ν_p_i], w, parameters)
+            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_1_p_i = 1:e_1_size
+                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_i, e_3_p_i, a_p, threshold_e[a_p_i, e_1_p_i, e_3_p_i, ν_p_i], w, parameters)
             end
             @inbounds q[a_p_i, e_1_i, e_2_i] = R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + r_f + τ + ι))
         end

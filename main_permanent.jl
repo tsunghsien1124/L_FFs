@@ -602,7 +602,7 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
     """
 
     # initialize the iteration number and criterion
-    iter = 0
+    search_iter = 0
     crit = Inf
 
     # construct containers
@@ -612,7 +612,7 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
     V_pos_p = similar(variables.V_pos)
     q_p = similar(variables.q)
 
-    while crit > tol && iter < iter_max
+    while crit > tol && search_iter < iter_max
 
         # copy previous values
         copyto!(V_p, variables.V)
@@ -637,10 +637,10 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         crit = max(V_crit, V_pos_crit, q_crit)
 
         # update the iteration number
-        iter += 1
+        search_iter += 1
 
         # manually report convergence progress
-        println("Solving household and banking problems (one-loop): iter = $iter and crit = $crit > tol = $tol")
+        println("Solving household and banking problems (one-loop): search_iter = $search_iter and crit = $crit > tol = $tol")
 
         # tracking figures
         if figure_track == true
@@ -772,13 +772,13 @@ function solve_stationary_distribution_function!(variables::Mutable_Variables, p
     """
 
     # initialize the iteration number and criterion
-    iter = 0
+    search_iter = 0
     crit = Inf
 
     # construct container
     μ_p = similar(variables.μ)
 
-    while crit > tol && iter < iter_max
+    while crit > tol && search_iter < iter_max
 
         # copy previous value
         copyto!(μ_p, variables.μ)
@@ -790,10 +790,10 @@ function solve_stationary_distribution_function!(variables::Mutable_Variables, p
         crit = norm(variables.μ .- μ_p, Inf)
 
         # update the iteration number
-        iter += 1
+        search_iter += 1
 
         # manually report convergence progress
-        println("Solving stationary distribution: iter = $iter and crit = $crit > tol = $tol")
+        println("Solving stationary distribution: search_iter = $search_iter and crit = $crit > tol = $tol")
     end
 end
 
@@ -968,13 +968,13 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     end
 
     # initialization
-    iter = 0
+    search_iter = 0
     crit = Inf
     λ_optimal = 0.0
     variables_λ_optimal = []
 
     # solve equlibrium multiplier by bisection
-    while crit > tol && iter < iter_max
+    while crit > tol && search_iter < iter_max
 
         # update the multiplier
         λ_optimal = (λ_lower + λ_upper) / 2
@@ -994,7 +994,7 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
         crit = abs(ED_λ_optimal)
 
         # update the iteration number
-        iter += 1
+        search_iter += 1
 
     end
 
@@ -1166,41 +1166,41 @@ end
 # Calibration #
 #=============#
 β_search = 0.98 # collect(0.94:0.01:0.97)
-η_search = collect(0.20:0.05:0.40)
 θ_search = eps() # collect(0.04:0.01:0.07)
-ν_p_search = collect(0.00:0.01:0.05)
-calibration_results = []
+η_search = 0.35 # collect(0.20:0.05:0.40)
+ν_p_search = collect(0.00:0.01:0.01)
+β_search_szie = length(β_search)
+θ_search_szie = length(θ_search)
+η_search_szie = length(η_search)
+ν_p_search_szie = length(ν_p_search)
+search_size = β_search_szie * θ_search_szie * η_search_szie * ν_p_search_szie
+search_iter = 1
+calibration_results = zeros(search_size, 16)
 
-for β_i in 1:length(β_search), θ_i in 1:length(θ_search), η_i in 1:length(η_search), ν_p_i in 1:length(ν_p_search)
+for β_i in 1:β_search_szie, θ_i in 1:θ_search_szie, η_i in 1:η_search_szie, ν_p_i in 1:ν_p_search_szie
     parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
     variables = variables_function(parameters; λ = 0.0)
     solve_economy_function!(variables, parameters)
     flag = 1
     # variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
 
-    results_temp = [
-        parameters.β,
-        parameters.δ,
-        parameters.ν_s,
-        parameters.τ,
-        parameters.p_h,
-        parameters.η,
-        parameters.θ,
-        parameters.ν_p,
-        variables.aggregate_prices.λ,
-        variables.aggregate_variables.KL_to_D_ratio,
-        variables.aggregate_variables.share_of_filers * 100,
-        variables.aggregate_variables.D / variables.aggregate_variables.L,
-        variables.aggregate_variables.share_in_debts * 100,
-        variables.aggregate_variables.debt_to_earning_ratio * 100,
-        variables.aggregate_variables.avg_loan_rate * 100,
-        flag
-        ]
-    if calibration_results == []
-        calibration_results = results_temp
-    else
-        calibration_results = [calibration_results results_temp]
-    end
+    search_iter = (β_i - 1)*(θ_search_szie*η_search_szie*ν_p_search_szie) + (θ_i-1)*(η_search_szie*ν_p_search_szie) + (η_i-1)*ν_p_search_szie + ν_p_i
+    calibration_results[search_iter, 1] = parameters.β
+    calibration_results[search_iter, 2] = parameters.δ
+    calibration_results[search_iter, 3] = parameters.ν_s
+    calibration_results[search_iter, 4] = parameters.τ
+    calibration_results[search_iter, 5] = parameters.p_h
+    calibration_results[search_iter, 6] = parameters.η
+    calibration_results[search_iter, 7] = parameters.θ
+    calibration_results[search_iter, 8] = parameters.ν_p
+    calibration_results[search_iter, 9] = variables.aggregate_prices.λ
+    calibration_results[search_iter, 10] = variables.aggregate_variables.KL_to_D_ratio
+    calibration_results[search_iter, 11] = variables.aggregate_variables.share_of_filers * 100
+    calibration_results[search_iter, 12] = variables.aggregate_variables.D / variables.aggregate_variables.L
+    calibration_results[search_iter, 13] = variables.aggregate_variables.share_in_debts * 100
+    calibration_results[search_iter, 14] = variables.aggregate_variables.debt_to_earning_ratio * 100
+    calibration_results[search_iter, 15] = variables.aggregate_variables.avg_loan_rate * 100
+    calibration_results[search_iter, 16] = flag
 end
 
 # cd(homedir() * "/financial_frictions/")
@@ -1403,7 +1403,7 @@ CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheade
 #     @unpack θ, ψ, β_f, r_f, E, δ, α = parameters_new
 #
 #     # initialize the iteration number and criterion
-#     iter = 0
+#     search_iter = 0
 #     crit = Inf
 #
 #     # obtain number of periods
@@ -1412,7 +1412,7 @@ CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheade
 #     # construct container
 #     leverage_ratio_λ_p = similar(variables_T.aggregate_prices.leverage_ratio_λ)
 #
-#     while crit > tol && iter < iter_max
+#     while crit > tol && search_iter < iter_max
 #
 #         # copy previous value
 #         copyto!(leverage_ratio_λ_p, variables_T.aggregate_prices.leverage_ratio_λ)
@@ -1456,10 +1456,10 @@ CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheade
 #         crit = norm(variables_T.aggregate_variables.leverage_ratio .- leverage_ratio_λ_p, Inf)
 #
 #         # update the iteration number
-#         iter += 1
+#         search_iter += 1
 #
 #         # manually report convergence progress
-#         println("Solving transitional dynamics: iter = $iter and crit = $crit > tol = $tol")
+#         println("Solving transitional dynamics: search_iter = $search_iter and crit = $crit > tol = $tol")
 #
 #         # update leverage ratio
 #         variables_T.aggregate_prices.leverage_ratio_λ = slow_updating * leverage_ratio_λ_p + (1.0 - slow_updating) * variables_T.aggregate_variables.leverage_ratio

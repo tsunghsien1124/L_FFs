@@ -14,7 +14,7 @@ using ProgressMeter
 using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions
 using Roots
 using UnicodePlots
-# using CSV
+using CSV
 using Tables
 
 # print out the number of threads
@@ -25,17 +25,17 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 #==================#
 function parameters_function(;
     ρ::Real = 0.975,                # survival rate
-    β::Real = 0.96,                 # discount factor (households)
+    β::Real = 0.98,                 # discount factor (households)
     β_f::Real = 1.0/1.04,           # discount factor (bank)
     r_f::Real = 0.04,               # risk-free rate
     τ::Real = 0.04,                 # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.35,                 # garnishment rate
+    η::Real = 0.30,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.90,                 # exogenous retention ratio
     θ::Real = 0.05,                 # diverting fraction
-    p_h::Real = 1.0/10.0,           # prob. of history erased
+    p_h::Real = 1.0/7.0,            # prob. of history erased
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -46,12 +46,12 @@ function parameters_function(;
     ν_s::Real = 0.00,               # scale of patience
     ν_p::Real = 0.01,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -8.0,             # min of asset holding
-    a_max::Real = 400.0,            # max of asset holding
-    a_size_neg::Integer = 401,      # number of grid of negative asset holding for VFI
-    a_size_pos::Integer = 201,      # number of grid of positive asset holding for VFI
+    a_min::Real = -5.0,             # min of asset holding
+    a_max::Real = 500.0,            # max of asset holding
+    a_size_neg::Integer = 251,      # number of grid of negative asset holding for VFI
+    a_size_pos::Integer = 101,      # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
-    a_size_pos_μ::Integer = 301,    # number of grid of positive asset holding for distribution
+    a_size_pos_μ::Integer = 101,    # number of grid of positive asset holding for distribution
     )
     """
     contruct an immutable object containg all paramters
@@ -1129,10 +1129,10 @@ end
 #=================#
 # Solve the model #
 #=================#
-parameters = parameters_function()
-variables = variables_function(parameters; λ = 0.0)
-solve_economy_function!(variables, parameters)
-flag = 1
+# parameters = parameters_function()
+# variables = variables_function(parameters; λ = 0.0)
+# solve_economy_function!(variables, parameters)
+# flag = 1
 
 # variables_max = variables_function(parameters; λ = 1 - sqrt(parameters.ψ))
 # solve_economy_function!(variables_max, parameters)
@@ -1140,23 +1140,23 @@ flag = 1
 
 # parameters = parameters_function()
 # variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
-#
-calibration_results = [
-    parameters.β,
-    parameters.δ,
-    parameters.ν_s,
-    parameters.η,
-    parameters.θ,
-    parameters.ν_p,
-    variables.aggregate_prices.λ,
-    variables.aggregate_variables.KL_to_D_ratio,
-    variables.aggregate_variables.share_of_filers * 100,
-    variables.aggregate_variables.D / variables.aggregate_variables.L,
-    variables.aggregate_variables.share_in_debts * 100,
-    variables.aggregate_variables.debt_to_earning_ratio * 100,
-    variables.aggregate_variables.avg_loan_rate * 100,
-    flag
-    ]
+
+# calibration_results = [
+#     parameters.β,
+#     parameters.δ,
+#     parameters.ν_s,
+#     parameters.η,
+#     parameters.θ,
+#     parameters.ν_p,
+#     variables.aggregate_prices.λ,
+#     variables.aggregate_variables.KL_to_D_ratio,
+#     variables.aggregate_variables.share_of_filers * 100,
+#     variables.aggregate_variables.D / variables.aggregate_variables.L,
+#     variables.aggregate_variables.share_in_debts * 100,
+#     variables.aggregate_variables.debt_to_earning_ratio * 100,
+#     variables.aggregate_variables.avg_loan_rate * 100,
+#     flag
+#     ]
 
 # parameters = parameters_function()
 # variables = variables_function(parameters; λ = 0.02496311756496223)
@@ -1165,44 +1165,47 @@ calibration_results = [
 #=============#
 # Calibration #
 #=============#
-# β_search = 0.97
-# η_search = collect(0.25:0.05:0.40)
-# θ_search = eps() # collect(0.04:0.01:0.07)
-# ν_p_search = collect(0.0:0.01:0.05)
-# calibration_results = []
-#
-# for β_i in 1:length(β_search), θ_i in 1:length(θ_search), η_i in 1:length(η_search), ν_p_i in 1:length(ν_p_search)
-#     parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
-#     variables = variables_function(parameters; λ = 0.0)
-#     solve_economy_function!(variables, parameters)
-#     flag = 1
-#     # variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
-#
-#     results_temp = [
-#         parameters.β,
-#         parameters.δ,
-#         parameters.ν_s,
-#         parameters.η,
-#         parameters.θ,
-#         parameters.ν_p,
-#         variables.aggregate_prices.λ,
-#         variables.aggregate_variables.KL_to_D_ratio,
-#         variables.aggregate_variables.share_of_filers * 100,
-#         variables.aggregate_variables.D / variables.aggregate_variables.L,
-#         variables.aggregate_variables.share_in_debts * 100,
-#         variables.aggregate_variables.debt_to_earning_ratio * 100,
-#         variables.aggregate_variables.avg_loan_rate * 100,
-#         flag
-#         ]
-#     if calibration_results == []
-#         calibration_results = results_temp
-#     else
-#         calibration_results = [calibration_results results_temp]
-#     end
-# end
-#
-# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-# CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
+β_search = 0.98 # collect(0.94:0.01:0.97)
+η_search = collect(0.20:0.05:0.40)
+θ_search = eps() # collect(0.04:0.01:0.07)
+ν_p_search = collect(0.00:0.01:0.05)
+calibration_results = []
+
+for β_i in 1:length(β_search), θ_i in 1:length(θ_search), η_i in 1:length(η_search), ν_p_i in 1:length(ν_p_search)
+    parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
+    variables = variables_function(parameters; λ = 0.0)
+    solve_economy_function!(variables, parameters)
+    flag = 1
+    # variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
+
+    results_temp = [
+        parameters.β,
+        parameters.δ,
+        parameters.ν_s,
+        parameters.τ,
+        parameters.p_h,
+        parameters.η,
+        parameters.θ,
+        parameters.ν_p,
+        variables.aggregate_prices.λ,
+        variables.aggregate_variables.KL_to_D_ratio,
+        variables.aggregate_variables.share_of_filers * 100,
+        variables.aggregate_variables.D / variables.aggregate_variables.L,
+        variables.aggregate_variables.share_in_debts * 100,
+        variables.aggregate_variables.debt_to_earning_ratio * 100,
+        variables.aggregate_variables.avg_loan_rate * 100,
+        flag
+        ]
+    if calibration_results == []
+        calibration_results = results_temp
+    else
+        calibration_results = [calibration_results results_temp]
+    end
+end
+
+# cd(homedir() * "/financial_frictions/")
+cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
 
 #======================================================#
 # Solve the model with different bankruptcy strictness #

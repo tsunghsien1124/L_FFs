@@ -34,7 +34,7 @@ function parameters_function(;
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.90,                 # exogenous retention ratio
-    θ::Real = 0.05,                 # diverting fraction
+    θ::Real = 0.06,                 # diverting fraction
     p_h::Real = 1.0/7.0,            # prob. of history erased
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
@@ -44,7 +44,7 @@ function parameters_function(;
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.01,               # probability of patience
+    ν_p::Real = 0.0255,             # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -5.0,             # min of asset holding
     a_max::Real = 500.0,            # max of asset holding
@@ -1013,7 +1013,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
     # initialize pparameters
     parameters = parameters_function()
-    @unpack a_size, a_size_pos, a_size_μ, e_size, t_size, ν_size = parameters
+    @unpack a_size, a_size_pos, a_size_μ, e_1_size, e_2_size, e_3_size, ν_size = parameters
 
     # initialize variables that will be saved
     var_names = [
@@ -1035,26 +1035,22 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
     # initialize containers
     results_A_NFF = zeros(var_size, η_size)
-    results_V_NFF = zeros(a_size, e_size, t_size, ν_size, η_size)
-    results_V_pos_NFF = zeros(a_size_pos, e_size, t_size, ν_size, η_size)
-    results_μ_NFF = zeros(a_size_μ, e_size, t_size, ν_size, 2, η_size)
+    results_V_NFF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+    results_V_pos_NFF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+    results_μ_NFF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
     results_A_FF = zeros(var_size, η_size)
-    results_V_FF = zeros(a_size, e_size, t_size, ν_size, η_size)
-    results_V_pos_FF = zeros(a_size_pos, e_size, t_size, ν_size, η_size)
-    results_μ_FF = zeros(a_size_μ, e_size, t_size, ν_size, 2, η_size)
+    results_V_FF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+    results_V_pos_FF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+    results_μ_FF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
 
     # compute the optimal multipliers with different η
     for η_i = 1:η_size
 
-        # if η_i > 1 then use previouse to narrow down searching area
-        if η_i == 1
-            parameters_NFF, variables_NFF, parameters_FF, variables_FF = optimal_multiplier_function(η_grid[η_i])
-        else
-            parameters_NFF, variables_NFF, parameters_FF, variables_FF = optimal_multiplier_function(η_grid[η_i])
-        end
+        parameters = parameters_function(η = η_grid[η_i])
+        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters)
 
         # save results
-        results_A_NFF[1, η_i] = parameters_NFF.η
+        results_A_NFF[1, η_i] = parameters.η
         results_A_NFF[2, η_i] = variables_NFF.aggregate_prices.r_k
         results_A_NFF[3, η_i] = variables_NFF.aggregate_prices.λ
         results_A_NFF[4, η_i] = variables_NFF.aggregate_prices.ι
@@ -1067,11 +1063,11 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_A_NFF[11, η_i] = variables_NFF.aggregate_variables.share_in_debts
         results_A_NFF[12, η_i] = variables_NFF.aggregate_variables.debt_to_earning_ratio
         results_A_NFF[13, η_i] = variables_NFF.aggregate_variables.avg_loan_rate_pw
-        results_V_NFF[:, :, :, :, η_i] = variables_NFF.V
-        results_V_pos_NFF[:, :, :, :, η_i] = variables_NFF.V_pos
-        results_μ_NFF[:, :, :, :, :, η_i] = variables_NFF.μ
+        results_V_NFF[:, :, :, :, :, η_i] = variables_NFF.V
+        results_V_pos_NFF[:, :, :, :, :, η_i] = variables_NFF.V_pos
+        results_μ_NFF[:, :, :, :, :, :, η_i] = variables_NFF.μ
 
-        results_A_FF[1, η_i] = parameters_FF.η
+        results_A_FF[1, η_i] = parameters.η
         results_A_FF[2, η_i] = variables_FF.aggregate_prices.r_k
         results_A_FF[3, η_i] = variables_FF.aggregate_prices.λ
         results_A_FF[4, η_i] = variables_FF.aggregate_prices.ι
@@ -1084,9 +1080,9 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_A_FF[11, η_i] = variables_FF.aggregate_variables.share_in_debts
         results_A_FF[12, η_i] = variables_FF.aggregate_variables.debt_to_earning_ratio
         results_A_FF[13, η_i] = variables_FF.aggregate_variables.avg_loan_rate_pw
-        results_V_FF[:, :, :, :, η_i] = variables_FF.V
-        results_V_pos_FF[:, :, :, :, η_i] = variables_FF.V_pos
-        results_μ_FF[:, :, :, :, :, η_i] = variables_FF.μ
+        results_V_FF[:, :, :, :, :, η_i] = variables_FF.V
+        results_V_pos_FF[:, :, :, :, :, η_i] = variables_FF.V_pos
+        results_μ_FF[:, :, :, :, :, :, η_i] = variables_FF.μ
     end
 
     # return results
@@ -1100,24 +1096,24 @@ function results_CEV_function(results_V::Array{Float64,6}, results_V_pos::Array{
 
     # initialize pparameters
     parameters = parameters_function()
-    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_size, t_size, ν_size, σ = parameters
+    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters
 
     # initialize result matrix
-    η_size = size(results_V, 5)
-    results_CEV = zeros(a_size_μ, e_size, t_size, ν_size, 2, η_size)
+    η_size = size(results_V, 6)
+    results_CEV = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
 
     # compute CEV for different η compared to the smallest η
-    for η_i = 1:η_size, e_i = 1:e_size, t_i = 1:t_size, ν_i = 1:ν_size
-        @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_i, t_i, ν_i, η_i])
-        @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_i, t_i, ν_i, end])
-        @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_i, t_i, ν_i, η_i])
-        @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_i, t_i, ν_i, end])
+    for η_i = 1:η_size, e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size, ν_i = 1:ν_size
+        @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+        @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+        @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+        @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end])
         for a_μ_i = 1:a_size_μ
             @inbounds a_μ = a_grid_μ[a_μ_i]
-            @inbounds results_CEV[a_μ_i, e_i, t_i, ν_i, 1, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
+            @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
             if a_μ >= 0.0
                 a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
-                @inbounds results_CEV[a_pos_μ_i, e_i, t_i, ν_i, 2, η_i] = (V_pos_itp_new(a_μ) / V_pos_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
+                @inbounds results_CEV[a_pos_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = (V_pos_itp_new(a_μ) / V_pos_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
             end
         end
     end
@@ -1137,6 +1133,10 @@ end
 # variables_max = variables_function(parameters; λ = 1 - sqrt(parameters.ψ))
 # solve_economy_function!(variables_max, parameters)
 # flag = 2
+
+# variables = variables_function(parameters; λ = 0.0323141121834014)
+# solve_economy_function!(variables, parameters)
+# flag = 3
 
 # parameters = parameters_function()
 # variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
@@ -1165,54 +1165,55 @@ end
 #=============#
 # Calibration #
 #=============#
-β_search = 0.98 # collect(0.94:0.01:0.97)
-θ_search = eps() # collect(0.04:0.01:0.07)
-η_search = 0.35 # collect(0.20:0.05:0.40)
-ν_p_search = collect(0.00:0.01:0.01)
-β_search_szie = length(β_search)
-θ_search_szie = length(θ_search)
-η_search_szie = length(η_search)
-ν_p_search_szie = length(ν_p_search)
-search_size = β_search_szie * θ_search_szie * η_search_szie * ν_p_search_szie
-search_iter = 1
-calibration_results = zeros(search_size, 16)
-
-for β_i in 1:β_search_szie, θ_i in 1:θ_search_szie, η_i in 1:η_search_szie, ν_p_i in 1:ν_p_search_szie
-    parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
-    variables = variables_function(parameters; λ = 0.0)
-    solve_economy_function!(variables, parameters)
-    flag = 1
-    # variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
-
-    search_iter = (β_i - 1)*(θ_search_szie*η_search_szie*ν_p_search_szie) + (θ_i-1)*(η_search_szie*ν_p_search_szie) + (η_i-1)*ν_p_search_szie + ν_p_i
-    calibration_results[search_iter, 1] = parameters.β
-    calibration_results[search_iter, 2] = parameters.δ
-    calibration_results[search_iter, 3] = parameters.ν_s
-    calibration_results[search_iter, 4] = parameters.τ
-    calibration_results[search_iter, 5] = parameters.p_h
-    calibration_results[search_iter, 6] = parameters.η
-    calibration_results[search_iter, 7] = parameters.θ
-    calibration_results[search_iter, 8] = parameters.ν_p
-    calibration_results[search_iter, 9] = variables.aggregate_prices.λ
-    calibration_results[search_iter, 10] = variables.aggregate_variables.KL_to_D_ratio
-    calibration_results[search_iter, 11] = variables.aggregate_variables.share_of_filers * 100
-    calibration_results[search_iter, 12] = variables.aggregate_variables.D / variables.aggregate_variables.L
-    calibration_results[search_iter, 13] = variables.aggregate_variables.share_in_debts * 100
-    calibration_results[search_iter, 14] = variables.aggregate_variables.debt_to_earning_ratio * 100
-    calibration_results[search_iter, 15] = variables.aggregate_variables.avg_loan_rate * 100
-    calibration_results[search_iter, 16] = flag
-end
+# β_search = 0.98 # collect(0.94:0.01:0.97)
+# θ_search = 0.06 # collect(0.04:0.01:0.07)
+# η_search = 0.30 # collect(0.20:0.05:0.40)
+# ν_p_search = 0.0255 # collect(0.0255:0.0005:0.0270)
+# β_search_szie = length(β_search)
+# θ_search_szie = length(θ_search)
+# η_search_szie = length(η_search)
+# ν_p_search_szie = length(ν_p_search)
+# search_size = β_search_szie * θ_search_szie * η_search_szie * ν_p_search_szie
+# search_iter = 1
+# calibration_results = zeros(search_size, 16)
+#
+# for β_i in 1:β_search_szie, θ_i in 1:θ_search_szie, η_i in 1:η_search_szie, ν_p_i in 1:ν_p_search_szie
+#     parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
+#     # variables = variables_function(parameters; λ = 0.0)
+#     # solve_economy_function!(variables, parameters)
+#     # flag = 1
+#     variables_λ_lower, variables, flag = optimal_multiplier_function(parameters)
+#
+#     search_iter = (β_i - 1)*(θ_search_szie*η_search_szie*ν_p_search_szie) + (θ_i-1)*(η_search_szie*ν_p_search_szie) + (η_i-1)*ν_p_search_szie + ν_p_i
+#     calibration_results[search_iter, 1] = parameters.β
+#     calibration_results[search_iter, 2] = parameters.δ
+#     calibration_results[search_iter, 3] = parameters.ν_s
+#     calibration_results[search_iter, 4] = parameters.τ
+#     calibration_results[search_iter, 5] = parameters.p_h
+#     calibration_results[search_iter, 6] = parameters.η
+#     calibration_results[search_iter, 7] = parameters.θ
+#     calibration_results[search_iter, 8] = parameters.ν_p
+#     calibration_results[search_iter, 9] = variables.aggregate_prices.λ
+#     calibration_results[search_iter, 10] = variables.aggregate_variables.KL_to_D_ratio
+#     calibration_results[search_iter, 11] = variables.aggregate_variables.share_of_filers * 100
+#     calibration_results[search_iter, 12] = variables.aggregate_variables.D / variables.aggregate_variables.L
+#     calibration_results[search_iter, 13] = variables.aggregate_variables.share_in_debts * 100
+#     calibration_results[search_iter, 14] = variables.aggregate_variables.debt_to_earning_ratio * 100
+#     calibration_results[search_iter, 15] = variables.aggregate_variables.avg_loan_rate * 100
+#     calibration_results[search_iter, 16] = flag
+# end
 
 # cd(homedir() * "/financial_frictions/")
-cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
+# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+# CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
 
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-# var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.05)
+var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.30, η_max = 0.30, η_step = 0.05)
+cd(homedir() * "/financial_frictions/")
 # cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+@save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 # @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
 #=============================#

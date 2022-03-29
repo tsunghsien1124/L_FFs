@@ -1051,9 +1051,9 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
         # save results
         results_A_NFF[1, η_i] = parameters.η
-        results_A_NFF[2, η_i] = variables_NFF.aggregate_prices.r_k
+        results_A_NFF[2, η_i] = variables_NFF.aggregate_prices.r_k_λ
         results_A_NFF[3, η_i] = variables_NFF.aggregate_prices.λ
-        results_A_NFF[4, η_i] = variables_NFF.aggregate_prices.ι
+        results_A_NFF[4, η_i] = variables_NFF.aggregate_prices.ι_λ
         results_A_NFF[5, η_i] = variables_NFF.aggregate_variables.K
         results_A_NFF[6, η_i] = variables_NFF.aggregate_variables.L
         results_A_NFF[7, η_i] = variables_NFF.aggregate_variables.D
@@ -1068,9 +1068,9 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_μ_NFF[:, :, :, :, :, :, η_i] = variables_NFF.μ
 
         results_A_FF[1, η_i] = parameters.η
-        results_A_FF[2, η_i] = variables_FF.aggregate_prices.r_k
+        results_A_FF[2, η_i] = variables_FF.aggregate_prices.r_k_λ
         results_A_FF[3, η_i] = variables_FF.aggregate_prices.λ
-        results_A_FF[4, η_i] = variables_FF.aggregate_prices.ι
+        results_A_FF[4, η_i] = variables_FF.aggregate_prices.ι_λ
         results_A_FF[5, η_i] = variables_FF.aggregate_variables.K
         results_A_FF[6, η_i] = variables_FF.aggregate_variables.L
         results_A_FF[7, η_i] = variables_FF.aggregate_variables.D
@@ -1125,7 +1125,7 @@ end
 #=================#
 # Solve the model #
 #=================#
-# parameters = parameters_function()
+parameters = parameters_function()
 # variables = variables_function(parameters; λ = 0.0)
 # solve_economy_function!(variables, parameters)
 # flag = 1
@@ -1134,9 +1134,9 @@ end
 # solve_economy_function!(variables_max, parameters)
 # flag = 2
 
-# variables = variables_function(parameters; λ = 0.0323141121834014)
-# solve_economy_function!(variables, parameters)
-# flag = 3
+variables = variables_function(parameters; λ = 0.0323141121834014)
+solve_economy_function!(variables, parameters)
+flag = 3
 
 # parameters = parameters_function()
 # variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
@@ -1210,10 +1210,10 @@ end
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.30, η_max = 0.30, η_step = 0.05)
-cd(homedir() * "/financial_frictions/")
+# var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.10)
+# cd(homedir() * "/financial_frictions/")
 # cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-@save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 # @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
 #=============================#

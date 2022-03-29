@@ -7,16 +7,20 @@ using Dierckx
 using StatsPlots
 using Parameters
 
+cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+
 #========================================#
 # Bond price across persistent endowment #
 #========================================#
 plot_col = 1
 plot_row = 1
-plot_q_index = findall(-4.0 .<= parameters.a_grid .<= 0.0)
+plot_q_e_1_index = 2
+plot_q_index = findall(-5.0 .<= parameters.a_grid .<= 0.0)
 plot_q = plot(
     size = (plot_col * 800, plot_row * 500),
     box = :on,
-    legend = :topleft,
+    # legend = :topleft,
+    legend = :none,
     ylimit = [0.0, 1.0],
     yticks = 0.0:0.2:1.0,
     # xlimit = [-6.0, 0.0],
@@ -25,33 +29,33 @@ plot_q = plot(
     titlefont = font(18, "Computer Modern", :black),
     guidefont = font(18, "Computer Modern", :black),
     legendfont = font(18, "Computer Modern", :black),
-    ylabel = "\$ q(b',e) \$",
-    xlabel = "\$ \\textrm{Loan\\ choice\\ } b'<0 \$"
+    ylabel = "\$ q(a',e) \$",
+    xlabel = "\$ \\textrm{Loan\\ choice\\ } a'<0 \$"
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
-    variables.q[plot_q_index, 2],
+    variables.q[plot_q_index, plot_q_e_1_index, 1],
     linecolor = :blue,
     linewidth = 3,
-    label = "\$ \\textrm{Low\\ persistent\\ productivity}\$",
+    # label = "\$ \\textrm{Low\\ persistent\\ productivity}\$",
     margin = 4mm,
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
-    variables.q[plot_q_index, 5],
+    variables.q[plot_q_index, plot_q_e_1_index, 3],
     linecolor = :red,
     linestyle = :dash,
     linewidth = 3,
-    label = "\$ \\textrm{Median\\ persistent\\ productivity} \$",
+    # label = "\$ \\textrm{Median\\ persistent\\ productivity} \$",
     margin = 4mm,
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
-    variables.q[plot_q_index, end-1],
+    variables.q[plot_q_index, plot_q_e_1_index, 5],
     linecolor = :black,
     linestyle = :dashdot,
     linewidth = 3,
-    label = "\$ \\textrm{High\\ persistent\\ productivity} \$",
+    # label = "\$ \\textrm{High\\ persistent\\ productivity} \$",
     margin = 4mm,
     titlefontsize=18,
     tickfontsize=18,
@@ -59,7 +63,7 @@ plot_q = plot!(
     legendfontsize=16,
 )
 plot_q
-savefig(plot_q, "figures/plot_q.pdf")
+Plots.savefig(plot_q, pwd() * "\\figures\\plot_q_high_permanent.pdf")
 
 #===============================================================#
 # Risky discounted borrowing amount across persistent endowment #

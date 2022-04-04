@@ -24,11 +24,11 @@ println("Julia is running with $(Threads.nthreads()) threads...")
 # Define functions #
 #==================#
 function parameters_function(;
-    β::Real = 0.98,                 # discount factor (households)
-    ρ::Real = 0.975,                # survival rate
+    β::Real = 0.96,                 # discount factor (households)
+    ρ::Real = 0.98,                 # survival rate
     r_f::Real = 0.04,               # risk-free rate # 1.04*ρ-1.0
     β_f::Real = 1.0/(1.0+r_f),      # discount factor (bank)
-    τ::Real = 0.00,                 # transaction cost
+    τ::Real = 0.04,                 # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
     η::Real = 0.25,                 # garnishment rate
     δ::Real = 0.10,                 # depreciation rate
@@ -44,13 +44,13 @@ function parameters_function(;
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.00,               # probability of patience
+    ν_p::Real = 0.0111,             # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -5.0,             # min of asset holding
-    a_max::Real = 800.0,            # max of asset holding
-    a_size_neg::Integer = 251,      # number of grid of negative asset holding for VFI
+    a_max::Real = 1000.0,           # max of asset holding
+    a_size_neg::Integer = 501,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 101,      # number of grid of positive asset holding for VFI
-    a_degree::Integer = 4,          # curvature of the positive asset gridpoints
+    a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     μ_scale::Integer = 1,           # scale for the asset holding gridpoints for distribution
     )
     """
@@ -88,10 +88,10 @@ function parameters_function(;
 
     # persistent endowment shock
     # e_2_MC = tauchen(e_2_size, e_2_ρ, e_2_σ, 0.0, 3)
-    e_2_MC = rouwenhorst(e_2_size, e_2_ρ, e_2_σ, 0.0)
-    e_2_Γ = e_2_MC.p
-    e_2_grid = collect(e_2_MC.state_values)
-    # e_2_grid, e_2_Γ = adda_cooper(e_2_size, e_2_ρ, e_2_σ)
+    # e_2_MC = rouwenhorst(e_2_size, e_2_ρ, e_2_σ, 0.0)
+    # e_2_Γ = e_2_MC.p
+    # e_2_grid = collect(e_2_MC.state_values)
+    e_2_grid, e_2_Γ = adda_cooper(e_2_size, e_2_ρ, e_2_σ)
 
     # transitory endowment shock
     e_3_grid, e_3_Γ = adda_cooper(e_3_size, 0.0, e_3_σ)
@@ -112,7 +112,7 @@ function parameters_function(;
     a_ind_zero = findall(iszero, a_grid)[]
 
     # asset holding grid for μ
-    a_size_neg_μ = a_size_neg * μ_scale
+    a_size_neg_μ = a_size_neg # * μ_scale
     a_size_pos_μ = a_size_pos * μ_scale
     a_grid_neg_μ = collect(range(a_min, 0.0, length = a_size_neg_μ))
     a_grid_pos_μ = collect(range(0.0, a_max, length = a_size_pos_μ))
@@ -462,8 +462,8 @@ function value_and_policy_function(V_p::Array{Float64,5}, V_d_p::Array{Float64,4
         V_hat_pos_itp = Akima(a_grid_pos, (p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos))
 
         # compute defaulting value
-        @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1.0 - η) * y, σ) + V_hat_pos[1]
-        # @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
+        # @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1.0 - η) * y, σ) + V_hat_pos[1]
+        @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
 
         # compute non-defaulting value
         Threads.@threads for a_i = 1:a_size
@@ -1143,10 +1143,10 @@ end
 #=================#
 # Solve the model #
 #=================#
-parameters = parameters_function()
-variables = variables_function(parameters; λ = 0.0)
-solve_economy_function!(variables, parameters)
-flag = 1
+# parameters = parameters_function()
+# variables = variables_function(parameters; λ = 0.0)
+# solve_economy_function!(variables, parameters)
+# flag = 1
 
 # variables_max = variables_function(parameters; λ = 1 - sqrt(parameters.ψ))
 # solve_economy_function!(variables_max, parameters)
@@ -1157,26 +1157,26 @@ flag = 1
 # flag = 3
 
 # parameters = parameters_function()
-# variables_λ_lower, variables_λ_optimal, flag = optimal_multiplier_function(parameters)
+# variables_λ_lower, variables, flag = optimal_multiplier_function(parameters)
 
-calibration_results = [
-    parameters.β,
-    parameters.δ,
-    parameters.ν_s,
-    parameters.τ,
-    parameters.p_h,
-    parameters.η,
-    parameters.θ,
-    parameters.ν_p,
-    variables.aggregate_prices.λ,
-    variables.aggregate_variables.KL_to_D_ratio,
-    variables.aggregate_variables.share_of_filers * 100,
-    variables.aggregate_variables.D / variables.aggregate_variables.L,
-    variables.aggregate_variables.share_in_debts * 100,
-    variables.aggregate_variables.debt_to_earning_ratio * 100,
-    variables.aggregate_variables.avg_loan_rate * 100,
-    flag
-    ]
+# calibration_results = [
+#     parameters.β,
+#     parameters.δ,
+#     parameters.ν_s,
+#     parameters.τ,
+#     parameters.p_h,
+#     parameters.η,
+#     parameters.θ,
+#     parameters.ν_p,
+#     variables.aggregate_prices.λ,
+#     variables.aggregate_variables.KL_to_D_ratio,
+#     variables.aggregate_variables.share_of_filers * 100,
+#     variables.aggregate_variables.D / variables.aggregate_variables.L,
+#     variables.aggregate_variables.share_in_debts * 100,
+#     variables.aggregate_variables.debt_to_earning_ratio * 100,
+#     variables.aggregate_variables.avg_loan_rate * 100,
+#     flag
+#     ]
 
 # parameters = parameters_function()
 # variables = variables_function(parameters; λ = 0.02496311756496223)
@@ -1188,7 +1188,7 @@ calibration_results = [
 # β_search = 0.96 # collect(0.94:0.01:0.97)
 # θ_search = eps() # collect(0.04:0.001:0.07)
 # η_search = 0.25 # collect(0.20:0.05:0.40)
-# ν_p_search = collect(0.00:0.002:0.02)
+# ν_p_search = collect(0.00:0.005:0.02)
 # β_search_szie = length(β_search)
 # θ_search_szie = length(θ_search)
 # η_search_szie = length(η_search)
@@ -1222,7 +1222,7 @@ calibration_results = [
 #     calibration_results[search_iter, 15] = variables.aggregate_variables.avg_loan_rate * 100
 #     calibration_results[search_iter, 16] = flag
 # end
-
+#
 # cd(homedir() * "/financial_frictions/")
 # cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
 # CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)

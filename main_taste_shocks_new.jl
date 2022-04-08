@@ -54,11 +54,11 @@ function parameters_function(;
     η::Real = 0.25,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
-    ψ::Real = 0.95,                 # exogenous retention ratio
+    ψ::Real = 1.0 - 1.0 / 20.0,     # exogenous retention ratio
     θ::Real = 1.0 / 3.0,            # diverting fraction
     p_h::Real = 1.0 / 7.0,          # prob. of history erased
     ζ_a::Real = 0.005,              # EV scale parameter (asset choice)
-    ζ_d::Real = 0.15,               # EV scale parameter (default)
+    ζ_d::Real = 0.17,               # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -635,6 +635,8 @@ function solve_aggregate_variable_function(policy_a::Array{Float64,5}, policy_d:
     leverage_ratio = 0.0
     KL_to_D_ratio = 0.0
     debt_to_earning_ratio = 0.0
+    debt_to_earning_ratio_num = 0.0
+    debt_to_earning_ratio_den = 0.0
     share_of_filers = 0.0
     share_in_debts = 0.0
     avg_loan_rate = 0.0
@@ -663,7 +665,7 @@ function solve_aggregate_variable_function(policy_a::Array{Float64,5}, policy_d:
 
             # average loan rate (persons-weighted)
             @inbounds @views avg_loan_rate_pw_num += (1.0 - policy_d[a_i, e_1_i, e_2_i, e_3_i]) * sum(policy_a[1:(a_ind_zero-1), a_i, e_1_i, e_2_i, e_3_i] .* (1.0 ./ q_e[1:(a_ind_zero-1)] .- 1.0))
-            @inbounds @views avg_loan_rate_pw_den += 1.0
+            @inbounds @views avg_loan_rate_pw_den += (1.0 - policy_d[a_i, e_1_i, e_2_i, e_3_i]) * sum(policy_a[1:(a_ind_zero-1), a_i, e_1_i, e_2_i, e_3_i])
 
             # total deposits
             @inbounds @views D += μ[a_i, e_1_i, e_2_i, e_3_i, 1] * (1.0 - policy_d[a_i, e_1_i, e_2_i, e_3_i]) * sum(policy_a[(a_ind_zero+1):end, a_i, e_1_i, e_2_i, e_3_i] .* qa_e[(a_ind_zero+1):end])
@@ -677,10 +679,15 @@ function solve_aggregate_variable_function(policy_a::Array{Float64,5}, policy_d:
 
             # debt-to-earning ratio
             if a_i < a_ind_zero
-                @inbounds debt_to_earning_ratio += μ[a_i, e_1_i, e_2_i, e_3_i, 1] * (-a_grid[a_i] / (w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i])))
+                @inbounds debt_to_earning_ratio_num += μ[a_i, e_1_i, e_2_i, e_3_i, 1] * -a_grid[a_i]
+                @inbounds debt_to_earning_ratio_den += μ[a_i, e_1_i, e_2_i, e_3_i, 1] * (w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]))
             end
         end
     end
+
+    # debt-to-earning ratio
+    # debt_to_earning_ratio = debt_to_earning_ratio_num / debt_to_earning_ratio_den
+    debt_to_earning_ratio = L / w
 
     # average loan rate
     avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
@@ -923,42 +930,42 @@ end
 #=================#
 # Solve the model #
 #=================#
-parameters = parameters_function()
+# parameters = parameters_function()
 # variables = variables_function(parameters; λ = 0.0)
 # solve_economy_function!(variables, parameters)
 
-variables_min = variables_function(parameters; λ = 0.0)
-solve_economy_function!(variables_min, parameters)
-flag = 1
+# variables_min = variables_function(parameters; λ = 0.0)
+# solve_economy_function!(variables_min, parameters)
+# flag = 1
+#
+# variables_max = variables_function(parameters; λ = 1.0 - sqrt(parameters.ψ))
+# solve_economy_function!(variables_max, parameters)
+# flag = 2
+#
+# compare_results = [
+#     variables_min.aggregate_prices.λ variables_max.aggregate_prices.λ
+#     variables_min.aggregate_prices.KL_to_D_ratio_λ variables_max.aggregate_prices.KL_to_D_ratio_λ
+#     variables_min.aggregate_variables.KL_to_D_ratio variables_max.aggregate_variables.KL_to_D_ratio
+#     variables_min.aggregate_variables.share_of_filers*100 variables_max.aggregate_variables.share_of_filers*100
+#     variables_min.aggregate_variables.share_in_debts*100 variables_max.aggregate_variables.share_in_debts*100
+#     variables_min.aggregate_variables.debt_to_earning_ratio*100 variables_max.aggregate_variables.debt_to_earning_ratio*100
+#     variables_min.aggregate_variables.avg_loan_rate*100 variables_max.aggregate_variables.avg_loan_rate*100
+#     # variables_min.policy_a[end,end,end,end,2] < parameters.a_grid[end]  variables_max.policy_a[end,end,end,end,2] < parameters.a_grid[end]
+# ]
 
-variables_max = variables_function(parameters; λ = 1.0 - sqrt(parameters.ψ))
-solve_economy_function!(variables_max, parameters)
-flag = 2
-
-compare_results = [
-    variables_min.aggregate_prices.λ variables_max.aggregate_prices.λ
-    variables_min.aggregate_prices.KL_to_D_ratio_λ variables_max.aggregate_prices.KL_to_D_ratio_λ
-    variables_min.aggregate_variables.KL_to_D_ratio variables_max.aggregate_variables.KL_to_D_ratio
-    variables_min.aggregate_variables.share_of_filers*100 variables_max.aggregate_variables.share_of_filers*100
-    variables_min.aggregate_variables.share_in_debts*100 variables_max.aggregate_variables.share_in_debts*100
-    variables_min.aggregate_variables.debt_to_earning_ratio*100 variables_max.aggregate_variables.debt_to_earning_ratio*100
-    variables_min.aggregate_variables.avg_loan_rate*100 variables_max.aggregate_variables.avg_loan_rate*100
-    # variables_min.policy_a[end,end,end,end,2] < parameters.a_grid[end]  variables_max.policy_a[end,end,end,end,2] < parameters.a_grid[end]
-]
-
-# variables = variables_function(parameters; λ = 0.0174079)
+# variables = variables_function(parameters; λ = 0.0193319674120158)
 # solve_economy_function!(variables, parameters)
 # flag = 3
 #
 # calibration_results = [
 #     parameters.β,
 #     parameters.δ,
-#     parameters.ν_s,
 #     parameters.τ,
 #     parameters.p_h,
 #     parameters.η,
 #     parameters.θ,
-#     parameters.ν_p,
+#     parameters.ζ_a,
+#     parameters.ζ_d,
 #     variables.aggregate_prices.λ,
 #     variables.aggregate_variables.KL_to_D_ratio,
 #     variables.aggregate_variables.share_of_filers * 100,
@@ -976,34 +983,35 @@ compare_results = [
 #=============#
 # Calibration #
 #=============#
-# β_search = 0.97/0.98 # collect(0.94:0.01:0.97)
-# θ_search = 1.0/3.0 # eps() # collect(0.04:0.001:0.07)
+# β_search = 0.95 # collect(0.94:0.01:0.97)
+# θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
 # η_search = 0.25 # collect(0.20:0.05:0.40)
-# ν_p_search = 0.0185 # collect(0.025:0.001:0.030)
+# ζ_a_search = collect(0.004:0.001:0.006)
+# ζ_d_search = collect(0.16:0.005:0.17)
 # β_search_szie = length(β_search)
 # θ_search_szie = length(θ_search)
 # η_search_szie = length(η_search)
-# ν_p_search_szie = length(ν_p_search)
-# search_size = β_search_szie * θ_search_szie * η_search_szie * ν_p_search_szie
-# # search_iter = 1
+# ζ_a_search_szie = length(ζ_a_search)
+# ζ_d_search_szie = length(ζ_d_search)
+# search_size = β_search_szie * θ_search_szie * η_search_szie * ζ_a_search_szie * ζ_d_search_szie
 # calibration_results = zeros(search_size, 16)
-#
-# for β_i in 1:β_search_szie, θ_i in 1:θ_search_szie, η_i in 1:η_search_szie, ν_p_i in 1:ν_p_search_szie
-#     parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ν_p = ν_p_search[ν_p_i])
+
+# for β_i in 1:β_search_szie, θ_i in 1:θ_search_szie, η_i in 1:η_search_szie, ζ_a_i in 1:ζ_a_search_szie, ζ_d_i in 1:ζ_d_search_szie
+#     parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ζ_a = ζ_a_search[ζ_a_i], ζ_d = ζ_d_search[ζ_d_i])
 #     # variables = variables_function(parameters; λ = 0.0)
 #     # solve_economy_function!(variables, parameters)
 #     # flag = 1
 #     variables_λ_lower, variables, flag = optimal_multiplier_function(parameters)
 #
-#     search_iter = (β_i - 1)*(θ_search_szie*η_search_szie*ν_p_search_szie) + (θ_i-1)*(η_search_szie*ν_p_search_szie) + (η_i-1)*ν_p_search_szie + ν_p_i
+#     search_iter = (β_i-1)*(θ_search_szie*η_search_szie*ζ_a_search_szie*ζ_d_search_szie) + (θ_i-1)*(η_search_szie*ζ_a_search_szie*ζ_d_search_szie) + (η_i-1)*ζ_a_search_szie*ζ_d_search_szie + (ζ_a_i-1)*ζ_d_search_szie + ζ_d_i
 #     calibration_results[search_iter, 1] = parameters.β
 #     calibration_results[search_iter, 2] = parameters.δ
-#     calibration_results[search_iter, 3] = parameters.ν_s
-#     calibration_results[search_iter, 4] = parameters.τ
-#     calibration_results[search_iter, 5] = parameters.p_h
-#     calibration_results[search_iter, 6] = parameters.η
-#     calibration_results[search_iter, 7] = parameters.θ
-#     calibration_results[search_iter, 8] = parameters.ν_p
+#     calibration_results[search_iter, 3] = parameters.τ
+#     calibration_results[search_iter, 4] = parameters.p_h
+#     calibration_results[search_iter, 5] = parameters.η
+#     calibration_results[search_iter, 6] = parameters.θ
+#     calibration_results[search_iter, 7] = parameters.ζ_a
+#     calibration_results[search_iter, 8] = parameters.ζ_d
 #     calibration_results[search_iter, 9] = variables.aggregate_prices.λ
 #     calibration_results[search_iter, 10] = variables.aggregate_variables.KL_to_D_ratio
 #     calibration_results[search_iter, 11] = variables.aggregate_variables.share_of_filers * 100
@@ -1017,7 +1025,7 @@ compare_results = [
 # cd(homedir() * "/financial_frictions/")
 # cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
 # CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
-#
+
 # short_results = [
 #     calibration_results[1,9]
 #     calibration_results[1,10]
@@ -1032,10 +1040,10 @@ compare_results = [
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-# var_names, results_A_NFF, results_A_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.10)
+var_names, results_A_NFF, results_A_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.10)
 # cd(homedir() * "/financial_frictions/")
-# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-# @save "results_eta.jld2" var_names, results_A_NFF, results_A_FF
+cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+@save "results_eta.jld2" var_names, results_A_NFF, results_A_FF
 # @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
 #=============================#

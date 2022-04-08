@@ -2,7 +2,7 @@ using Parameters
 using LinearAlgebra
 using ProgressMeter
 using Plots
-using QuantEcon: tauchen
+using QuantEcon: tauchen, rouwenhorst
 using Distributions
 using QuadGK
 
@@ -14,22 +14,22 @@ function parameters_function(;
     r_f::Real = 0.04,               # risk-free rate
     τ::Real = 0.04,                 # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.355,                # garnishment rate
+    η::Real = 0.25,                # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 1.0 / 3.0,            # capital share
     ψ::Real = 0.972,                # exogenous retention ratio
     θ::Real = 0.381,                # diverting fraction
-    ζ_a::Real = 0.005,              # EV scale parameter (asset choice)
-    ζ_d::Real = 0.005,              # EV scale parameter (default)
+    ζ_a::Real = 0.1,               # EV scale parameter (asset choice)
+    ζ_d::Real = 0.1,               # EV scale parameter (default)
     e_ρ::Real = 0.9630,             # AR(1) of persistent endowment shock
     e_σ::Real = 0.1300,             # s.d. of persistent endowment shock
-    e_size::Integer = 5,            # number of persistent endowment shock
+    e_size::Integer = 3,            # number of persistent endowment shock
     z_σ::Real = 0.35,               # s.d. of transitory endowment shock
     z_size::Integer = 3,            # number oftransitory endowment shock
-    a_min::Real = -2.5,             # min of asset holding
+    a_min::Real = -5.0,             # min of asset holding
     a_max::Real = 30.0,             # max of asset holding
-    a_size_neg::Integer = 201,      # number of grid of negative asset holding for VFI
-    a_size_pos::Integer = 251,      # number of grid of positive asset holding for VFI
+    a_size_neg::Integer = 101,      # number of grid of negative asset holding for VFI
+    a_size_pos::Integer = 51,       # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     h_size::Integer = 2,            # good and bad credit history
     p_h::Real = 1.0 / 7,            # probability of credit history erased
@@ -66,6 +66,9 @@ function parameters_function(;
     end
     e_grid, e_Γ = adda_cooper(e_size, e_ρ, e_σ)
     e_grid = exp.(e_grid)
+    # e_MC = rouwenhorst(e_size, e_ρ, e_σ, 0.0)
+    # e_Γ = e_MC.p
+    # e_grid = exp.(collect(e_MC.state_values))
 
     # transitory endowment shock
     z_bar = sqrt((z_size / (z_size - 1)) * (z_σ^2))
@@ -281,7 +284,8 @@ function value_function!(V_good::Array{Float64,3}, V_bad::Array{Float64,3}, vari
 
         # good credit history and repay
         c_repay = y .+ a .- variables.q[:, e_i] .* a_grid
-        variables.V_good_repay_all[:, a_i, e_i, z_i] = (1.0 - β) * utility_function.(c_repay, σ) .+ β * V_good_expect[:, e_i]
+        # variables.V_good_repay_all[:, a_i, e_i, z_i] = (1.0 - β) * utility_function.(c_repay, σ) .+ β * V_good_expect[:, e_i]
+        variables.V_good_repay_all[:, a_i, e_i, z_i] = utility_function.(c_repay, σ) .+ β * V_good_expect[:, e_i]
         V_good_repay_max = maximum(variables.V_good_repay_all[:, a_i, e_i, z_i])
         if V_good_repay_max == -Inf
             variables.V_good_repay[a_i, e_i, z_i] = V_good_repay_max
@@ -295,8 +299,8 @@ function value_function!(V_good::Array{Float64,3}, V_bad::Array{Float64,3}, vari
 
         # good credit history and default
         c_default = (1.0 - η) * y
-        variables.V_good_default[a_i, e_i, z_i] = a < -η*y ? (1.0 - β) * utility_function(c_default, σ) + β * V_bad_expect[1, e_i] : -Inf
-
+        # variables.V_good_default[a_i, e_i, z_i] = a < -η*y ? (1.0 - β) * utility_function(c_default, σ) + β * V_bad_expect[1, e_i] : -Inf
+        variables.V_good_default[a_i, e_i, z_i] = a < -η*y ? utility_function(c_default, σ) + β * V_bad_expect[1, e_i] : -Inf
         # good credit history
         V_max = max(variables.V_good_repay[a_i, e_i, z_i], variables.V_good_default[a_i, e_i, z_i])
         if V_max == -Inf
@@ -312,7 +316,8 @@ function value_function!(V_good::Array{Float64,3}, V_bad::Array{Float64,3}, vari
         if a_i >= a_ind_zero
             a_pos_i = a_i - a_ind_zero + 1
             c_bad = y .+ a .- variables.q[a_ind_zero:end, e_i] .* a_grid_pos
-            variables.V_bad_all[:, a_pos_i, e_i, z_i] = (1.0 - β) * utility_function.(c_bad, σ) .+ β * (p_h * V_good_expect[a_ind_zero:end, e_i] .+ (1.0 - p_h) * V_bad_expect[:, e_i])
+            # variables.V_bad_all[:, a_pos_i, e_i, z_i] = (1.0 - β) * utility_function.(c_bad, σ) .+ β * (p_h * V_good_expect[a_ind_zero:end, e_i] .+ (1.0 - p_h) * V_bad_expect[:, e_i])
+            variables.V_bad_all[:, a_pos_i, e_i, z_i] = utility_function.(c_bad, σ) .+ β * (p_h * V_good_expect[a_ind_zero:end, e_i] .+ (1.0 - p_h) * V_bad_expect[:, e_i])
             V_bad_max = maximum(variables.V_bad_all[:, a_pos_i, e_i, z_i])
             if V_bad_max == -Inf
                 variables.V_bad[a_pos_i, e_i, z_i] = V_bad_max
@@ -387,4 +392,4 @@ end
 
 parameters = parameters_function()
 variables = variables_function(parameters; λ = 0.0)
-solve_function!(variables, parameters; tol = 1E-8, iter_max = 1000)
+solve_function!(variables, parameters; tol = 1E-6, iter_max = 1000)

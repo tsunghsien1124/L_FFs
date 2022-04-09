@@ -545,8 +545,8 @@ savefig(plot_capital, "figures/plot_capital.pdf")
 #==========================#
 # Welfare comparison (CEV) #
 #==========================#
-parameters_CEV, results_CEV_NFF = results_CEV_function(results_V_NFF, results_V_pos_NFF)
-parameters_CEV, results_CEV_FF = results_CEV_function(results_V_FF, results_V_pos_FF)
+results_CEV_NFF = results_CEV_function(parameters, results_V_NFF, results_V_pos_NFF)
+results_CEV_FF = results_CEV_function(parameters, results_V_FF, results_V_pos_FF)
 η_grid = results_A_NFF[1, :]
 η_size = length(η_grid)
 CEV_comparison_NFF = zeros(η_size)
@@ -561,8 +561,8 @@ plot_welfare = plot(
     size = (plot_col * 800, plot_row * 500),
     box = :on,
     legend = :topleft,
-    ylimit = [0.0,6.0],
-    yticks = 0.0:0.5:6.0,
+    # ylimit = [0.0,6.0],
+    # yticks = 0.0:0.5:6.0,
     xticks = 0.1:0.1:0.9,
     xtickfont = font(18, "Computer Modern", :black),
     ytickfont = font(18, "Computer Modern", :black),

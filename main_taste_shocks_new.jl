@@ -8,7 +8,7 @@ using LinearAlgebra
 using Parameters: @unpack
 using PrettyTables
 using ProgressMeter
-using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions, MarkovChain
+using QuantEcon: stationary_distributions, MarkovChain # gridmake, rouwenhorst, tauchen
 using CSV
 using Tables
 
@@ -45,7 +45,7 @@ function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real = 0.0)
 end
 
 function parameters_function(;
-    β::Real = 0.95,                 # discount factor (households)
+    β::Real = 0.93 / 0.98,          # discount factor (households)
     ρ::Real = 0.98,                 # survival rate
     r_f::Real = 0.04,               # risk-free rate # 1.04*ρ-1.0
     β_f::Real = 1.0 / (1.0 + r_f),  # discount factor (bank)
@@ -54,11 +54,11 @@ function parameters_function(;
     η::Real = 0.25,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
-    ψ::Real = 1.0 - 1.0 / 20.0,     # exogenous retention ratio
+    ψ::Real = 1.0 - 1.0 / 10.0,     # exogenous retention ratio
     θ::Real = 1.0 / 3.0,            # diverting fraction
     p_h::Real = 1.0 / 7.0,          # prob. of history erased
-    ζ_a::Real = 0.005,              # EV scale parameter (asset choice)
-    ζ_d::Real = 0.17,               # EV scale parameter (default)
+    ζ_a::Real = 0.0055,             # EV scale parameter (asset choice)
+    ζ_d::Real = 0.18,               # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -810,7 +810,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
     # initialize pparameters
     parameters = parameters_function()
-    @unpack a_size, a_size_pos, a_size_μ, e_1_size, e_2_size, e_3_size, ν_size = parameters
+    @unpack a_size, a_size_pos, e_1_size, e_2_size, e_3_size = parameters
 
     # initialize variables that will be saved
     var_names = [
@@ -832,21 +832,17 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
     # initialize containers
     results_A_NFF = zeros(var_size, η_size)
-    # results_V_NFF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-    # results_V_pos_NFF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-    # results_μ_NFF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+    results_V_NFF = zeros(a_size, e_1_size, e_2_size, e_3_size, η_size)
+    results_V_pos_NFF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, η_size)
+    results_μ_NFF = zeros(a_size, e_1_size, e_2_size, e_3_size, 2, η_size)
     results_A_FF = zeros(var_size, η_size)
-    # results_V_FF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-    # results_V_pos_FF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-    # results_μ_FF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+    results_V_FF = zeros(a_size, e_1_size, e_2_size, e_3_size, η_size)
+    results_V_pos_FF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, η_size)
+    results_μ_FF = zeros(a_size, e_1_size, e_2_size, e_3_size, 2, η_size)
 
     # compute the optimal multipliers with different η
     for η_i = 1:η_size
-        η = η_grid[η_i]
-        a_min_η = -((η / 0.05) * 0.4 + 3)
-        a_size_neg_η = convert(Int, round(-a_min_η * 100 + 1))
-
-        parameters_η = parameters_function(η = η, a_min = a_min_η, a_size_neg = a_size_neg_η)
+        parameters_η = parameters_function(η = η_grid[η_i])
         variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_η)
 
         # save results
@@ -863,9 +859,9 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_A_NFF[11, η_i] = variables_NFF.aggregate_variables.share_in_debts
         results_A_NFF[12, η_i] = variables_NFF.aggregate_variables.debt_to_earning_ratio
         results_A_NFF[13, η_i] = variables_NFF.aggregate_variables.avg_loan_rate_pw
-        # results_V_NFF[:, :, :, :, :, η_i] = variables_NFF.V
-        # results_V_pos_NFF[:, :, :, :, :, η_i] = variables_NFF.V_pos
-        # results_μ_NFF[:, :, :, :, :, :, η_i] = variables_NFF.μ
+        results_V_NFF[:, :, :, :, η_i] = variables_NFF.V
+        results_V_pos_NFF[:, :, :, :, η_i] = variables_NFF.V_pos
+        results_μ_NFF[:, :, :, :, :, η_i] = variables_NFF.μ
 
         results_A_FF[1, η_i] = parameters_η.η
         results_A_FF[2, η_i] = variables_FF.aggregate_prices.r_k_λ
@@ -880,101 +876,92 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_A_FF[11, η_i] = variables_FF.aggregate_variables.share_in_debts
         results_A_FF[12, η_i] = variables_FF.aggregate_variables.debt_to_earning_ratio
         results_A_FF[13, η_i] = variables_FF.aggregate_variables.avg_loan_rate_pw
-        # results_V_FF[:, :, :, :, :, η_i] = variables_FF.V
-        # results_V_pos_FF[:, :, :, :, :, η_i] = variables_FF.V_pos
-        # results_μ_FF[:, :, :, :, :, :, η_i] = variables_FF.μ
+        results_V_FF[:, :, :, :, η_i] = variables_FF.V
+        results_V_pos_FF[:, :, :, :, η_i] = variables_FF.V_pos
+        results_μ_FF[:, :, :, :, :, η_i] = variables_FF.μ
     end
 
     # return results
-    # return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
-    return var_names, results_A_NFF, results_A_FF
+    return parameters, var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
 end
 
-function results_CEV_function(results_A::Array{Float64,2})
+function results_CEV_function(parameters::NamedTuple, results_V::Array{Float64,5}, results_V_pos::Array{Float64,5})
     """
     compute consumption equivalent variation (CEV) with various η compared to the smallest η (most lenient policy)
     """
 
-    # initialize pparameters
-    parameters = parameters_function()
-    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters
+    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_ind_zero, e_1_size, e_2_size, e_3_size, σ = parameters
 
     # initialize result matrix
-    η_size = size(results_A_NFF, 6)
-    results_CEV = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+    η_size = size(results_V)[end]
+    results_CEV = zeros(a_size, e_1_size, e_2_size, e_3_size, 2, η_size)
 
     # compute CEV for different η compared to the smallest η
-    for η_i = 1:η_size, e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size, ν_i = 1:ν_size
-        @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
-        # @inbounds @views V_itp_new = Spline1D(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i]; k = 1, bc = "extrapolate")
-        @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end])
-        # @inbounds @views V_itp_old = Spline1D(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end]; k = 1, bc = "extrapolate")
-        @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
-        # @inbounds @views V_pos_itp_new = Spline1D(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i]; k = 1, bc = "extrapolate")
-        @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end])
-        # @inbounds @views V_pos_itp_old = Spline1D(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end]; k = 1, bc = "extrapolate")
-        for a_μ_i = 1:a_size_μ
-            @inbounds a_μ = a_grid_μ[a_μ_i]
-            @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
-            if a_μ >= 0.0
-                a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
-                @inbounds results_CEV[a_pos_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = (V_pos_itp_new(a_μ) / V_pos_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
-            end
+    for η_i = 1:η_size, e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size, a_i = 1:a_size
+        @inbounds V_new = results_V[a_i, e_1_i, e_2_i, e_3_i, η_i]
+        @inbounds V_old = results_V[a_i, e_1_i, e_2_i, e_3_i, end]
+        @inbounds results_CEV[a_i, e_1_i, e_2_i, e_3_i, 1, η_i] = (V_new / V_old) ^ (1.0 / (1.0 - σ)) - 1.0
+        if a_i >= a_ind_zero
+            a_pos_i = a_i - a_ind_zero + 1
+            @inbounds V_pos_new = results_V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, η_i]
+            @inbounds V_pos_old = results_V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, end]
+            @inbounds results_CEV[a_pos_i, e_1_i, e_2_i, e_3_i, 2, η_i] = (V_pos_new / V_pos_old) ^ (1.0 / (1.0 - σ)) - 1.0
         end
     end
 
     # return results
-    return parameters, results_CEV
+    return results_CEV
 end
 
 #=================#
 # Solve the model #
 #=================#
-# parameters = parameters_function()
+parameters = parameters_function()
 # variables = variables_function(parameters; λ = 0.0)
 # solve_economy_function!(variables, parameters)
 
-# variables_min = variables_function(parameters; λ = 0.0)
-# solve_economy_function!(variables_min, parameters)
-# flag = 1
-#
-# variables_max = variables_function(parameters; λ = 1.0 - sqrt(parameters.ψ))
-# solve_economy_function!(variables_max, parameters)
-# flag = 2
-#
-# compare_results = [
-#     variables_min.aggregate_prices.λ variables_max.aggregate_prices.λ
-#     variables_min.aggregate_prices.KL_to_D_ratio_λ variables_max.aggregate_prices.KL_to_D_ratio_λ
-#     variables_min.aggregate_variables.KL_to_D_ratio variables_max.aggregate_variables.KL_to_D_ratio
-#     variables_min.aggregate_variables.share_of_filers*100 variables_max.aggregate_variables.share_of_filers*100
-#     variables_min.aggregate_variables.share_in_debts*100 variables_max.aggregate_variables.share_in_debts*100
-#     variables_min.aggregate_variables.debt_to_earning_ratio*100 variables_max.aggregate_variables.debt_to_earning_ratio*100
-#     variables_min.aggregate_variables.avg_loan_rate*100 variables_max.aggregate_variables.avg_loan_rate*100
-#     # variables_min.policy_a[end,end,end,end,2] < parameters.a_grid[end]  variables_max.policy_a[end,end,end,end,2] < parameters.a_grid[end]
-# ]
+variables_min = variables_function(parameters; λ = 0.0)
+solve_economy_function!(variables_min, parameters)
+flag = 1
 
-# variables = variables_function(parameters; λ = 0.0193319674120158)
-# solve_economy_function!(variables, parameters)
-# flag = 3
-#
-# calibration_results = [
-#     parameters.β,
-#     parameters.δ,
-#     parameters.τ,
-#     parameters.p_h,
-#     parameters.η,
-#     parameters.θ,
-#     parameters.ζ_a,
-#     parameters.ζ_d,
-#     variables.aggregate_prices.λ,
-#     variables.aggregate_variables.KL_to_D_ratio,
-#     variables.aggregate_variables.share_of_filers * 100,
-#     variables.aggregate_variables.D / variables.aggregate_variables.L,
-#     variables.aggregate_variables.share_in_debts * 100,
-#     variables.aggregate_variables.debt_to_earning_ratio * 100,
-#     variables.aggregate_variables.avg_loan_rate * 100,
-#     flag
-#     ]
+variables_max = variables_function(parameters; λ = 1.0 - sqrt(parameters.ψ))
+solve_economy_function!(variables_max, parameters)
+flag = 2
+
+compare_results = [
+    variables_min.aggregate_prices.λ variables_max.aggregate_prices.λ
+    variables_min.aggregate_prices.KL_to_D_ratio_λ variables_max.aggregate_prices.KL_to_D_ratio_λ
+    variables_min.aggregate_variables.KL_to_D_ratio variables_max.aggregate_variables.KL_to_D_ratio
+    variables_min.aggregate_variables.share_of_filers*100 variables_max.aggregate_variables.share_of_filers*100
+    variables_min.aggregate_variables.share_in_debts*100 variables_max.aggregate_variables.share_in_debts*100
+    variables_min.aggregate_variables.debt_to_earning_ratio*100 variables_max.aggregate_variables.debt_to_earning_ratio*100
+    variables_min.aggregate_variables.avg_loan_rate*100 variables_max.aggregate_variables.avg_loan_rate*100
+    # variables_min.policy_a[end,end,end,end,2] < parameters.a_grid[end]  variables_max.policy_a[end,end,end,end,2] < parameters.a_grid[end]
+]
+
+variables = variables_function(parameters; λ = 0.0381861)
+solve_economy_function!(variables, parameters)
+flag = 3
+
+calibration_results = [
+    parameters.β,
+    parameters.δ,
+    parameters.τ,
+    parameters.p_h,
+    parameters.η,
+    parameters.ψ,
+    parameters.θ,
+    parameters.ζ_a,
+    parameters.ζ_d,
+    variables.aggregate_prices.λ,
+    variables.aggregate_variables.KL_to_D_ratio,
+    variables.aggregate_variables.share_of_filers * 100,
+    variables.aggregate_variables.D / variables.aggregate_variables.L,
+    variables.aggregate_variables.share_in_debts * 100,
+    variables.aggregate_variables.debt_to_earning_ratio * 100,
+    variables.aggregate_variables.avg_loan_rate * 100,
+    flag
+    ]
 
 # parameters = parameters_function()
 # variables = variables_function(parameters; λ = 0.02496311756496223)
@@ -983,48 +970,49 @@ end
 #=============#
 # Calibration #
 #=============#
-# β_search = 0.95 # collect(0.94:0.01:0.97)
-# θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
-# η_search = 0.25 # collect(0.20:0.05:0.40)
-# ζ_a_search = collect(0.004:0.001:0.006)
-# ζ_d_search = collect(0.16:0.005:0.17)
-# β_search_szie = length(β_search)
-# θ_search_szie = length(θ_search)
-# η_search_szie = length(η_search)
-# ζ_a_search_szie = length(ζ_a_search)
-# ζ_d_search_szie = length(ζ_d_search)
-# search_size = β_search_szie * θ_search_szie * η_search_szie * ζ_a_search_szie * ζ_d_search_szie
-# calibration_results = zeros(search_size, 16)
+β_search = 0.93 / 0.98 # collect(0.94:0.01:0.97)
+θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
+η_search = 0.25 # collect(0.20:0.05:0.40)
+ζ_a_search = 0.005 # collect(0.004:0.001:0.006)
+ζ_d_search = 0.18 # collect(0.16:0.005:0.17)
+β_search_szie = length(β_search)
+θ_search_szie = length(θ_search)
+η_search_szie = length(η_search)
+ζ_a_search_szie = length(ζ_a_search)
+ζ_d_search_szie = length(ζ_d_search)
+search_size = β_search_szie * θ_search_szie * η_search_szie * ζ_a_search_szie * ζ_d_search_szie
+calibration_results = zeros(search_size, 17)
 
-# for β_i in 1:β_search_szie, θ_i in 1:θ_search_szie, η_i in 1:η_search_szie, ζ_a_i in 1:ζ_a_search_szie, ζ_d_i in 1:ζ_d_search_szie
-#     parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ζ_a = ζ_a_search[ζ_a_i], ζ_d = ζ_d_search[ζ_d_i])
-#     # variables = variables_function(parameters; λ = 0.0)
-#     # solve_economy_function!(variables, parameters)
-#     # flag = 1
-#     variables_λ_lower, variables, flag = optimal_multiplier_function(parameters)
-#
-#     search_iter = (β_i-1)*(θ_search_szie*η_search_szie*ζ_a_search_szie*ζ_d_search_szie) + (θ_i-1)*(η_search_szie*ζ_a_search_szie*ζ_d_search_szie) + (η_i-1)*ζ_a_search_szie*ζ_d_search_szie + (ζ_a_i-1)*ζ_d_search_szie + ζ_d_i
-#     calibration_results[search_iter, 1] = parameters.β
-#     calibration_results[search_iter, 2] = parameters.δ
-#     calibration_results[search_iter, 3] = parameters.τ
-#     calibration_results[search_iter, 4] = parameters.p_h
-#     calibration_results[search_iter, 5] = parameters.η
-#     calibration_results[search_iter, 6] = parameters.θ
-#     calibration_results[search_iter, 7] = parameters.ζ_a
-#     calibration_results[search_iter, 8] = parameters.ζ_d
-#     calibration_results[search_iter, 9] = variables.aggregate_prices.λ
-#     calibration_results[search_iter, 10] = variables.aggregate_variables.KL_to_D_ratio
-#     calibration_results[search_iter, 11] = variables.aggregate_variables.share_of_filers * 100
-#     calibration_results[search_iter, 12] = variables.aggregate_variables.D / variables.aggregate_variables.L
-#     calibration_results[search_iter, 13] = variables.aggregate_variables.share_in_debts * 100
-#     calibration_results[search_iter, 14] = variables.aggregate_variables.debt_to_earning_ratio * 100
-#     calibration_results[search_iter, 15] = variables.aggregate_variables.avg_loan_rate * 100
-#     calibration_results[search_iter, 16] = flag
-# end
+for β_i in 1:β_search_szie, θ_i in 1:θ_search_szie, η_i in 1:η_search_szie, ζ_a_i in 1:ζ_a_search_szie, ζ_d_i in 1:ζ_d_search_szie
+    parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ζ_a = ζ_a_search[ζ_a_i], ζ_d = ζ_d_search[ζ_d_i])
+    # variables = variables_function(parameters; λ = 0.0)
+    # solve_economy_function!(variables, parameters)
+    # flag = 1
+    variables_λ_lower, variables, flag = optimal_multiplier_function(parameters)
+
+    search_iter = (β_i-1)*(θ_search_szie*η_search_szie*ζ_a_search_szie*ζ_d_search_szie) + (θ_i-1)*(η_search_szie*ζ_a_search_szie*ζ_d_search_szie) + (η_i-1)*ζ_a_search_szie*ζ_d_search_szie + (ζ_a_i-1)*ζ_d_search_szie + ζ_d_i
+    calibration_results[search_iter, 1] = parameters.β
+    calibration_results[search_iter, 2] = parameters.δ
+    calibration_results[search_iter, 3] = parameters.τ
+    calibration_results[search_iter, 4] = parameters.p_h
+    calibration_results[search_iter, 5] = parameters.η
+    calibration_results[search_iter, 6] = parameters.ψ
+    calibration_results[search_iter, 7] = parameters.θ
+    calibration_results[search_iter, 8] = parameters.ζ_a
+    calibration_results[search_iter, 9] = parameters.ζ_d
+    calibration_results[search_iter, 10] = variables.aggregate_prices.λ
+    calibration_results[search_iter, 11] = variables.aggregate_variables.KL_to_D_ratio
+    calibration_results[search_iter, 12] = variables.aggregate_variables.share_of_filers * 100
+    calibration_results[search_iter, 13] = variables.aggregate_variables.D / variables.aggregate_variables.L
+    calibration_results[search_iter, 14] = variables.aggregate_variables.share_in_debts * 100
+    calibration_results[search_iter, 15] = variables.aggregate_variables.debt_to_earning_ratio * 100
+    calibration_results[search_iter, 16] = variables.aggregate_variables.avg_loan_rate * 100
+    calibration_results[search_iter, 17] = flag
+end
 
 # cd(homedir() * "/financial_frictions/")
-# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-# CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
+cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
 
 # short_results = [
 #     calibration_results[1,9]
@@ -1040,11 +1028,11 @@ end
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-var_names, results_A_NFF, results_A_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.10)
+# var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.10)
 # cd(homedir() * "/financial_frictions/")
 cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-@save "results_eta.jld2" var_names, results_A_NFF, results_A_FF
-# @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+@load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
 #=============================#
 # Solve transitional dynamics #

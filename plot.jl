@@ -545,6 +545,9 @@ savefig(plot_capital, "figures/plot_capital.pdf")
 #==========================#
 # Welfare comparison (CEV) #
 #==========================#
+parameters_NFF, results_CEV_NFF = results_CEV_function(results_A_NFF)
+parameters_FF, results_CEV_FF = results_CEV_function(results_A_FF)
+
 results_CEV_NFF = results_CEV_function(parameters, results_V_NFF, results_V_pos_NFF)
 results_CEV_FF = results_CEV_function(parameters, results_V_FF, results_V_pos_FF)
 η_grid = results_A_NFF[1, :]

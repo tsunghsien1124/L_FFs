@@ -15,7 +15,7 @@ cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Fi
 plot_col = 1
 plot_row = 1
 plot_q_e_1_index = 2
-plot_q_index = findall(-5.0 .<= parameters.a_grid .<= 0.0)
+plot_q_index = findall(-3.0 .<= parameters.a_grid .<= 0.0)
 plot_q = plot(
     size = (plot_col * 800, plot_row * 500),
     box = :on,
@@ -29,8 +29,10 @@ plot_q = plot(
     titlefont = font(18, "Computer Modern", :black),
     guidefont = font(18, "Computer Modern", :black),
     legendfont = font(18, "Computer Modern", :black),
-    ylabel = "\$ q(a',e) \$",
-    xlabel = "\$ \\textrm{Loan\\ choice\\ } a'<0 \$"
+    # ylabel = "\$ q(a',e) \$",
+    ylabel = "q(a',e)",
+    # xlabel = "\$ \\textrm{Loan\\ choice\\ } a'<0 \$"
+    xlabel = "Loan choice a'<0"
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
@@ -38,24 +40,27 @@ plot_q = plot!(
     linecolor = :blue,
     linewidth = 3,
     # label = "\$ \\textrm{Low\\ persistent\\ productivity}\$",
+    # label = "Low persistent productivity",
+    margin = 4mm,
+)
+plot_q = plot!(
+    parameters.a_grid[plot_q_index],
+    variables.q[plot_q_index, plot_q_e_1_index, 2],
+    linecolor = :red,
+    linestyle = :dash,
+    linewidth = 3,
+    # label = "\$ \\textrm{Median\\ persistent\\ productivity} \$",
+    # label = "Median persistent productivity",
     margin = 4mm,
 )
 plot_q = plot!(
     parameters.a_grid[plot_q_index],
     variables.q[plot_q_index, plot_q_e_1_index, 3],
-    linecolor = :red,
-    linestyle = :dash,
-    linewidth = 3,
-    # label = "\$ \\textrm{Median\\ persistent\\ productivity} \$",
-    margin = 4mm,
-)
-plot_q = plot!(
-    parameters.a_grid[plot_q_index],
-    variables.q[plot_q_index, plot_q_e_1_index, 5],
     linecolor = :black,
     linestyle = :dashdot,
     linewidth = 3,
     # label = "\$ \\textrm{High\\ persistent\\ productivity} \$",
+    # label = "High persistent productivity",
     margin = 4mm,
     titlefontsize=18,
     tickfontsize=18,
@@ -545,25 +550,23 @@ savefig(plot_capital, "figures/plot_capital.pdf")
 #==========================#
 # Welfare comparison (CEV) #
 #==========================#
-parameters_NFF, results_CEV_NFF = results_CEV_function(results_A_NFF)
-parameters_FF, results_CEV_FF = results_CEV_function(results_A_FF)
-
-results_CEV_NFF = results_CEV_function(parameters, results_V_NFF, results_V_pos_NFF)
-results_CEV_FF = results_CEV_function(parameters, results_V_FF, results_V_pos_FF)
+parameters = parameters_function()
+results_CEV_NFF = results_CEV_function(parameters, results_A_NFF, results_V_NFF, results_V_pos_NFF)
+results_CEV_FF = results_CEV_function(parameters, results_A_FF, results_V_FF, results_V_pos_FF)
 η_grid = results_A_NFF[1, :]
 η_size = length(η_grid)
 CEV_comparison_NFF = zeros(η_size)
 CEV_comparison_FF = zeros(η_size)
-for η_i = 1:η_size
-    @inbounds CEV_comparison_NFF[η_i] = sum(results_CEV_NFF[:, :, :, :, :, η_i] .* results_μ_NFF[:, :, :, :, :, η_i]) *100
-    @inbounds CEV_comparison_FF[η_i] = sum(results_CEV_FF[:, :, :, :, :, η_i] .* results_μ_FF[:, :, :, :, :, η_i]) * 100
+for η_i in 1:η_size
+    CEV_comparison_NFF[η_i] = sum(results_μ_NFF[:,:,:,:,:,:,η_i] .* results_CEV_NFF[:,:,:,:,:,:,η_i])
+    CEV_comparison_FF[η_i] = sum(results_μ_FF[:,:,:,:,:,:,η_i] .* results_CEV_FF[:,:,:,:,:,:,η_i])
 end
 plot_col = 1
 plot_row = 1
 plot_welfare = plot(
     size = (plot_col * 800, plot_row * 500),
     box = :on,
-    legend = :topleft,
+    legend = :bottomleft,
     # ylimit = [0.0,6.0],
     # yticks = 0.0:0.5:6.0,
     xticks = 0.1:0.1:0.9,
@@ -582,12 +585,15 @@ plot_welfare = plot!(
     markerstrokecolor = :blue,
     linecolor = :blue,
     linewidth = 3,
-    label = "\$ \\textrm{Without\\ financial\\ frictions} \$",
-    xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
-    ylabel = "\$ \\% \$",
+    # label = "\$ \\textrm{Without\\ financial\\ frictions} \$",
+    label = "without financial frictions",
+    # xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    xlabel = "wage garnishment rate",
+    # ylabel = "\$ \\% \$",
+    ylabel = "%",
     margin = 4mm,
 )
-plot_welfare = vline!([η_grid[argmax(CEV_comparison_NFF)]], linecolor = :blue, linewidth = 3, linestyle = :dot, label = "")
+# plot_welfare = vline!([η_grid[argmax(CEV_comparison_NFF)]], linecolor = :blue, linewidth = 3, linestyle = :dot, label = "")
 plot_welfare = plot!(
     η_grid,
     CEV_comparison_FF,
@@ -598,7 +604,8 @@ plot_welfare = plot!(
     linecolor = :red,
     linestyle = :dash,
     linewidth = 3,
-    label = "\$ \\textrm{With\\ financial\\ frictions} \$",
+    # label = "\$ \\textrm{With\\ financial\\ frictions} \$",
+    label = "with financial frictions",
     # title = "Welfare (CEV)",
     margin = 4mm,
     titlefontsize=18,
@@ -606,9 +613,148 @@ plot_welfare = plot!(
     guidefontsize=18,
     legendfontsize=16,
 )
-plot_welfare = vline!([η_grid[argmax(CEV_comparison_FF)]], linecolor = :red, linewidth = 3, linestyle = :dot, label = "")
+# plot_welfare = vline!([η_grid[argmax(CEV_comparison_FF)]], linecolor = :red, linewidth = 3, linestyle = :dot, label = "")
 
 savefig(plot_welfare, "figures/plot_welfare.pdf")
+
+#==============================#
+# Welfare comparison (Newborn) #
+#==============================#
+parameters = parameters_function()
+η_grid = results_A_NFF[1, :]
+η_size = length(η_grid)
+newborn_comparison_NFF = zeros(η_size)
+newborn_comparison_FF = zeros(η_size)
+for η_i in 1:η_size
+    for e_2_i in 1:parameters.e_2_size, e_1_i in 1:parameters.e_1_size
+        newborn_comparison_NFF[η_i] += parameters.G_e_1[e_1_i] * parameters.G_e_2[e_2_i] * results_V_NFF[parameters.a_ind_zero, e_1_i, e_2_i, 2, 2, η_i]
+        newborn_comparison_FF[η_i] += parameters.G_e_1[e_1_i] * parameters.G_e_2[e_2_i] * results_V_FF[parameters.a_ind_zero, e_1_i, e_2_i, 2, 2, η_i]
+    end
+end
+plot_col = 1
+plot_row = 1
+plot_welfare_newborn = plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :topleft,
+    # ylimit = [0.0,6.0],
+    # yticks = 0.0:0.5:6.0,
+    xticks = 0.1:0.1:0.9,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_welfare_newborn = plot!(
+    η_grid,
+    newborn_comparison_NFF,
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    markerstrokecolor = :blue,
+    linecolor = :blue,
+    linewidth = 3,
+    # label = "\$ \\textrm{Without\\ financial\\ frictions} \$",
+    label = "without financial frictions",
+    # xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    xlabel = "wage garnishment rate",
+    # ylabel = "\$ \\% \$",
+    # ylabel = "%",
+    margin = 4mm,
+)
+# plot_welfare_newborn = vline!([η_grid[argmax(newborn_comparison_NFF)]], linecolor = :blue, linewidth = 3, linestyle = :dot, label = "")
+plot_welfare_newborn = plot!(
+    η_grid,
+    newborn_comparison_FF,
+    markershapes = :square,
+    markercolor = :red,
+    markersize = 6,
+    markerstrokecolor = :red,
+    linecolor = :red,
+    linestyle = :dash,
+    linewidth = 3,
+    # label = "\$ \\textrm{With\\ financial\\ frictions} \$",
+    label = "with financial frictions",
+    # title = "Welfare (CEV)",
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+)
+# plot_welfare_newborn = vline!([η_grid[argmax(newborn_comparison_FF)]], linecolor = :red, linewidth = 3, linestyle = :dot, label = "")
+
+savefig(plot_welfare_newborn, "figures/plot_welfare_newborn.pdf")
+
+#================================#
+# Welfare comparison (HHs favor) #
+#================================#
+parameters = parameters_function()
+results_HHs_favor_NFF = results_HHs_favor_function(parameters, results_A_NFF, results_V_NFF, results_V_pos_NFF)
+results_HHs_favor_FF = results_HHs_favor_function(parameters, results_A_FF, results_V_FF, results_V_pos_FF)
+η_grid = results_A_NFF[1, :]
+η_size = length(η_grid)
+HHs_favor_comparison_NFF = zeros(η_size)
+HHs_favor_comparison_FF = zeros(η_size)
+for η_i in 1:η_size
+    HHs_favor_comparison_NFF[η_i] = sum(results_μ_NFF[:,:,:,:,:,:,η_i] .* results_HHs_favor_NFF[:,:,:,:,:,:,η_i])
+    HHs_favor_comparison_FF[η_i] = sum(results_μ_FF[:,:,:,:,:,:,η_i] .* results_HHs_favor_FF[:,:,:,:,:,:,η_i])
+end
+plot_col = 1
+plot_row = 1
+plot_welfare_HHs_favor = plot(
+    size = (plot_col * 800, plot_row * 500),
+    box = :on,
+    legend = :bottomleft,
+    # ylimit = [0.0,6.0],
+    # yticks = 0.0:0.5:6.0,
+    xticks = 0.1:0.1:0.9,
+    xtickfont = font(18, "Computer Modern", :black),
+    ytickfont = font(18, "Computer Modern", :black),
+    titlefont = font(18, "Computer Modern", :black),
+    guidefont = font(18, "Computer Modern", :black),
+    legendfont = font(18, "Computer Modern", :black),
+)
+plot_welfare_HHs_favor = plot!(
+    η_grid,
+    HHs_favor_comparison_NFF,
+    markershapes = :circle,
+    markercolor = :blue,
+    markersize = 7,
+    markerstrokecolor = :blue,
+    linecolor = :blue,
+    linewidth = 3,
+    # label = "\$ \\textrm{Without\\ financial\\ frictions} \$",
+    label = "without financial frictions",
+    # xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate\\ } \\eta \$",
+    xlabel = "wage garnishment rate",
+    # ylabel = "\$ \\% \$",
+    ylabel = "%",
+    margin = 4mm,
+)
+# plot_welfare = vline!([η_grid[argmax(CEV_comparison_NFF)]], linecolor = :blue, linewidth = 3, linestyle = :dot, label = "")
+plot_welfare_HHs_favor = plot!(
+    η_grid,
+    HHs_favor_comparison_FF,
+    markershapes = :square,
+    markercolor = :red,
+    markersize = 6,
+    markerstrokecolor = :red,
+    linecolor = :red,
+    linestyle = :dash,
+    linewidth = 3,
+    # label = "\$ \\textrm{With\\ financial\\ frictions} \$",
+    label = "with financial frictions",
+    # title = "Welfare (CEV)",
+    margin = 4mm,
+    titlefontsize=18,
+    tickfontsize=18,
+    guidefontsize=18,
+    legendfontsize=16,
+)
+
+savefig(plot_welfare_HHs_favor, "figures/plot_welfare_HHs_favor.pdf")
 
 #============#
 # Equilibria #

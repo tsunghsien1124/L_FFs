@@ -73,9 +73,9 @@ function parameters_function(;
     ν_s::Real = 0.0000,             # scale of patience
     ν_p::Real = 0.010074,           # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -3.0,             # min of asset holding
+    a_min::Real = -12.0,            # min of asset holding
     a_max::Real = 500.0,            # max of asset holding
-    a_size_neg::Integer = 601,      # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 1201,     # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 201,      # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     μ_scale::Integer = 1,           # scale for the asset holding gridpoints for distribution
@@ -684,7 +684,6 @@ function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, ι::Real,
 
     # loop over states
     for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-
         for a_p_i = 1:(a_size_neg-1)
             @inbounds a_p = a_grid[a_p_i]
             for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size, e_1_p_i = 1:e_1_size
@@ -1093,20 +1092,19 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     """
 
     # check the case of λ_min = 0.0
-    λ_lower = max(λ_min_adhoc, 0.0)
-    variables_λ_lower = variables_function(parameters; λ = λ_lower)
-    ED_λ_lower = solve_economy_function!(variables_λ_lower, parameters)
-    if ED_λ_lower > 0.0
-        return variables_λ_lower, variables_λ_lower, 1
+    λ_min = 0.0
+    variables_λ_min = variables_function(parameters; λ = λ_min)
+    ED_λ_min = solve_economy_function!(variables_λ_min, parameters)
+    if ED_λ_min > 0.0
+        return variables_λ_min, variables_λ_min, 1
     end
 
     # check the case of λ_max = 1-ψ^(1/2)
     λ_max = 1.0 - sqrt(parameters.ψ)
-    λ_upper = min(λ_max_adhoc, λ_max)
-    variables_λ_upper = variables_function(parameters; λ = λ_upper)
-    ED_λ_upper = solve_economy_function!(variables_λ_upper, parameters)
-    if ED_λ_upper < 0.0
-        return variables_λ_lower, variables_λ_upper, 2 # meaning solution doesn't exist!
+    variables_λ_max = variables_function(parameters; λ = λ_max)
+    ED_λ_max = solve_economy_function!(variables_λ_max, parameters)
+    if ED_λ_max < 0.0
+        return variables_λ_min, variables_λ_max, 2 # meaning solution doesn't exist!
     end
 
     # initialization
@@ -1114,6 +1112,8 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     crit = Inf
     λ_optimal = 0.0
     variables_λ_optimal = []
+    λ_lower = max(λ_min_adhoc, λ_min)
+    λ_upper = min(λ_max_adhoc, λ_max)
 
     # solve equlibrium multiplier by bisection
     while crit > tol && search_iter < iter_max
@@ -1141,7 +1141,7 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     end
 
     # return results
-    return variables_λ_lower, variables_λ_optimal, 3
+    return variables_λ_min, variables_λ_optimal, 3
 end
 
 function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
@@ -1154,8 +1154,8 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
     η_size = length(η_grid)
 
     # initialize pparameters
-    # parameters = parameters_function()
-    # @unpack a_size, a_size_pos, a_size_μ, e_1_size, e_2_size, e_3_size, ν_size = parameters
+    parameters = parameters_function()
+    @unpack a_size, a_size_pos, a_size_μ, e_1_size, e_2_size, e_3_size, ν_size = parameters
 
     # initialize variables that will be saved
     var_names = [
@@ -1172,28 +1172,29 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         "Sahre in Debt", #=11=#
         "Debt-to-Earning Ratio", #=12=#
         "Average Loan Rate", #=13=#
-        "Flag"  #=14=#
+        "Flag",  #=14=#
     ]
     var_size = length(var_names)
 
     # initialize containers
     results_A_NFF = zeros(var_size, η_size)
-    # results_V_NFF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-    # results_V_pos_NFF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-    # results_μ_NFF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+    results_V_NFF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+    results_V_pos_NFF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+    results_μ_NFF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
     results_A_FF = zeros(var_size, η_size)
-    # results_V_FF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-    # results_V_pos_FF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-    # results_μ_FF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+    results_V_FF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+    results_V_pos_FF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+    results_μ_FF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
 
     # compute the optimal multipliers with different η
     for η_i = 1:η_size
-
         η = η_grid[η_i]
-        a_min_η = -((η + 0.05) * 10)
-        a_size_neg_η = convert(Int, round(-a_min_η * 200 + 1))
-        parameters_η = parameters_function(η = η, a_min = a_min_η, a_size_neg = a_size_neg_η)
-        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_η)
+        # a_min_η = -((η + 0.05) * 10)
+        # a_size_neg_η = convert(Int, round(-a_min_η * 200 + 1))
+        # parameters_η = parameters_function(η = η, a_min = a_min_η, a_size_neg = a_size_neg_η)
+        parameters_η = parameters_function(η = η)
+        λ_min_adhoc_η = η_i > 1 ? results_A_FF[3,η_i-1] : -Inf
+        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_η; λ_min_adhoc = λ_min_adhoc_η)
 
         # save results
         results_A_NFF[1, η_i] = parameters_η.η
@@ -1210,9 +1211,9 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_A_NFF[12, η_i] = variables_NFF.aggregate_variables.debt_to_earning_ratio
         results_A_NFF[13, η_i] = variables_NFF.aggregate_variables.avg_loan_rate
         results_A_NFF[14, η_i] = 1
-        # results_V_NFF[:, :, :, :, :, η_i] = variables_NFF.V
-        # results_V_pos_NFF[:, :, :, :, :, η_i] = variables_NFF.V_pos
-        # results_μ_NFF[:, :, :, :, :, :, η_i] = variables_NFF.μ
+        results_V_NFF[:, :, :, :, :, η_i] = variables_NFF.V
+        results_V_pos_NFF[:, :, :, :, :, η_i] = variables_NFF.V_pos
+        results_μ_NFF[:, :, :, :, :, :, η_i] = variables_NFF.μ
 
         results_A_FF[1, η_i] = parameters_η.η
         results_A_FF[2, η_i] = variables_FF.aggregate_prices.r_k_λ
@@ -1228,72 +1229,134 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_A_FF[12, η_i] = variables_FF.aggregate_variables.debt_to_earning_ratio
         results_A_FF[13, η_i] = variables_FF.aggregate_variables.avg_loan_rate
         results_A_FF[14, η_i] = flag
-        # results_V_FF[:, :, :, :, :, η_i] = variables_FF.V
-        # results_V_pos_FF[:, :, :, :, :, η_i] = variables_FF.V_pos
-        # results_μ_FF[:, :, :, :, :, :, η_i] = variables_FF.μ
+        results_V_FF[:, :, :, :, :, η_i] = variables_FF.V
+        results_V_pos_FF[:, :, :, :, :, η_i] = variables_FF.V_pos
+        results_μ_FF[:, :, :, :, :, :, η_i] = variables_FF.μ
     end
 
     # return results
-    # return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
-    return var_names, results_A_NFF, results_A_FF
+    return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
+    # return var_names, results_A_NFF, results_A_FF
 end
+#
+# function results_V_and_μ_function(results_A::Array{Float64,2})
+#     """
+#     compute value function and cross-sectional distribution across η
+#     """
+#
+#     # garnishment rate
+#     η_grid = results_A[1,:]
+#     η_size = length(η_grid)
+#
+#     # largest garnishment rate
+#     η_max = η_grid[1]
+#     a_min_η_max = -((η_max + 0.05) * 10)
+#     a_size_neg_η_max = convert(Int, round(-a_min_η_max * 200 + 1))
+#     parameters_η_max = parameters_function(η = η_max, a_min = a_min_η_max, a_size_neg = a_size_neg_η_max)
+#
+#     # container
+#     @unpack a_grid_μ, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters_η_max
+#     results_V = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+#     results_V_pos = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, η_size)
+#     results_μ = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+#
+#     # compute CEV for different η compared to the smallest η
+#     for η_i = 1:η_size
+#
+#         η = η_grid[η_i]
+#         a_min_η = -((η + 0.05) * 10)
+#         a_size_neg_η = convert(Int, round(-a_min_η * 200 + 1))
+#         parameters_η = parameters_function(η = η, a_min = a_min_η, a_size_neg = a_size_neg_η)
+#         variables_η = variables_function(parameters_η; λ = results_A[3,η_i])
+#         solve_economy_function!(variables_η, parameters_η)
+#
+#         for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
+#
+#             @inbounds @views V_itp = Akima(parameters_η.a_grid, variables_η.V[:, e_1_i, e_2_i, e_3_i, ν_i])
+#             @inbounds @views V_pos_itp = Akima(parameters_η.a_grid_pos, variables_η.V_pos[:, e_1_i, e_2_i, e_3_i, ν_i])
+#
+#             for a_μ_i = 1:a_size_μ
+#                 @inbounds a_μ = a_grid_μ[a_μ_i]
+#                 @inbounds results_V[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, η_i] = V_itp(a_μ)
+#                 if a_μ >= a_min_η
+#                     a_μ_i_η = findall(parameters_η.a_grid_μ .≈ a_μ)[]
+#                     @inbounds results_μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = variables_η.μ[a_μ_i_η, e_1_i, e_2_i, e_3_i, ν_i, 1]
+#                     if a_μ >= 0.0
+#                         a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
+#                         @inbounds results_V_pos[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, η_i] = V_pos_itp(a_μ)
+#                         @inbounds results_μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = variables_η.μ[a_μ_i_η, e_1_i, e_2_i, e_3_i, ν_i, 2]
+#                     end
+#                 end
+#             end
+#         end
+#     end
+#
+#     # return results
+#     return parameters_η_max, results_V, results_V_pos, results_μ
+# end
 
-function results_CEV_function(results_A::Array{Float64,2})
+function results_CEV_function(parameters::NamedTuple, results_A::Array{Float64,2}, results_V::Array{Float64,6}, results_V_pos::Array{Float64,6})
     """
     compute consumption equivalent variation (CEV) with various η compared to the smallest η (most lenient policy)
     """
 
-    # initialize result matrix
-    η_grid = results_A[1,:]
-    η_size = length(η_grid)
+    # initialize pparameters
+    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters
 
-    η_max = η_grid[1]
-    a_min_η_max = -((η_max + 0.05) * 10)
-    a_size_neg_η_max = convert(Int, round(-a_min_η_max * 200 + 1))
-    parameters_η_max = parameters_function(η = η_max, a_min = a_min_η_max, a_size_neg = a_size_neg_η_max)
-    @unpack a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters_η_max
+    # initialize result matrix
+    η_size = size(results_A)[2]
     results_CEV = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
 
-    η_min = η_grid[end]
-    a_min_η_min = -((η_min + 0.05) * 10)
-    a_size_neg_η_min = convert(Int, round(-a_min_η_min * 200 + 1))
-    parameters_η_min = parameters_function(η = η_min, a_min = a_min_η_min, a_size_neg = a_size_neg_η_min)
-    variables_η_min = variables_function(parameters_η_min; λ = results_A[3,end])
-    solve_economy_function!(variables_η_min, parameters_η_min)
-
     # compute CEV for different η compared to the smallest η
-    for η_i = 1:η_size
-
-        η = η_grid[η_i]
-        a_min_η = -((η + 0.05) * 10)
-        a_size_neg_η = convert(Int, round(-a_min_η * 200 + 1))
-        parameters_η = parameters_function(η = η, a_min = a_min_η, a_size_neg = a_size_neg_η)
-        variables_η = variables_function(parameters_η; λ = results_A[3,η_i])
-        solve_economy_function!(variables_η, parameters_η)
-
-        for ν_i = 1:ν_size, e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size
-
-            @inbounds @views V_itp_new = Akima(parameters_η.a_grid, variables_η.V[:, e_1_i, e_2_i, e_3_i, ν_i])
-            @inbounds @views V_itp_old = Akima(parameters_η_min.a_grid, variables_η_min.V[:, e_1_i, e_2_i, e_3_i, ν_i])
-            @inbounds @views V_pos_itp_new = Akima(parameters_η.a_grid_pos, variables_η.V_pos[:, e_1_i, e_2_i, e_3_i, ν_i])
-            @inbounds @views V_pos_itp_old = Akima(parameters_η_min.a_grid_pos, variables_η_min.V_pos[:, e_1_i, e_2_i, e_3_i, ν_i])
-
-            for a_μ_i = 1:a_size_μ
-                @inbounds a_μ = a_grid_μ[a_μ_i]
-                if a_μ >= a_min_η
-                    a_μ_i_η = findall(parameters_η.a_grid_μ .≈ a_μ)[]
-                    @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = variables_η.μ[a_μ_i_η, e_1_i, e_2_i, e_3_i, ν_i, 1] * ((V_itp_new(a_μ) / V_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0)
-                    if a_μ >= 0.0
-                        a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
-                        @inbounds results_CEV[a_pos_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = variables_η.μ[a_μ_i_η, e_1_i, e_2_i, e_3_i, ν_i, 2]  * ((V_pos_itp_new(a_μ) / V_pos_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0)
-                    end
-                end
+    for η_i = 1:η_size, e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size, ν_i = 1:ν_size
+        @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+        @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+        @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+        @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+        for a_μ_i = 1:a_size_μ
+            @inbounds a_μ = a_grid_μ[a_μ_i]
+            @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
+            if a_μ >= 0.0
+                # a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
+                @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = (V_pos_itp_new(a_μ) / V_pos_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
             end
         end
     end
 
     # return results
-    return parameters_η_max, results_CEV
+    return results_CEV
+end
+
+function results_HHs_favor_function(parameters::NamedTuple, results_A::Array{Float64,2}, results_V::Array{Float64,6}, results_V_pos::Array{Float64,6})
+    """
+    compute consumption share of HHs in favor of the given η compared to the smallest η (most lenient policy)
+    """
+
+    # initialize pparameters
+    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters
+
+    # initialize result matrix
+    η_size = size(results_A)[2]
+    results_HHs_favor = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+
+    # compute CEV for different η compared to the smallest η
+    for η_i = 1:η_size, ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
+        @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+        @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+        @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+        @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+        for a_μ_i = 1:a_size_μ
+            @inbounds a_μ = a_grid_μ[a_μ_i]
+            @inbounds results_HHs_favor[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = V_itp_new(a_μ) >= V_itp_old(a_μ)
+            if a_μ >= 0.0
+                # a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
+                @inbounds results_HHs_favor[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = V_pos_itp_new(a_μ) >= V_pos_itp_old(a_μ)
+            end
+        end
+    end
+
+    # return results
+    return results_HHs_favor
 end
 
 #=================#
@@ -1320,32 +1383,29 @@ parameters = parameters_function()
 #     variables_min.policy_a[end, end, end, end, 2]<parameters.a_grid[end] variables_max.policy_a[end, end, end, end, 2]<parameters.a_grid[end]
 # ]
 
-# variables = variables_function(parameters; λ = 0.0170364025311602)
-# solve_economy_function!(variables, parameters)
-# flag = 3
-#
-# calibration_results = [
-#     parameters.β,
-#     parameters.δ,
-#     parameters.ν_s,
-#     parameters.τ,
-#     parameters.p_h,
-#     parameters.η,
-#     parameters.θ,
-#     parameters.ν_p,
-#     variables.aggregate_prices.λ,
-#     variables.aggregate_variables.KL_to_D_ratio,
-#     variables.aggregate_variables.share_of_filers * 100,
-#     variables.aggregate_variables.D / variables.aggregate_variables.L,
-#     variables.aggregate_variables.share_in_debts * 100,
-#     variables.aggregate_variables.debt_to_earning_ratio * 100,
-#     variables.aggregate_variables.avg_loan_rate * 100,
-#     flag
-#     ]
+variables = variables_function(parameters; λ = 0.0170364025311602)
+# variables = variables_function(parameters; λ = 0.0)
+solve_economy_function!(variables, parameters)
+flag = 3
 
-# parameters = parameters_function()
-# variables = variables_function(parameters; λ = 0.02496311756496223)
-# solve_economy_function!(variables, parameters)
+calibration_results = [
+    parameters.β,
+    parameters.δ,
+    parameters.ν_s,
+    parameters.τ,
+    parameters.p_h,
+    parameters.η,
+    parameters.θ,
+    parameters.ν_p,
+    variables.aggregate_prices.λ,
+    variables.aggregate_variables.KL_to_D_ratio,
+    variables.aggregate_variables.share_of_filers * 100,
+    variables.aggregate_variables.D / variables.aggregate_variables.L,
+    variables.aggregate_variables.share_in_debts * 100,
+    variables.aggregate_variables.debt_to_earning_ratio * 100,
+    variables.aggregate_variables.avg_loan_rate * 100,
+    flag
+    ]
 
 #=============#
 # Calibration #
@@ -1410,11 +1470,11 @@ parameters = parameters_function()
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-var_names, results_A_NFF, results_A_FF = results_η_function(η_min = 0.20, η_max = 0.80, η_step = 0.05)
+# var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.10)
 # cd(homedir() * "/financial_frictions/")
-cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-@save "results_eta.jld2" var_names results_A_NFF results_A_FF
-# @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+@load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
 #=============================#
 # Solve transitional dynamics #

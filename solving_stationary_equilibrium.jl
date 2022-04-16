@@ -1,28 +1,7 @@
-#===========================#
-# Import packages and files #
-#===========================#
-using Dierckx
-using FLOWMath
-using Distributions
-using QuadGK
-using JLD2: @save, @load
-using LinearAlgebra
-using Optim
-using Parameters: @unpack
-using PrettyTables
-using ProgressMeter
-using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions, MarkovChain
-using Roots
-# using UnicodePlots
-using CSV
-using Tables
+#=============================#
+# Solve stationary equlibrium #
+#=============================#
 
-# print out the number of threads
-println("Julia is running with $(Threads.nthreads()) threads...")
-
-#==================#
-# Define functions #
-#==================#
 function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real = 0.0)
     """
     Approximation of an autoregression process with a Markov chain proposed by Adda and Cooper (2003)
@@ -50,8 +29,8 @@ function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real = 0.0)
 end
 
 function parameters_function(;
-    β::Real = 0.94 / 0.98,          # discount factor (households)
-    ρ::Real = 0.98,                 # survival rate
+    β::Real = 0.940 / 0.980,        # discount factor (households)
+    ρ::Real = 0.980,                # survival rate
     r_f::Real = 0.04,               # risk-free rate # 1.04*ρ-1.0
     β_f::Real = 1.0 / (1.0 + r_f),  # discount factor (bank)
     τ::Real = 0.04,                 # transaction cost
@@ -62,7 +41,8 @@ function parameters_function(;
     ψ::Real = 1.0 - 1.0 / 20.0,     # exogenous retention ratio
     θ::Real = 1.0 / 3.0,            # diverting fraction
     p_h::Real = 1.0 / 7.0,          # prob. of history erased
-    ζ_d::Real = 0.001999,           # EV scale parameter (default)
+    κ::Real = 0.02,                 # filing cost
+    ζ_d::Real = 0.220,              # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -70,12 +50,12 @@ function parameters_function(;
     e_2_size::Integer = 3,          # number of persistent endowment shock
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
-    ν_s::Real = 0.0000,             # scale of patience
-    ν_p::Real = 0.010074,           # probability of patience
+    ν_s::Real = 0.9000,             # scale of patience
+    ν_p::Real = 0.1300,             # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -12.0,            # min of asset holding
     a_max::Real = 500.0,            # max of asset holding
-    a_size_neg::Integer = 1201,     # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 301,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 201,      # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     μ_scale::Integer = 1,           # scale for the asset holding gridpoints for distribution
@@ -143,6 +123,7 @@ function parameters_function(;
         ψ = ψ,
         θ = θ,
         p_h = p_h,
+        κ = κ,
         ζ_d = ζ_d,
         e_1_σ = e_1_σ,
         e_1_size = e_1_size,
@@ -207,6 +188,7 @@ mutable struct Mutable_Aggregate_Variables
     L::Real
     D::Real
     N::Real
+    ω::Real
     leverage_ratio::Real
     KL_to_D_ratio::Real
     debt_to_earning_ratio::Real
@@ -233,12 +215,10 @@ mutable struct Mutable_Variables
     policy_a::Array{Float64,5}
     policy_d::Array{Float64,5}
     policy_pos_a::Array{Float64,5}
-    # threshold_a::Array{Float64,4}
-    # threshold_e::Array{Float64,4}
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 150, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 240, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """
@@ -259,6 +239,29 @@ function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid
     end
     return lb, ub
 end
+
+# function min_bounds_function(obj::Function, a_grid::Array{Float64,1}, grid_min::Real, grid_max::Real; obj_range::Integer = 1)
+#     """
+#     compute bounds for minimization
+#     """
+#     grid_min_ind = findfirst(grid_min .<= a_grid)[]
+#     grid_max_ind = findlast(a_grid .<= grid_max)[]
+#     grid_adj = a_grid[grid_min_ind:grid_max_ind]
+#     grid_size = length(grid_adj)
+#     obj_grid = obj.(grid_adj)
+#     obj_index = argmin(obj_grid)
+#     if obj_index < (1 + obj_range)
+#         lb = grid_min
+#         @inbounds ub = grid_adj[obj_index+obj_range]
+#     elseif obj_index > (grid_size - obj_range)
+#         @inbounds lb = grid_adj[obj_index-obj_range]
+#         ub = grid_max
+#     else
+#         @inbounds lb = grid_adj[obj_index-obj_range]
+#         @inbounds ub = grid_adj[obj_index+obj_range]
+#     end
+#     return lb, ub
+# end
 
 function zero_bounds_function(V_d::Real, V_nd::Array{Float64,1}, a_grid::Array{Float64,1})
     """
@@ -347,16 +350,15 @@ function variables_function(parameters::NamedTuple; λ::Real)
     """
 
     # unpack parameters
-    @unpack a_ind_zero, a_size, a_grid, a_size_pos, a_size_neg, a_grid_neg, a_ind_zero_μ, a_size_μ, a_size_pos_μ, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_2_ρ, e_2_σ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ =
-        parameters
-    @unpack ρ, r_f, τ = parameters
+    @unpack a_ind_zero, a_size, a_grid, a_size_pos, a_size_neg, a_grid_neg, a_ind_zero_μ, a_size_μ, a_size_pos_μ, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_2_ρ, e_2_σ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ, ρ, r_f, τ = parameters
 
     # define aggregate prices and variables
     ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ = λ)
-    K = K_λ
+    K = 0.0
     L = 0.0
     D = 0.0
     N = 0.0
+    ω = 0.0
     leverage_ratio = 0.0
     KL_to_D_ratio = 0.0
     debt_to_earning_ratio = 0.0
@@ -366,7 +368,7 @@ function variables_function(parameters::NamedTuple; λ::Real)
     avg_loan_rate = 0.0
     avg_loan_rate_pw = 0.0
     aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+    aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     # define repayment probability, pricing function, and risky borrowing limit
     R = zeros(a_size_neg, e_1_size, e_2_size)
@@ -383,10 +385,9 @@ function variables_function(parameters::NamedTuple; λ::Real)
         end
 
         qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
-        # qa_funcion_itp = Spline1D(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg; k = 1, bc = "extrapolate")
         qa_funcion(a_p) = qa_funcion_itp(a_p)
         @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
-        # rbl_lb, rbl_ub = a_grid[1], 0.0
+        # @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid_neg, a_grid[1], 0.0)
         res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
         @inbounds rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
         @inbounds rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
@@ -401,10 +402,6 @@ function variables_function(parameters::NamedTuple; λ::Real)
     policy_d = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
     policy_pos_a = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
 
-    # define thresholds conditional on endowment or asset
-    # threshold_a = zeros(e_1_size, e_2_size, e_3_size, ν_size)
-    # threshold_e = zeros(a_size, e_1_size, e_3_size, ν_size)
-
     # define cross-sectional distribution
     μ = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2)
     μ_size = (a_size_μ + a_size_pos_μ) * e_1_size * e_2_size * e_3_size * ν_size
@@ -412,7 +409,6 @@ function variables_function(parameters::NamedTuple; λ::Real)
     μ[a_ind_zero_μ:end, :, :, :, :, 2] .= 1.0 ./ μ_size
 
     # return outputs
-    # variables = Mutable_Variables(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_pos_a, threshold_a, threshold_e, μ)
     variables = Mutable_Variables(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, μ)
     return variables
 end
@@ -457,9 +453,7 @@ function value_and_policy_function(
     """
 
     # unpack parameters
-    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero = parameters
-    @unpack e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_grid, ν_Γ = parameters
-    @unpack ρ, β, σ, η, r_f, p_h, ζ_d = parameters
+    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_grid, ν_Γ, ρ, β, σ, η, r_f, p_h, κ, ζ_d = parameters
 
     # construct containers
     V = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
@@ -482,7 +476,6 @@ function value_and_policy_function(
         # construct interpolated discounted borrowing amount functions
         @inbounds @views qa = q[:, e_1_i, e_2_i] .* a_grid
         qa_function_itp = Akima(a_grid, qa)
-        # qa_function_itp = Spline1D(a_grid, qa; k = 1, bc = "extrapolate")
 
         # extract preference
         @inbounds ν = ν_grid[ν_i]
@@ -491,13 +484,7 @@ function value_and_policy_function(
         V_hat = ρ * ν * β * EV_function(e_1_i, e_2_i, V_p, parameters)
         V_hat_pos = ρ * ν * β * EV_function(e_1_i, e_2_i, V_pos_p, parameters)
         V_hat_itp = Akima(a_grid, V_hat)
-        # V_hat_itp = Spline1D(a_grid, V_hat; k = 1, bc = "extrapolate")
         V_hat_pos_itp = Akima(a_grid_pos, (p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos))
-        # V_hat_pos_itp = Spline1D(a_grid_pos, (p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos); k = 1, bc = "extrapolate")
-
-        # compute defaulting value
-        # @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1.0 - η) * y, σ) + V_hat_pos[1]
-        # @inbounds V_d[e_1_i, e_2_i, e_3_i, ν_i] = utility_function((1 - η) * y, σ) + (p_h * V_hat[a_ind_zero] + (1.0 - p_h) * V_hat_pos[1])
 
         # compute non-defaulting value
         Threads.@threads for a_i = 1:a_size
@@ -508,37 +495,26 @@ function value_and_policy_function(
 
             # compute non-defaulting value
             if (CoH - rbl_qa) >= 0.0
-                # define optimization problem
-                # object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
-                object_nd(a_p) = -((1.0 - β * ρ) * utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
-                lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH + eps())
-                # lb, ub = rbl_a - eps(), CoH + eps()
-                res_nd = optimize(object_nd, lb, ub)
-
+                object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
+                # object_nd(a_p) = -((1.0 - ν*β*ρ) * utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
                 if ν == 0.0
                     V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -object_nd(rbl_a)
                     policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = rbl_a
                 else
+                    lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH + eps())
+                    # lb, ub = min_bounds_function(object_nd, a_grid, rbl_a - eps(), CoH + eps())
+                    res_nd = optimize(object_nd, lb, ub)
                     @inbounds V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)
                     @inbounds policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_nd)
                 end
-
-                # if V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] > V_d[e_1_i, e_2_i, e_3_i, ν_i]
-                #     # repayment
-                #     @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
-                # else
-                #     # voluntary default
-                #     @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
-                # end
             else
                 # involuntary default
-                @inbounds V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = utility_function(0.0, σ)
-                # @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
+                @inbounds V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
             end
 
             # compute defaulting value
-            # @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y ? utility_function((1.0 - η) * y, σ) + V_hat_pos[1] : -Inf
-            @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y ? (1.0 - β * ρ) * utility_function((1.0 - η) * y, σ) + V_hat_pos[1] : -Inf
+            @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y ? utility_function((1.0 - η) * y, σ) + V_hat_pos[1] : -Inf
+            # @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y - κ ? (1.0 - ν*β*ρ) * utility_function((1.0 - η) * y, σ) + V_hat_pos[1] : -Inf
 
             V_max = max(V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i], V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i])
             if V_max == -Inf
@@ -553,15 +529,15 @@ function value_and_policy_function(
             # bad credit history
             if a_i >= a_ind_zero
                 a_pos_i = a_i - a_ind_zero + 1
-                object_pos(a_p) = -((1.0 - β * ρ) * utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
-                lb, ub = min_bounds_function(object_pos, 0.0, CoH + eps())
-                # lb, ub = 0.0, CoH + eps()
-                res_pos = optimize(object_pos, lb, ub)
-
+                object_pos(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
+                # object_pos(a_p) = -((1.0 - ν*β*ρ) * utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
                 if ν == 0.0
                     @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -object_pos(0.0)
                     @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
                 else
+                    lb, ub = min_bounds_function(object_pos, 0.0, CoH + eps())
+                    # lb, ub = min_bounds_function(object_pos, a_grid, 0.0, CoH + eps())
+                    res_pos = optimize(object_pos, lb, ub)
                     @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
                     @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
                 end
@@ -580,94 +556,6 @@ function value_and_policy_function(
     # return results
     return V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a
 end
-
-# function threshold_function(V_d::Array{Float64,4}, V_nd::Array{Float64,5}, w::Real, parameters::NamedTuple)
-#     """
-#     update thresholds
-#     """
-#
-#     # unpack parameters
-#     @unpack ν_size, e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid, a_size, a_grid = parameters
-#
-#     # construct containers
-#     threshold_a = zeros(e_1_size, e_2_size, e_3_size, ν_size)
-#     threshold_e = zeros(a_size, e_1_size, e_3_size, ν_size)
-#
-#     for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_1_i = 1:e_1_size
-#
-#         # defaulting thresholds in wealth (a)
-#         for e_2_i = 1:e_2_size
-#             @inbounds @views V_nd_Non_Inf = findall(V_nd[:, e_1_i, e_2_i, e_3_i, ν_i] .!= -Inf)
-#             @inbounds @views a_grid_itp = a_grid[V_nd_Non_Inf]
-#             @inbounds @views V_nd_grid_itp = V_nd[V_nd_Non_Inf, e_1_i, e_2_i, e_3_i, ν_i]
-#             V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
-#             # V_nd_itp = Spline1D(a_grid_itp, V_nd_grid_itp; k = 1, bc = "extrapolate")
-#             @inbounds V_diff_itp(a) = V_nd_itp(a) - V_d[e_1_i, e_2_i, e_3_i, ν_i]
-#             if minimum(V_nd_grid_itp) > V_d[e_1_i, e_2_i, e_3_i, ν_i]
-#                 @inbounds threshold_a[e_1_i, e_2_i, e_3_i, ν_i] = -Inf
-#             else
-#                 @inbounds V_diff_lb, V_diff_ub = zero_bounds_function(V_d[e_1_i, e_2_i, e_3_i, ν_i], V_nd[:, e_1_i, e_2_i, e_3_i, ν_i], a_grid)
-#                 # @inbounds threshold_a[e_1_i, e_2_i, e_3_i, ν_i] = find_zero(a -> V_diff_itp(a), (V_diff_lb, V_diff_ub), Bisection())
-#                 @inbounds threshold_a[e_1_i, e_2_i, e_3_i, ν_i] = find_zero(V_diff_itp, (V_diff_lb, V_diff_ub), Bisection())
-#
-#             end
-#         end
-#
-#         # defaulting thresholds in persistent endowment (e_2)
-#         @inbounds @views thres_a_Non_Inf = findall(threshold_a[e_1_i, :, e_3_i, ν_i] .!= -Inf)
-#         @inbounds @views thres_a_grid_itp = -threshold_a[e_1_i, thres_a_Non_Inf, e_3_i, ν_i]
-#         @inbounds @views earning_grid_itp = w * exp.(e_1_grid[e_1_i] .+ e_2_grid[thres_a_Non_Inf] .+ e_3_grid[e_3_i])
-#         threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k = 1, bc = "extrapolate")
-#         Threads.@threads for a_i = 1:a_size
-#             @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
-#             e_thres = earning_thres > 0.0 ? log(earning_thres / w) - e_1_grid[e_1_i] - e_3_grid[e_3_i] : -Inf
-#             @inbounds threshold_e[a_i, e_1_i, e_3_i, ν_i] = e_thres
-#         end
-#     end
-#
-#     # return results
-#     return threshold_a, threshold_e
-# end
-
-# function pricing_and_rbl_function(threshold_e::Array{Float64,4}, w::Real, ι::Real, parameters::NamedTuple)
-#     """
-#     update pricing function and borrowing risky limit
-#     """
-#
-#     # unpack parameters
-#     @unpack ρ, r_f, τ, a_ind_zero, a_size, a_grid, a_size_neg, a_grid_neg, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ = parameters
-#
-#     # contruct containers
-#     R = zeros(a_size_neg, e_1_size, e_2_size)
-#     q = ones(a_size, e_1_size, e_2_size) .* ρ ./ (1.0 + r_f)
-#     rbl = zeros(e_1_size, e_2_size, 2)
-#
-#     # loop over states
-#     for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-#
-#         # repayment probability and pricing funciton
-#         Threads.@threads for a_p_i = 1:(a_size_neg-1)
-#             @inbounds a_p = a_grid[a_p_i]
-#             for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_1_p_i = 1:e_1_size
-#                 @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_i, e_3_p_i, a_p, threshold_e[a_p_i, e_1_p_i, e_3_p_i, ν_p_i], w, parameters)
-#             end
-#             @inbounds q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + τ + ι))
-#         end
-#
-#         # risky borrowing limit and maximum discounted borrwoing amount
-#         qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
-#         # qa_funcion_itp = Spline1D(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg; k = 1, bc = "extrapolate")
-#         qa_funcion(a_p) = qa_funcion_itp(a_p)
-#         @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
-#         # rbl_lb, rbl_ub =  a_grid[1], 0.0
-#         res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
-#         @inbounds rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
-#         @inbounds rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
-#     end
-#
-#     # return results
-#     return R, q, rbl
-# end
 
 function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, ι::Real, parameters::NamedTuple)
     """
@@ -702,7 +590,7 @@ function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, ι::Real,
         # qa_funcion_itp = Spline1D(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg; k = 1, bc = "extrapolate")
         qa_funcion(a_p) = qa_funcion_itp(a_p)
         @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
-        # rbl_lb, rbl_ub =  a_grid[1], 0.0
+        # @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid_neg, a_grid[1], 0.0)
         res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
         @inbounds rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
         @inbounds rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
@@ -712,7 +600,7 @@ function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, ι::Real,
     return R, q, rbl
 end
 
-function solve_value_and_pricing_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Real = 1E-8, iter_max::Integer = 1000, figure_track::Bool = false, slow_updating::Real = 1.0)
+function solve_value_and_pricing_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Real = 1E-8, iter_max::Integer = 1000, slow_updating::Real = 1.0)
     """
     solve household and banking problems using one-loop algorithm
     """
@@ -742,9 +630,6 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_d, variables.policy_pos_a =
             value_and_policy_function(V_p, V_d_p, V_nd_p, V_pos_p, variables.q, variables.rbl, variables.aggregate_prices.w_λ, parameters; slow_updating = slow_updating)
 
-        # thresholds
-        # variables.threshold_a, variables.threshold_e = threshold_function(variables.V_d, variables.V_nd, variables.aggregate_prices.w_λ, parameters)
-
         # pricing function and borrowing risky limit
         variables.R, variables.q, variables.rbl = pricing_and_rbl_function(variables.policy_d, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
@@ -761,45 +646,6 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         # println("|V| = $V_crit, |V_pos| = $V_pos_crit, |q| = $q_crit")
         # println("Solving household and banking problems (one-loop): search_iter = $search_iter and crit = $crit > tol = $tol")
         ProgressMeter.update!(prog, crit)
-
-        # tracking figures
-        if figure_track == true
-
-            # add new line
-            println()
-
-            # discounted bond price
-            plt_q = lineplot(
-                parameters.a_grid_neg,
-                variables.q[1:parameters.a_size_neg, end],
-                name = "e = $(round(parameters.e_grid[end],digits=2))",
-                title = "discounted bond price",
-                xlim = [round(parameters.a_grid[1], digits = 1), 0.0],
-                ylim = [0.0, ceil(maximum(variables.q[1:parameters.a_size_neg, end]); digits = 1)],
-                width = 50,
-                height = 10,
-            )
-            for e_i = (parameters.e_size-1):(-1):1
-                lineplot!(plt_q, parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e_i], name = "e = $(round(parameters.e_grid[e_i],digits=2))")
-            end
-            println(plt_q)
-
-            # discounted borrowing amount
-            plt_qa = lineplot(
-                parameters.a_grid_neg,
-                -variables.q[1:parameters.a_size_neg, end] .* parameters.a_grid_neg,
-                name = "e = $(round(parameters.e_grid[end],digits=2))",
-                title = "discounted borrowing amount",
-                xlim = [round(parameters.a_grid[1], digits = 1), 0.0],
-                ylim = [0.0, ceil(maximum(-variables.q[1:parameters.a_size_neg, end] .* parameters.a_grid_neg); digits = 1)],
-                width = 50,
-                height = 10,
-            )
-            for e_i = (parameters.e_size-1):(-1):1
-                lineplot!(plt_qa, parameters.a_grid_neg, -variables.q[1:parameters.a_size_neg, e_i] .* parameters.a_grid_neg, name = "e = $(round(parameters.e_grid[e_i],digits=2))")
-            end
-            println(plt_qa)
-        end
     end
 end
 
@@ -819,13 +665,10 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
         # interpolated decision rules
         @inbounds @views policy_a_Non_Inf = findall(policy_a[:, e_1_i, e_2_i, e_3_i, ν_i] .!= -Inf)
         @inbounds policy_a_itp = Akima(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf, e_1_i, e_2_i, e_3_i, ν_i])
-        # @inbounds policy_a_itp = Spline1D(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf, e_1_i, e_2_i, e_3_i, ν_i]; k = 1, bc = "extrapolate")
-        # @inbounds policy_d_itp(a_μ) = a_μ > threshold_a[e_1_i, e_2_i, e_3_i, ν_i] ? 0.0 : 1.0
         @inbounds policy_d_itp = Akima(a_grid, policy_d[:, e_1_i, e_2_i, e_3_i, ν_i])
         @inbounds policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i])
-        # @inbounds policy_pos_a_itp = Spline1D(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i]; k = 1, bc = "extrapolate")
-        # loop over the dimension of asset holding
 
+        # loop over the dimension of asset holding
         for a_μ_i = 1:a_size_μ
 
             # extract wealth and compute asset choice
@@ -930,6 +773,7 @@ function solve_aggregate_variable_function(
     μ::Array{Float64,6},
     K::Real,
     w::Real,
+    ι::Real,
     parameters::NamedTuple,
 )
     """
@@ -937,8 +781,7 @@ function solve_aggregate_variable_function(
     """
 
     # unpack parameters
-    @unpack e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid, ν_size, a_grid, a_grid_neg, a_grid_pos = parameters
-    @unpack a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ = parameters
+    @unpack e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid, ν_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ, r_f, τ, ψ = parameters
 
     # initialize container
     L = 0.0
@@ -1040,6 +883,10 @@ function solve_aggregate_variable_function(
     # net worth
     N = (K + L) - D
 
+    # exogenous dividend policy
+    profit = (1.0 + r_f + ι) * K + (1.0 + τ + ι) * L - (1.0 + r_f) * D
+    ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
+
     # leverage ratio
     leverage_ratio = (K + L) / N
 
@@ -1050,24 +897,24 @@ function solve_aggregate_variable_function(
     share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, :, :, 1])
 
     # return results
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+    aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
     return aggregate_variables
 end
 
-function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-5, tol_μ::Real = 1E-8)
+function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-5, tol_μ::Real = 1E-8, slow_updaing::Real = 1.0)
     """
     solve the economy with given liquidity multiplier ι
     """
 
     # solve household and banking problems
-    solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, figure_track = false, slow_updating = 0.5)
+    solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, slow_updating = slow_updaing)
 
     # solve the cross-sectional distribution
     solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
 
     # compute aggregate variables
     variables.aggregate_variables =
-        solve_aggregate_variable_function(variables.policy_a, variables.policy_d, variables.policy_pos_a, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, parameters)
+        solve_aggregate_variable_function(variables.policy_a, variables.policy_d, variables.policy_pos_a, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
     # compute the difference between demand and supply sides
     ED = variables.aggregate_variables.KL_to_D_ratio - variables.aggregate_prices.KL_to_D_ratio_λ
@@ -1238,62 +1085,6 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
     return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
     # return var_names, results_A_NFF, results_A_FF
 end
-#
-# function results_V_and_μ_function(results_A::Array{Float64,2})
-#     """
-#     compute value function and cross-sectional distribution across η
-#     """
-#
-#     # garnishment rate
-#     η_grid = results_A[1,:]
-#     η_size = length(η_grid)
-#
-#     # largest garnishment rate
-#     η_max = η_grid[1]
-#     a_min_η_max = -((η_max + 0.05) * 10)
-#     a_size_neg_η_max = convert(Int, round(-a_min_η_max * 200 + 1))
-#     parameters_η_max = parameters_function(η = η_max, a_min = a_min_η_max, a_size_neg = a_size_neg_η_max)
-#
-#     # container
-#     @unpack a_grid_μ, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters_η_max
-#     results_V = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-#     results_V_pos = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, η_size)
-#     results_μ = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
-#
-#     # compute CEV for different η compared to the smallest η
-#     for η_i = 1:η_size
-#
-#         η = η_grid[η_i]
-#         a_min_η = -((η + 0.05) * 10)
-#         a_size_neg_η = convert(Int, round(-a_min_η * 200 + 1))
-#         parameters_η = parameters_function(η = η, a_min = a_min_η, a_size_neg = a_size_neg_η)
-#         variables_η = variables_function(parameters_η; λ = results_A[3,η_i])
-#         solve_economy_function!(variables_η, parameters_η)
-#
-#         for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-#
-#             @inbounds @views V_itp = Akima(parameters_η.a_grid, variables_η.V[:, e_1_i, e_2_i, e_3_i, ν_i])
-#             @inbounds @views V_pos_itp = Akima(parameters_η.a_grid_pos, variables_η.V_pos[:, e_1_i, e_2_i, e_3_i, ν_i])
-#
-#             for a_μ_i = 1:a_size_μ
-#                 @inbounds a_μ = a_grid_μ[a_μ_i]
-#                 @inbounds results_V[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, η_i] = V_itp(a_μ)
-#                 if a_μ >= a_min_η
-#                     a_μ_i_η = findall(parameters_η.a_grid_μ .≈ a_μ)[]
-#                     @inbounds results_μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = variables_η.μ[a_μ_i_η, e_1_i, e_2_i, e_3_i, ν_i, 1]
-#                     if a_μ >= 0.0
-#                         a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
-#                         @inbounds results_V_pos[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, η_i] = V_pos_itp(a_μ)
-#                         @inbounds results_μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = variables_η.μ[a_μ_i_η, e_1_i, e_2_i, e_3_i, ν_i, 2]
-#                     end
-#                 end
-#             end
-#         end
-#     end
-#
-#     # return results
-#     return parameters_η_max, results_V, results_V_pos, results_μ
-# end
 
 function results_CEV_function(parameters::NamedTuple, results_A::Array{Float64,2}, results_V::Array{Float64,6}, results_V_pos::Array{Float64,6})
     """
@@ -1358,416 +1149,3 @@ function results_HHs_favor_function(parameters::NamedTuple, results_A::Array{Flo
     # return results
     return results_HHs_favor
 end
-
-#=================#
-# Solve the model #
-#=================#
-parameters = parameters_function()
-#
-# variables_min = variables_function(parameters; λ = 0.0)
-# solve_economy_function!(variables_min, parameters)
-# flag = 1
-#
-# variables_max = variables_function(parameters; λ = 1.0 - sqrt(parameters.ψ))
-# solve_economy_function!(variables_max, parameters)
-# flag = 2
-#
-# compare_results = [
-#     variables_min.aggregate_prices.λ variables_max.aggregate_prices.λ
-#     variables_min.aggregate_prices.KL_to_D_ratio_λ variables_max.aggregate_prices.KL_to_D_ratio_λ
-#     variables_min.aggregate_variables.KL_to_D_ratio variables_max.aggregate_variables.KL_to_D_ratio
-#     variables_min.aggregate_variables.share_of_filers*100 variables_max.aggregate_variables.share_of_filers*100
-#     variables_min.aggregate_variables.share_in_debts*100 variables_max.aggregate_variables.share_in_debts*100
-#     variables_min.aggregate_variables.debt_to_earning_ratio*100 variables_max.aggregate_variables.debt_to_earning_ratio*100
-#     variables_min.aggregate_variables.avg_loan_rate*100 variables_max.aggregate_variables.avg_loan_rate*100
-#     variables_min.policy_a[end, end, end, end, 2]<parameters.a_grid[end] variables_max.policy_a[end, end, end, end, 2]<parameters.a_grid[end]
-# ]
-
-variables = variables_function(parameters; λ = 0.0170364025311602)
-# variables = variables_function(parameters; λ = 0.0)
-solve_economy_function!(variables, parameters)
-flag = 3
-
-calibration_results = [
-    parameters.β,
-    parameters.δ,
-    parameters.ν_s,
-    parameters.τ,
-    parameters.p_h,
-    parameters.η,
-    parameters.θ,
-    parameters.ν_p,
-    variables.aggregate_prices.λ,
-    variables.aggregate_variables.KL_to_D_ratio,
-    variables.aggregate_variables.share_of_filers * 100,
-    variables.aggregate_variables.D / variables.aggregate_variables.L,
-    variables.aggregate_variables.share_in_debts * 100,
-    variables.aggregate_variables.debt_to_earning_ratio * 100,
-    variables.aggregate_variables.avg_loan_rate * 100,
-    flag
-    ]
-
-#=============#
-# Calibration #
-#=============#
-# β_search = 0.94 / 0.98 # collect(0.94:0.01:0.97)
-# θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
-# η_search = 0.25 # collect(0.20:0.05:0.40)
-# ζ_d_search = 0.001999
-# ν_p_search = 0.010075 # collect(0.01002:0.00002:0.01008)
-# β_search_size = length(β_search)
-# θ_search_size = length(θ_search)
-# η_search_size = length(η_search)
-# ζ_d_search_size = length(ζ_d_search)
-# ν_p_search_size = length(ν_p_search)
-# search_size = β_search_size * θ_search_size * η_search_size * ζ_d_search_size * ν_p_search_size
-# # search_iter = 1
-# calibration_results = zeros(search_size, 18)
-#
-# for β_i in 1:β_search_size, θ_i in 1:θ_search_size, η_i in 1:η_search_size, ζ_d_i in 1:ζ_d_search_size, ν_p_i in 1:ν_p_search_size
-#     parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ζ_d = ζ_d_search[ζ_d_i], ν_p = ν_p_search[ν_p_i])
-#     # variables = variables_function(parameters; λ = 0.0)
-#     # solve_economy_function!(variables, parameters)
-#     # flag = 1
-#     variables_λ_lower, variables, flag = optimal_multiplier_function(parameters)
-#
-#     search_iter = (β_i - 1)*(θ_search_size*η_search_size*ζ_d_search_size*ν_p_search_size) + (θ_i-1)*(η_search_size*ζ_d_search_size*ν_p_search_size) + (η_i-1)*ζ_d_search_size*ν_p_search_size + (ζ_d_i-1)*ν_p_search_size + ν_p_i
-#     calibration_results[search_iter, 1] = parameters.β
-#     calibration_results[search_iter, 2] = parameters.δ
-#     calibration_results[search_iter, 3] = parameters.τ
-#     calibration_results[search_iter, 4] = parameters.p_h
-#     calibration_results[search_iter, 5] = parameters.η
-#     calibration_results[search_iter, 6] = parameters.ψ
-#     calibration_results[search_iter, 7] = parameters.θ
-#     calibration_results[search_iter, 8] = parameters.ζ_d
-#     calibration_results[search_iter, 9] = parameters.ν_s
-#     calibration_results[search_iter, 10] = parameters.ν_p
-#     calibration_results[search_iter, 11] = variables.aggregate_prices.λ
-#     calibration_results[search_iter, 12] = variables.aggregate_variables.KL_to_D_ratio
-#     calibration_results[search_iter, 13] = variables.aggregate_variables.share_of_filers * 100
-#     calibration_results[search_iter, 14] = variables.aggregate_variables.D / variables.aggregate_variables.L
-#     calibration_results[search_iter, 15] = variables.aggregate_variables.share_in_debts * 100
-#     calibration_results[search_iter, 16] = variables.aggregate_variables.debt_to_earning_ratio * 100
-#     calibration_results[search_iter, 17] = variables.aggregate_variables.avg_loan_rate * 100
-#     calibration_results[search_iter, 18] = flag
-# end
-
-# cd(homedir() * "/financial_frictions/")
-# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-# CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
-
-# short_results = [
-#     calibration_results[1,9]
-#     calibration_results[1,10]
-#     calibration_results[1,10]
-#     calibration_results[1,11]
-#     calibration_results[1,13]
-#     calibration_results[1,14]
-#     calibration_results[1,15]
-#     -Inf
-# ]
-
-#======================================================#
-# Solve the model with different bankruptcy strictness #
-#======================================================#
-# var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.10)
-# cd(homedir() * "/financial_frictions/")
-# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
-@load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
-
-#=============================#
-# Solve transitional dynamics #
-#=============================#
-# mutable struct Mutable_Aggregate_Prices_T
-#     """
-#     construct a type for mutable aggregate prices of periods T
-#     """
-#     λ::Array{Float64,1}
-#     ξ::Array{Float64,1}
-#     Λ::Array{Float64,1}
-#     leverage_ratio_λ::Array{Float64,1}
-#     KL_to_D_ratio_λ::Array{Float64,1}
-#     ι::Array{Float64,1}
-#     r_k::Array{Float64,1}
-#     K_λ::Array{Float64,1}
-#     w::Array{Float64,1}
-# end
-#
-# mutable struct Mutable_Aggregate_Variables_T
-#     """
-#     construct a type for mutable aggregate variables of periods T
-#     """
-#     K::Array{Float64,1}
-#     L::Array{Float64,1}
-#     D::Array{Float64,1}
-#     N::Array{Float64,1}
-#     leverage_ratio::Array{Float64,1}
-#     KL_to_D_ratio::Array{Float64,1}
-#     debt_to_earning_ratio::Array{Float64,1}
-#     share_of_filers::Array{Float64,1}
-#     share_of_involuntary_filers::Array{Float64,1}
-#     share_in_debts::Array{Float64,1}
-#     avg_loan_rate::Array{Float64,1}
-#     avg_loan_rate_pw::Array{Float64,1}
-# end
-#
-# mutable struct Mutable_Variables_T
-#     """
-#     construct a type for mutable variables of periods T
-#     """
-#     aggregate_prices::Mutable_Aggregate_Prices_T
-#     aggregate_variables::Mutable_Aggregate_Variables_T
-#     R::Array{Float64,3}
-#     q::Array{Float64,3}
-#     rbl::Array{Float64,3}
-#     V::Array{Float64,5}
-#     V_d::Array{Float64,4}
-#     V_nd::Array{Float64,5}
-#     policy_a::Array{Float64,5}
-#     threshold_a::Array{Float64,4}
-#     threshold_e::Array{Float64,4}
-#     μ::Array{Float64,5}
-# end
-#
-# function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer)
-#     """
-#     construct a mutable object containing endogenous variables of periods T
-#     """
-#
-#     # unapcl parameters from new steady state
-#     @unpack a_size, a_size_neg, a_size_μ, e_size, t_size, ν_size = parameters_new
-#     @unpack θ, β_f, ψ, r_f, E, δ, α = parameters_new
-#
-#     # adjust periods considered
-#     T_size = T_size + 2
-#
-#     # leverage_ratio_λ = collect(range(variables_new.aggregate_prices.leverage_ratio_λ, variables_new.aggregate_prices.leverage_ratio_λ, length = T_size))
-#     # leverage_ratio_λ = collect(range(variables_old.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
-#     leverage_ratio_λ = collect(range(variables_new.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
-#     ξ = θ .* leverage_ratio_λ
-#     Λ = β_f .* (1.0 .- ψ .+ ψ .* ξ)
-#     KL_to_D_ratio_λ = leverage_ratio_λ ./ (leverage_ratio_λ .- 1.0)
-#     λ = zeros(T_size)
-#     λ[1] = 1.0 - ((1.0 - ψ + ψ*ξ[1]) / ξ[1])
-#     λ[end] = 1.0 - ((1.0 - ψ + ψ*ξ[end]) / ξ[end])
-#     ι = zeros(T_size)
-#     ι[1] = λ[1] * θ / Λ[1]
-#     ι[end] = λ[end] * θ / Λ[end]
-#     r_k = zeros(T_size)
-#     r_k[1] = variables_old.aggregate_prices.r_k
-#     r_k[end] = variables_new.aggregate_prices.r_k
-#     K_λ = zeros(T_size)
-#     K_λ[1] = variables_old.aggregate_prices.K_λ
-#     K_λ[end] = variables_new.aggregate_prices.K_λ
-#     w  = zeros(T_size)
-#     w[1] = variables_old.aggregate_prices.w
-#     w[end] = variables_new.aggregate_prices.w
-#     for T_i = (T_size-1):(-1):2
-#         λ[T_i] = 1.0 - ((1.0 - ψ + ψ*ξ[T_i+1]) / ξ[T_i])
-#         ι[T_i] = λ[T_i] * θ / Λ[T_i+1]
-#         r_k[T_i] = r_f + ι[T_i]
-#         K_λ[T_i] = E .* ((r_k[T_i] .+ δ) ./ α).^(1.0 / (α - 1.0))
-#         w[T_i] = (1.0 - α) .* ((K_λ[T_i] ./ E).^α)
-#     end
-#     aggregate_prices = Mutable_Aggregate_Prices_T(λ, ξ, Λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι, r_k, K_λ, w)
-#
-#     # define aggregate variables
-#     K = zeros(T_size)
-#     K[1] = K_λ[1]
-#     K[end] = K_λ[end]
-#     L = zeros(T_size)
-#     L[1] = variables_old.aggregate_variables.L
-#     L[end] = variables_new.aggregate_variables.L
-#     D = zeros(T_size)
-#     D[1] = variables_old.aggregate_variables.D
-#     D[end] = variables_new.aggregate_variables.D
-#     N = zeros(T_size)
-#     N[1] = variables_old.aggregate_variables.N
-#     N[end] = variables_new.aggregate_variables.N
-#     leverage_ratio = zeros(T_size)
-#     leverage_ratio[1] = variables_old.aggregate_variables.leverage_ratio
-#     leverage_ratio[end] = variables_new.aggregate_variables.leverage_ratio
-#     KL_to_D_ratio = zeros(T_size)
-#     KL_to_D_ratio[1] = variables_old.aggregate_variables.KL_to_D_ratio
-#     KL_to_D_ratio[end] = variables_new.aggregate_variables.KL_to_D_ratio
-#     debt_to_earning_ratio = zeros(T_size)
-#     debt_to_earning_ratio[1] = variables_old.aggregate_variables.debt_to_earning_ratio
-#     debt_to_earning_ratio[end] = variables_new.aggregate_variables.debt_to_earning_ratio
-#     share_of_filers = zeros(T_size)
-#     share_of_filers[1] = variables_old.aggregate_variables.share_of_filers
-#     share_of_filers[end] = variables_new.aggregate_variables.share_of_filers
-#     share_of_involuntary_filers = zeros(T_size)
-#     share_of_involuntary_filers[1] = variables_old.aggregate_variables.share_of_involuntary_filers
-#     share_of_involuntary_filers[end] = variables_new.aggregate_variables.share_of_involuntary_filers
-#     share_in_debts = zeros(T_size)
-#     share_in_debts[1] = variables_old.aggregate_variables.share_in_debts
-#     share_in_debts[end] = variables_new.aggregate_variables.share_in_debts
-#     avg_loan_rate = zeros(T_size)
-#     avg_loan_rate[1] = variables_old.aggregate_variables.avg_loan_rate
-#     avg_loan_rate[end] = variables_new.aggregate_variables.avg_loan_rate
-#     avg_loan_rate_pw = zeros(T_size)
-#     avg_loan_rate_pw[1] = variables_old.aggregate_variables.avg_loan_rate_pw
-#     avg_loan_rate_pw[end] = variables_new.aggregate_variables.avg_loan_rate_pw
-#     aggregate_variables = Mutable_Aggregate_Variables_T(K, L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
-#
-#     # define repayment probability, pricing function, and risky borrowing limit
-#     R = zeros(a_size_neg, e_size, T_size)
-#     R[:,:,1] = variables_old.R
-#     R[:,:,(end-1):end] .= variables_new.R
-#     q = ones(a_size, e_size, T_size) ./ (1.0 + r_f)
-#     q[:,:,1] = variables_old.q
-#     q[:,:,(end-1):end] .= variables_new.q
-#     rbl = zeros(e_size, 2, T_size)
-#     rbl[:,:,1] = variables_old.rbl
-#     rbl[:,:,(end-1):end] .= variables_new.rbl
-#
-#     # define value and policy functions
-#     V = zeros(a_size, e_size, t_size, ν_size, T_size)
-#     V[:,:,:,:,1] = variables_old.V
-#     V[:,:,:,:,end] = variables_new.V
-#     V_d = zeros(e_size, t_size, ν_size, T_size)
-#     V_d[:,:,:,1] = variables_old.V_d
-#     V_d[:,:,:,end] = variables_new.V_d
-#     V_nd = zeros(a_size, e_size, t_size, ν_size, T_size)
-#     V_nd[:,:,:,:,1] = variables_old.V_nd
-#     V_nd[:,:,:,:,end] = variables_new.V_nd
-#     policy_a = zeros(a_size, e_size, t_size, ν_size, T_size)
-#     policy_a[:,:,:,:,1] = variables_old.policy_a
-#     policy_a[:,:,:,:,end] = variables_new.policy_a
-#
-#     # define thresholds conditional on endowment or asset
-#     threshold_a = zeros(e_size, t_size, ν_size, T_size)
-#     threshold_a[:,:,:,1] = variables_old.threshold_a
-#     threshold_a[:,:,:,end] = variables_new.threshold_a
-#     threshold_e = zeros(a_size, t_size, ν_size, T_size)
-#     threshold_e[:,:,:,1] = variables_old.threshold_e
-#     threshold_e[:,:,:,end] = variables_new.threshold_e
-#
-#     # define cross-sectional distribution
-#     μ_size = a_size_μ * e_size * t_size * ν_size
-#     μ = ones(a_size_μ, e_size, t_size, ν_size, T_size) ./ μ_size
-#     μ[:,:,:,:,1] = variables_old.μ
-#     μ[:,:,:,:,end] = variables_new.μ
-#
-#     # return outputs
-#     variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ)
-#     return variables_T
-# end
-#
-# function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, parameters_new::NamedTuple; tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = true)
-#     """
-#     solve transitional dynamics of periods T from initial to new steady states
-#     """
-#
-#     # unpack parameters
-#     @unpack θ, ψ, β_f, r_f, E, δ, α = parameters_new
-#
-#     # initialize the iteration number and criterion
-#     search_iter = 0
-#     crit = Inf
-#
-#     # obtain number of periods
-#     T_size = length(variables_T.aggregate_prices.leverage_ratio_λ)
-#
-#     # construct container
-#     leverage_ratio_λ_p = similar(variables_T.aggregate_prices.leverage_ratio_λ)
-#
-#     while crit > tol && search_iter < iter_max
-#
-#         # copy previous value
-#         copyto!(leverage_ratio_λ_p, variables_T.aggregate_prices.leverage_ratio_λ)
-#
-#         # solve individual-level problems backward
-#         println("Solving individual-level problems backward...")
-#         for T_i = (T_size-1):(-1):2
-#             # pricing function and borrowing risky limit
-#             variables_T.R[:,:,T_i], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i] = pricing_and_rbl_function(variables_T.threshold_e[:,:,:,T_i+1], variables_T.aggregate_prices.ι[T_i], parameters)
-#
-#             # value and policy functions
-#             variables_T.V[:,:,:,:,T_i], variables_T.V_d[:,:,:,T_i], variables_T.V_nd[:,:,:,:,T_i], variables_T.policy_a[:,:,:,:,T_i] = value_and_policy_function(variables_T.V[:,:,:,:,T_i+1], variables_T.V_d[:,:,:,T_i+1], variables_T.V_nd[:,:,:,:,T_i+1], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i], variables_T.aggregate_prices.w[T_i], parameters)
-#
-#             # thresholds
-#             variables_T.threshold_a[:,:,:,T_i], variables_T.threshold_e[:,:,:,T_i] = threshold_function(variables_T.V_d[:,:,:,T_i], variables_T.V_nd[:,:,:,:,T_i], variables_T.aggregate_prices.w[T_i], parameters)
-#         end
-#
-#         # solve distribution forward and update aggregate variables and prices
-#         println("Solving distribution and aggregate variables/prices forward...")
-#         for T_i = 2:(T_size-1)
-#             # update stationary distribution
-#             variables_T.μ[:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,T_i], variables_T.threshold_a[:,:,:,T_i], parameters_new)
-#
-#             # compute aggregate variables
-#             aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,T_i], variables_T.threshold_a[:,:,:,T_i], variables_T.q[:,:,T_i], variables_T.rbl[:,:,T_i], variables_T.μ[:,:,:,:,T_i], variables_T.aggregate_prices.K_λ[T_i], variables_T.aggregate_prices.w[T_i], parameters_new)
-#             variables_T.aggregate_variables.K[T_i] = aggregate_variables.K
-#             variables_T.aggregate_variables.L[T_i] = aggregate_variables.L
-#             variables_T.aggregate_variables.D[T_i] = aggregate_variables.D
-#             variables_T.aggregate_variables.N[T_i] = aggregate_variables.N
-#             variables_T.aggregate_variables.leverage_ratio[T_i] = aggregate_variables.leverage_ratio
-#             variables_T.aggregate_variables.KL_to_D_ratio[T_i] = aggregate_variables.KL_to_D_ratio
-#             variables_T.aggregate_variables.debt_to_earning_ratio[T_i] = aggregate_variables.debt_to_earning_ratio
-#             variables_T.aggregate_variables.share_of_filers[T_i] = aggregate_variables.share_of_filers
-#             variables_T.aggregate_variables.share_of_involuntary_filers[T_i] = aggregate_variables.share_of_involuntary_filers
-#             variables_T.aggregate_variables.share_in_debts[T_i] = aggregate_variables.share_in_debts
-#             variables_T.aggregate_variables.avg_loan_rate[T_i] = aggregate_variables.avg_loan_rate
-#             variables_T.aggregate_variables.avg_loan_rate_pw[T_i] = aggregate_variables.avg_loan_rate_pw
-#         end
-#
-#         # check convergence
-#         crit = norm(variables_T.aggregate_variables.leverage_ratio .- leverage_ratio_λ_p, Inf)
-#
-#         # update the iteration number
-#         search_iter += 1
-#
-#         # manually report convergence progress
-#         println("Solving transitional dynamics: search_iter = $search_iter and crit = $crit > tol = $tol")
-#
-#         # update leverage ratio
-#         variables_T.aggregate_prices.leverage_ratio_λ = slow_updating * leverage_ratio_λ_p + (1.0 - slow_updating) * variables_T.aggregate_variables.leverage_ratio
-#
-#         # update aggregate prices
-#         variables_T.aggregate_prices.ξ = θ .* variables_T.aggregate_prices.leverage_ratio_λ
-#         variables_T.aggregate_prices.Λ = β_f .* (1.0 .- ψ .+ ψ .* variables_T.aggregate_prices.ξ)
-#         variables_T.aggregate_prices.KL_to_D_ratio_λ = variables_T.aggregate_prices.leverage_ratio_λ ./ (variables_T.aggregate_prices.leverage_ratio_λ .- 1.0)
-#         for T_i = 2:(T_size-1)
-#             variables_T.aggregate_prices.λ[T_i] = 1.0 - (1.0 - ψ + ψ*variables_T.aggregate_prices.ξ[T_i+1]) / variables_T.aggregate_prices.ξ[T_i]
-#             variables_T.aggregate_prices.ι[T_i] = variables_T.aggregate_prices.λ[T_i] * θ / variables_T.aggregate_prices.Λ[T_i+1]
-#         end
-#         variables_T.aggregate_prices.r_k = r_f .+ variables_T.aggregate_prices.ι
-#         variables_T.aggregate_prices.K_λ = E .* ((variables_T.aggregate_prices.r_k .+ δ) ./ α).^(1.0 / (α - 1.0))
-#         variables_T.aggregate_prices.w = (1.0 - α) .* ((variables_T.aggregate_prices.K_λ ./ E).^α)
-#
-#         # tracking figures
-#         if figure_track == true
-#             println()
-#             plt_LR = lineplot(
-#                 collect(2:(T_size-1)),
-#                 variables_T.aggregate_variables.leverage_ratio[2:(T_size-1)],
-#                 name = "updated",
-#                 title = "leverage ratio",
-#                 xlim = [0.0, T_size],
-#                 width = 50,
-#                 height = 10,
-#             )
-#             lineplot!(plt_LR, collect(2:(T_size-1)), leverage_ratio_λ_p[2:(T_size-1)], name = "initial")
-#             lineplot!(plt_LR, collect(2:(T_size-1)), variables_T.aggregate_prices.leverage_ratio_λ[2:(T_size-1)], name = "slow updating")
-#             println(plt_LR)
-#         end
-#     end
-# end
-#
-# # old stationary equilibrium
-# println("Solving initial steady state...")
-# parameters_old = parameters_function()
-# variables_old = variables_function(parameters_old; λ = 0.0)
-# solve_economy_function!(variables_old, parameters_old)
-#
-# # new stationary equilibrium
-# println("Solving new steady state...")
-# parameters_new = parameters_function()
-# variables_new = variables_function(parameters_new; λ = λ_optimal)
-# solve_economy_function!(variables_new, parameters_new)
-#
-# # solve transitional dynamics
-# variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 240)
-# transitional_dynamic_λ_function!(variables_T, parameters_new; iter_max = 4, slow_updating = 0.5)

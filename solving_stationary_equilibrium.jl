@@ -42,7 +42,7 @@ function parameters_function(;
     θ::Real = 1.0 / 3.0,            # diverting fraction
     p_h::Real = 1.0 / 7.0,          # prob. of history erased
     κ::Real = 0.02,                 # filing cost
-    ζ_d::Real = 0.220,              # EV scale parameter (default)
+    ζ_d::Real = 0.2350,             # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -51,7 +51,7 @@ function parameters_function(;
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.9000,             # scale of patience
-    ν_p::Real = 0.1300,             # probability of patience
+    ν_p::Real = 0.1350,             # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -12.0,            # min of asset holding
     a_max::Real = 500.0,            # max of asset holding
@@ -218,7 +218,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 240, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 480, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """
@@ -513,8 +513,8 @@ function value_and_policy_function(
             end
 
             # compute defaulting value
-            @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y ? utility_function((1.0 - η) * y, σ) + V_hat_pos[1] : -Inf
-            # @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y - κ ? (1.0 - ν*β*ρ) * utility_function((1.0 - η) * y, σ) + V_hat_pos[1] : -Inf
+            @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y - κ ? utility_function((1.0 - η) * (y - κ), σ) + V_hat_pos[1] : -Inf
+            # @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y - κ ? (1.0 - ν*β*ρ) * utility_function((1.0 - η) * (y - κ), σ) + V_hat_pos[1] : -Inf
 
             V_max = max(V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i], V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i])
             if V_max == -Inf
@@ -901,13 +901,13 @@ function solve_aggregate_variable_function(
     return aggregate_variables
 end
 
-function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-5, tol_μ::Real = 1E-8, slow_updaing::Real = 1.0)
+function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-5, tol_μ::Real = 1E-8, slow_updating::Real = 1.0)
     """
     solve the economy with given liquidity multiplier ι
     """
 
     # solve household and banking problems
-    solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, slow_updating = slow_updaing)
+    solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, slow_updating = slow_updating)
 
     # solve the cross-sectional distribution
     solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
@@ -926,14 +926,16 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
         "Asset-to-Debt Ratio (Demand)" variables.aggregate_variables.KL_to_D_ratio #=3=#
         "Asset-to-Debt Ratio (Supply)" variables.aggregate_prices.KL_to_D_ratio_λ #=4=#
         "Difference" ED #=5=#
+        "Leverage Ratio (Demand)" variables.aggregate_variables.leverage_ratio #=6=#
+        "Leverage Ratio (Supply)" variables.aggregate_prices.leverage_ratio_λ #=7=#
     ]
-    pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [2, 4])
+    pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [2, 4, 5])
 
     # return excess demand
     return ED
 end
 
-function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-6, iter_max::Real = 500)
+function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-6, iter_max::Real = 500, slow_updating::Real = 1.0)
     """
     solve for optimal liquidity multiplier
     """
@@ -941,7 +943,7 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     # check the case of λ_min = 0.0
     λ_min = 0.0
     variables_λ_min = variables_function(parameters; λ = λ_min)
-    ED_λ_min = solve_economy_function!(variables_λ_min, parameters)
+    ED_λ_min = solve_economy_function!(variables_λ_min, parameters; slow_updating = slow_updating)
     if ED_λ_min > 0.0
         return variables_λ_min, variables_λ_min, 1
     end
@@ -949,7 +951,7 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     # check the case of λ_max = 1-ψ^(1/2)
     λ_max = 1.0 - sqrt(parameters.ψ)
     variables_λ_max = variables_function(parameters; λ = λ_max)
-    ED_λ_max = solve_economy_function!(variables_λ_max, parameters)
+    ED_λ_max = solve_economy_function!(variables_λ_max, parameters; slow_updating = slow_updating)
     if ED_λ_max < 0.0
         return variables_λ_min, variables_λ_max, 2 # meaning solution doesn't exist!
     end
@@ -970,7 +972,7 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
 
         # compute the associated results
         variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
-        ED_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters)
+        ED_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters; slow_updating = slow_updating)
 
         # update search region
         if ED_λ_optimal > 0.0

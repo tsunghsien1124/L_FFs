@@ -108,7 +108,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
         ι_λ[T_i] = θ * λ[T_i] / Λ_λ[T_i+1]
         r_k_λ[T_i] = r_f + ι_λ[T_i]
         K_p_λ[T_i] = E * ((r_k_λ[T_i] + δ) / α)^(1.0 / (α - 1.0))
-        w_λ[T_i] = (1.0 - α) * (K_p_λ[T_i-1] / E)^α
+        w_λ[T_i+1] = (1.0 - α) * (K_p_λ[T_i] / E)^α
     end
 
     aggregate_prices = Mutable_Aggregate_Prices_T(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ)
@@ -210,8 +210,8 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     # define cross-sectional distribution
     μ = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, T_size)
     μ_size = (a_size_μ + a_size_pos_μ) * e_1_size * e_2_size * e_3_size * ν_size
-    μ[:,:,:,:,:,1,:] .= 1.0 ./ μ_size
-    μ[a_ind_zero_μ:end,:,:,:,:,2,:] .= 1.0 ./ μ_size
+    μ[:,:,:,:,:,1,2:(end-1)] .= 1.0 ./ μ_size
+    μ[a_ind_zero_μ:end,:,:,:,:,2,2:(end-1)] .= 1.0 ./ μ_size
     μ[:,:,:,:,:,:,1] = variables_old.μ
     μ[:,:,:,:,:,:,end] = variables_new.μ
 
@@ -226,7 +226,7 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, par
     """
 
     # unpack parameters
-    @unpack θ, ψ, β_f, r_f, E, δ, α = parameters_new
+    @unpack θ, ψ, r_f, E, δ, α = parameters_new
 
     # initialize the iteration number and criterion
     search_iter = 0
@@ -260,9 +260,9 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, par
 
             # compute aggregate variables
             aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i], variables_T.aggregate_prices.K_λ[T_i], variables_T.aggregate_prices.w[T_i], parameters_new)
-            variables_T.aggregate_variables.K[T_i] = aggregate_variables.K
-            variables_T.aggregate_variables.L[T_i] = aggregate_variables.L
-            variables_T.aggregate_variables.D[T_i] = aggregate_variables.D
+            variables_T.aggregate_variables.K_p[T_i] = aggregate_variables.K
+            variables_T.aggregate_variables.L_p[T_i] = aggregate_variables.L
+            variables_T.aggregate_variables.D_p[T_i] = aggregate_variables.D
             variables_T.aggregate_variables.N[T_i] = aggregate_variables.N
             variables_T.aggregate_variables.leverage_ratio[T_i] = aggregate_variables.leverage_ratio
             variables_T.aggregate_variables.KL_to_D_ratio[T_i] = aggregate_variables.KL_to_D_ratio

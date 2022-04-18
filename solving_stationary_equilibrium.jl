@@ -188,6 +188,7 @@ mutable struct Mutable_Aggregate_Variables
     L::Real
     D::Real
     N::Real
+    profit::Real
     ω::Real
     leverage_ratio::Real
     KL_to_D_ratio::Real
@@ -352,12 +353,16 @@ function variables_function(parameters::NamedTuple; λ::Real)
     # unpack parameters
     @unpack a_ind_zero, a_size, a_grid, a_size_pos, a_size_neg, a_grid_neg, a_ind_zero_μ, a_size_μ, a_size_pos_μ, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_2_ρ, e_2_σ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ, ρ, r_f, τ = parameters
 
-    # define aggregate prices and variables
+    # define aggregate prices
     ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ = λ)
+    aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
+
+    # define aggregate variables
     K = 0.0
     L = 0.0
     D = 0.0
     N = 0.0
+    profit = 0.0
     ω = 0.0
     leverage_ratio = 0.0
     KL_to_D_ratio = 0.0
@@ -367,8 +372,7 @@ function variables_function(parameters::NamedTuple; λ::Real)
     share_in_debts = 0.0
     avg_loan_rate = 0.0
     avg_loan_rate_pw = 0.0
-    aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+    aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     # define repayment probability, pricing function, and risky borrowing limit
     R = zeros(a_size_neg, e_1_size, e_2_size)
@@ -784,9 +788,12 @@ function solve_aggregate_variable_function(
     @unpack e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid, ν_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ, r_f, τ, ψ = parameters
 
     # initialize container
+    K = K
     L = 0.0
     D = 0.0
     N = 0.0
+    profit = 0.0
+    ω = 0.0
     leverage_ratio = 0.0
     KL_to_D_ratio = 0.0
     debt_to_earning_ratio = 0.0
@@ -808,18 +815,13 @@ function solve_aggregate_variable_function(
         # interpolated decision rules
         @inbounds @views policy_a_Non_Inf = findall(policy_a[:, e_1_i, e_2_i, e_3_i, ν_i] .!= -Inf)
         @inbounds policy_a_itp = Akima(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf, e_1_i, e_2_i, e_3_i, ν_i])
-        # @inbounds policy_a_itp = Spline1D(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf]; k = 1, bc = "extrapolate")
-        # @inbounds policy_d_itp(a_μ) = a_μ > threshold_a[e_1_i, e_2_i, e_3_i, ν_i] ? 0.0 : 1.0
         @inbounds policy_d_itp = Akima(a_grid, policy_d[:, e_1_i, e_2_i, e_3_i, ν_i])
         @inbounds policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i])
-        # @inbounds policy_pos_a_itp = Spline1D(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i]; k = 1, bc = "extrapolate")
 
         # interpolated discounted borrowing amount
         @inbounds @views q_e = q[:, e_1_i, e_2_i]
         q_function_itp = Akima(a_grid, q_e)
-        # q_function_itp = Spline1D(a_grid, q_e; k = 1, bc = "extrapolate")
         qa_function_itp = Akima(a_grid, q_e .* a_grid)
-        # qa_function_itp = Spline1D(a_grid, q_e .* a_grid; k = 1, bc = "extrapolate")
 
         # loop over the dimension of asset holding
         for a_μ_i = 1:a_size_μ
@@ -841,10 +843,8 @@ function solve_aggregate_variable_function(
                 avg_loan_rate_pw_den += 1
             else
                 # total deposits
-                # @inbounds D += (μ[a_μ_i, e_i, t_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
                 if a_p > 0.0
-                    # @inbounds D += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
-                    @inbounds D += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * qa_function_itp(a_p))
+                    @inbounds D += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
                 end
             end
 
@@ -866,11 +866,25 @@ function solve_aggregate_variable_function(
 
                 # debt-to-earning ratio
                 # @inbounds debt_to_earning_ratio += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ / (w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i])))
-                @inbounds debt_to_earning_ratio_num += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * -a_μ
-                @inbounds debt_to_earning_ratio_den += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]))
+                # @inbounds debt_to_earning_ratio_num += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * -a_μ
+                # @inbounds debt_to_earning_ratio_den += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]))
             end
         end
     end
+
+    # net worth
+    N = (K + L) - D
+
+    # exogenous dividend policy
+    profit = (1.0 + r_f + ι) * K + (1.0 + τ + ι) * L - (1.0 + r_f) * D
+    # ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
+    ω = N / (ψ * profit)
+
+    # leverage ratio
+    leverage_ratio = (K + L) / N
+
+    # capital-loan-to-deposit ratio
+    KL_to_D_ratio = (K + L) / D
 
     # debt-to-earning ratio
     # debt_to_earning_ratio = debt_to_earning_ratio_num / debt_to_earning_ratio_den
@@ -880,24 +894,11 @@ function solve_aggregate_variable_function(
     avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
     avg_loan_rate_pw = avg_loan_rate_pw_num / avg_loan_rate_pw_den
 
-    # net worth
-    N = (K + L) - D
-
-    # exogenous dividend policy
-    profit = (1.0 + r_f + ι) * K + (1.0 + τ + ι) * L - (1.0 + r_f) * D
-    ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
-
-    # leverage ratio
-    leverage_ratio = (K + L) / N
-
-    # capital-loan-to-deposit ratio
-    KL_to_D_ratio = (K + L) / D
-
     # share in debt
     share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, :, :, 1])
 
     # return results
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+    aggregate_variables = Mutable_Aggregate_Variables(K, L, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
     return aggregate_variables
 end
 

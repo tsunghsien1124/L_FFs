@@ -220,7 +220,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     return variables_T
 end
 
-function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, parameters_new::NamedTuple; T_size::Integer = 240, tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = true)
+function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer = 240, tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = true)
     """
     solve transitional dynamics of periods T from initial to new steady states
     """
@@ -259,17 +259,23 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, par
             variables_T.μ[:,:,:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], parameters_new)
 
             # compute aggregate variables
-            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i], variables_T.aggregate_prices.K_λ[T_i], variables_T.aggregate_prices.w[T_i], parameters_new)
+            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i], variables_T.aggregate_prices.K_λ[T_i], variables_T.aggregate_prices.w_λ[T_i], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
+
             variables_T.aggregate_variables.K_p[T_i] = aggregate_variables.K
             variables_T.aggregate_variables.L_p[T_i] = aggregate_variables.L
             variables_T.aggregate_variables.D_p[T_i] = aggregate_variables.D
-            variables_T.aggregate_variables.N[T_i] = aggregate_variables.N
-            variables_T.aggregate_variables.leverage_ratio[T_i] = aggregate_variables.leverage_ratio
+            variables_T.aggregate_variables.N[T_i+1] = variables_new.aggregate_variables.ω * ψ * aggregate_variables.profit
+
+            variables_T.aggregate_variables.leverage_ratio[T_i] = (variables_T.aggregate_variables.K_p[T_i] + variables_T.aggregate_variables.L_p[T_i]) / variables_T.aggregate_variables.N[T_i]
+
             variables_T.aggregate_variables.KL_to_D_ratio[T_i] = aggregate_variables.KL_to_D_ratio
+
             variables_T.aggregate_variables.debt_to_earning_ratio[T_i] = aggregate_variables.debt_to_earning_ratio
+
             variables_T.aggregate_variables.share_of_filers[T_i] = aggregate_variables.share_of_filers
             variables_T.aggregate_variables.share_of_involuntary_filers[T_i] = aggregate_variables.share_of_involuntary_filers
             variables_T.aggregate_variables.share_in_debts[T_i] = aggregate_variables.share_in_debts
+
             variables_T.aggregate_variables.avg_loan_rate[T_i] = aggregate_variables.avg_loan_rate
             variables_T.aggregate_variables.avg_loan_rate_pw[T_i] = aggregate_variables.avg_loan_rate_pw
         end

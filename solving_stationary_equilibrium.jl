@@ -417,6 +417,16 @@ function variables_function(parameters::NamedTuple; λ::Real)
     return variables
 end
 
+function variables_function_update!(variables::Mutable_Variables, parameters::NamedTuple; λ::Real)
+    """
+    construct a mutable object containing endogenous variables
+    """
+
+    # define aggregate prices
+    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ = λ)
+    variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
+end
+
 function EV_function(e_1_i::Integer, e_2_i::Integer, V_p::Array{Float64,5}, parameters::NamedTuple)
     """
     construct expected value function
@@ -902,7 +912,7 @@ function solve_aggregate_variable_function(
     return aggregate_variables
 end
 
-function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-5, tol_μ::Real = 1E-8, slow_updating::Real = 1.0)
+function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-8, tol_μ::Real = 1E-10, slow_updating::Real = 1.0)
     """
     solve the economy with given liquidity multiplier ι
     """
@@ -918,7 +928,8 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
         solve_aggregate_variable_function(variables.policy_a, variables.policy_d, variables.policy_pos_a, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
     # compute the difference between demand and supply sides
-    ED = variables.aggregate_variables.KL_to_D_ratio - variables.aggregate_prices.KL_to_D_ratio_λ
+    ED_KL_to_D_ratio = variables.aggregate_variables.KL_to_D_ratio - variables.aggregate_prices.KL_to_D_ratio_λ
+    ED_leverage_ratio = variables.aggregate_variables.leverage_ratio - variables.aggregate_prices.leverage_ratio_λ
 
     # printout results
     data_spec = Any[
@@ -926,17 +937,18 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
         "Liquidity Multiplier" variables.aggregate_prices.λ #=2=#
         "Asset-to-Debt Ratio (Demand)" variables.aggregate_variables.KL_to_D_ratio #=3=#
         "Asset-to-Debt Ratio (Supply)" variables.aggregate_prices.KL_to_D_ratio_λ #=4=#
-        "Difference" ED #=5=#
+        "Difference" ED_KL_to_D_ratio #=5=#
         "Leverage Ratio (Demand)" variables.aggregate_variables.leverage_ratio #=6=#
         "Leverage Ratio (Supply)" variables.aggregate_prices.leverage_ratio_λ #=7=#
+        "Difference" ED_leverage_ratio #=8=#
     ]
-    pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [2, 4, 5])
+    pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [2, 4, 5, 7])
 
     # return excess demand
-    return ED
+    return ED_KL_to_D_ratio, ED_leverage_ratio
 end
 
-function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-6, iter_max::Real = 500, slow_updating::Real = 1.0)
+function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-5, iter_max::Real = 500, slow_updating::Real = 1.0)
     """
     solve for optimal liquidity multiplier
     """
@@ -944,16 +956,22 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     # check the case of λ_min = 0.0
     λ_min = 0.0
     variables_λ_min = variables_function(parameters; λ = λ_min)
-    ED_λ_min = solve_economy_function!(variables_λ_min, parameters; slow_updating = slow_updating)
-    if ED_λ_min > 0.0
+    ED_KL_to_D_ratio_λ_min, ED_leverage_ratio_λ_min = solve_economy_function!(variables_λ_min, parameters; slow_updating = slow_updating)
+    # if ED_KL_to_D_ratio_λ_min > 0.0
+    #     return variables_λ_min, variables_λ_min, 1
+    # end
+    if ED_leverage_ratio_λ_min < 0.0
         return variables_λ_min, variables_λ_min, 1
     end
 
     # check the case of λ_max = 1-ψ^(1/2)
     λ_max = 1.0 - sqrt(parameters.ψ)
     variables_λ_max = variables_function(parameters; λ = λ_max)
-    ED_λ_max = solve_economy_function!(variables_λ_max, parameters; slow_updating = slow_updating)
-    if ED_λ_max < 0.0
+    ED_KL_to_D_ratio_λ_max, ED_leverage_ratio_λ_max = solve_economy_function!(variables_λ_max, parameters; slow_updating = slow_updating)
+    # if ED_KL_to_D_ratio_λ_max < 0.0
+    #     return variables_λ_min, variables_λ_max, 2 # meaning solution doesn't exist!
+    # end
+    if ED_leverage_ratio_λ_max > 0.0
         return variables_λ_min, variables_λ_max, 2 # meaning solution doesn't exist!
     end
 
@@ -972,18 +990,28 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
         λ_optimal = (λ_lower + λ_upper) / 2
 
         # compute the associated results
-        variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
-        ED_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters; slow_updating = slow_updating)
+        if search_iter == 0
+            variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
+        else
+            variables_function_update!(variables_λ_optimal, parameters; λ = λ_optimal)
+        end
+        ED_KL_to_D_ratio_λ_optimal, ED_leverage_ratio_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters; slow_updating = slow_updating)
 
         # update search region
-        if ED_λ_optimal > 0.0
+        # if ED_KL_to_D_ratio_λ_optimal > 0.0
+        #     λ_upper = λ_optimal
+        # else
+        #     λ_lower = λ_optimal
+        # end
+        if ED_leverage_ratio_λ_optimal < 0.0
             λ_upper = λ_optimal
         else
             λ_lower = λ_optimal
         end
 
         # check convergence
-        crit = abs(ED_λ_optimal)
+        # crit = abs(ED_KL_to_D_ratio_λ_optimal)
+        crit = abs(ED_leverage_ratio_λ_optimal)
 
         # update the iteration number
         search_iter += 1
@@ -1039,9 +1067,6 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
     # compute the optimal multipliers with different η
     for η_i = 1:η_size
         η = η_grid[η_i]
-        # a_min_η = -((η + 0.05) * 10)
-        # a_size_neg_η = convert(Int, round(-a_min_η * 200 + 1))
-        # parameters_η = parameters_function(η = η, a_min = a_min_η, a_size_neg = a_size_neg_η)
         parameters_η = parameters_function(η = η)
         λ_min_adhoc_η = η_i > 1 ? results_A_FF[3,η_i-1] : -Inf
         variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_η; λ_min_adhoc = λ_min_adhoc_η)
@@ -1086,69 +1111,68 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
     # return results
     return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
-    # return var_names, results_A_NFF, results_A_FF
 end
 
-function results_CEV_function(parameters::NamedTuple, results_A::Array{Float64,2}, results_V::Array{Float64,6}, results_V_pos::Array{Float64,6})
-    """
-    compute consumption equivalent variation (CEV) with various η compared to the smallest η (most lenient policy)
-    """
+# function results_CEV_function(parameters::NamedTuple, results_A::Array{Float64,2}, results_V::Array{Float64,6}, results_V_pos::Array{Float64,6})
+#     """
+#     compute consumption equivalent variation (CEV) with various η compared to the smallest η (most lenient policy)
+#     """
+#
+#     # initialize pparameters
+#     @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters
+#
+#     # initialize result matrix
+#     η_size = size(results_A)[2]
+#     results_CEV = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+#
+#     # compute CEV for different η compared to the smallest η
+#     for η_i = 1:η_size, e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size, ν_i = 1:ν_size
+#         @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+#         @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+#         @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+#         @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+#         for a_μ_i = 1:a_size_μ
+#             @inbounds a_μ = a_grid_μ[a_μ_i]
+#             @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
+#             if a_μ >= 0.0
+#                 # a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
+#                 @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = (V_pos_itp_new(a_μ) / V_pos_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
+#             end
+#         end
+#     end
+#
+#     # return results
+#     return results_CEV
+# end
 
-    # initialize pparameters
-    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters
-
-    # initialize result matrix
-    η_size = size(results_A)[2]
-    results_CEV = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
-
-    # compute CEV for different η compared to the smallest η
-    for η_i = 1:η_size, e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size, ν_i = 1:ν_size
-        @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
-        @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end])
-        @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
-        @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end])
-        for a_μ_i = 1:a_size_μ
-            @inbounds a_μ = a_grid_μ[a_μ_i]
-            @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = (V_itp_new(a_μ) / V_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
-            if a_μ >= 0.0
-                # a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
-                @inbounds results_CEV[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = (V_pos_itp_new(a_μ) / V_pos_itp_old(a_μ))^(1.0 / (1.0 - σ)) - 1.0
-            end
-        end
-    end
-
-    # return results
-    return results_CEV
-end
-
-function results_HHs_favor_function(parameters::NamedTuple, results_A::Array{Float64,2}, results_V::Array{Float64,6}, results_V_pos::Array{Float64,6})
-    """
-    compute consumption share of HHs in favor of the given η compared to the smallest η (most lenient policy)
-    """
-
-    # initialize pparameters
-    @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters
-
-    # initialize result matrix
-    η_size = size(results_A)[2]
-    results_HHs_favor = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
-
-    # compute CEV for different η compared to the smallest η
-    for η_i = 1:η_size, ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-        @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
-        @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end])
-        @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
-        @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end])
-        for a_μ_i = 1:a_size_μ
-            @inbounds a_μ = a_grid_μ[a_μ_i]
-            @inbounds results_HHs_favor[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = V_itp_new(a_μ) >= V_itp_old(a_μ)
-            if a_μ >= 0.0
-                # a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
-                @inbounds results_HHs_favor[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = V_pos_itp_new(a_μ) >= V_pos_itp_old(a_μ)
-            end
-        end
-    end
-
-    # return results
-    return results_HHs_favor
-end
+# function results_HHs_favor_function(parameters::NamedTuple, results_A::Array{Float64,2}, results_V::Array{Float64,6}, results_V_pos::Array{Float64,6})
+#     """
+#     compute consumption share of HHs in favor of the given η compared to the smallest η (most lenient policy)
+#     """
+#
+#     # initialize pparameters
+#     @unpack a_grid, a_size, a_grid_pos, a_size_pos, a_grid_μ, a_size_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, σ = parameters
+#
+#     # initialize result matrix
+#     η_size = size(results_A)[2]
+#     results_HHs_favor = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, η_size)
+#
+#     # compute CEV for different η compared to the smallest η
+#     for η_i = 1:η_size, ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
+#         @inbounds @views V_itp_new = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+#         @inbounds @views V_itp_old = Akima(a_grid, results_V[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+#         @inbounds @views V_pos_itp_new = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, η_i])
+#         @inbounds @views V_pos_itp_old = Akima(a_grid_pos, results_V_pos[:, e_1_i, e_2_i, e_3_i, ν_i, end])
+#         for a_μ_i = 1:a_size_μ
+#             @inbounds a_μ = a_grid_μ[a_μ_i]
+#             @inbounds results_HHs_favor[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1, η_i] = V_itp_new(a_μ) >= V_itp_old(a_μ)
+#             if a_μ >= 0.0
+#                 # a_pos_μ_i = a_μ_i - a_ind_zero_μ + 1
+#                 @inbounds results_HHs_favor[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2, η_i] = V_pos_itp_new(a_μ) >= V_pos_itp_old(a_μ)
+#             end
+#         end
+#     end
+#
+#     # return results
+#     return results_HHs_favor
+# end

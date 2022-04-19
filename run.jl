@@ -54,10 +54,10 @@ if Indicator_solve_equlibria_λ_min_and_max == true
     parameters = parameters_function()
 
     variables_min = variables_function(parameters; λ = 0.0)
-    solve_economy_function!(variables_min, parameters; slow_updating = slow_updating)
+    ED_KL_to_D_ratio_min, ED_leverage_ratio_min = solve_economy_function!(variables_min, parameters; slow_updating = slow_updating)
 
     variables_max = variables_function(parameters; λ = 1.0 - sqrt(parameters.ψ))
-    solve_economy_function!(variables_max, parameters; slow_updating = slow_updating)
+    ED_KL_to_D_ratio_max, ED_leverage_ratio_max = solve_economy_function!(variables_max, parameters; slow_updating = slow_updating)
 
     data_spec = Any[
         "λ" variables_min.aggregate_prices.λ variables_max.aggregate_prices.λ

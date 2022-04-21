@@ -77,13 +77,14 @@ function parameters_function(;
     # e_2_grid = collect(e_2_MC.state_values)
     e_2_grid, e_2_Γ = adda_cooper(e_2_size, e_2_ρ, e_2_σ)
     G_e_2 = stationary_distributions(MarkovChain(e_2_Γ, e_2_grid))[1]
+    # G_e_2 = [1.0, 0.0, 0.0]
 
     # transitory endowment shock
     # e_3_grid, e_3_Γ = adda_cooper(e_3_size, 0.0, e_3_σ)
     e_3_bar = sqrt((3 / 2) * e_3_σ^2)
     e_3_grid = [-e_3_bar, 0.0, e_3_bar]
     e_3_Γ = [1.0 / e_3_size for i = 1:e_3_size]
-    G_e_3 = e_3_Γ
+    G_e_3 = [0.0, 1.0, 0.0]
 
     # aggregate labor endowment
     E = 1.0
@@ -91,6 +92,7 @@ function parameters_function(;
     # preference schock
     ν_grid = [ν_s, 1.0]
     ν_Γ = [ν_p, 1.0 - ν_p]
+    G_ν = [0.0, 1.0]
 
     # asset holding grid for VFI
     a_grid_neg = collect(range(a_min, 0.0, length = a_size_neg))
@@ -147,6 +149,7 @@ function parameters_function(;
         ν_size = ν_size,
         ν_Γ = ν_Γ,
         ν_grid = ν_grid,
+        G_ν = G_ν,
         a_grid = a_grid,
         a_grid_neg = a_grid_neg,
         a_grid_pos = a_grid_pos,
@@ -219,7 +222,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 480, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 720, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """
@@ -669,7 +672,7 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
     """
 
     # unpack parameters
-    @unpack e_1_size, e_1_Γ, G_e_1, e_2_size, e_2_Γ, G_e_2, e_3_size, e_3_Γ, G_e_3, ν_size, ν_Γ, a_grid, a_grid_pos, a_size_μ, a_grid_μ, a_ind_zero_μ, ρ, p_h = parameters
+    @unpack e_1_size, e_1_Γ, G_e_1, e_2_size, e_2_Γ, G_e_2, e_3_size, e_3_Γ, G_e_3, ν_size, ν_Γ, G_ν, a_grid, a_grid_pos, a_size_μ, a_grid_μ, a_ind_zero_μ, ρ, p_h = parameters
 
     # construct container
     μ = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2)
@@ -711,7 +714,7 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
                 @inbounds μ[a_p_ub, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 1] +=
                     ρ * (1.0 - policy_d_itp(a_μ)) * e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_upper * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1]
                 @inbounds μ[a_ind_zero_μ, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 2] += ρ * policy_d_itp(a_μ) * e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1]
-                @inbounds μ[a_ind_zero_μ, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += (1.0 - ρ) * G_e_1[e_1_p_i] * G_e_2[e_2_p_i] * (e_3_p_i == ((e_3_size + 1) / 2)) * (ν_p_i == 2) * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1]
+                @inbounds μ[a_ind_zero_μ, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += (1.0 - ρ) * G_e_1[e_1_p_i] * G_e_2[e_2_p_i] * G_e_3[e_3_p_i] * G_ν[ν_p_i] * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1]
             end
 
             if a_μ >= 0.0
@@ -732,7 +735,7 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
                     @inbounds μ[a_p_ub, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += ρ * p_h * e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_upper * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
                     @inbounds μ[a_p_lb, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 2] += ρ * (1.0 - p_h) * e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_lower * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
                     @inbounds μ[a_p_ub, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 2] += ρ * (1.0 - p_h) * e_1_Γ[e_1_i, e_1_p_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_upper * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
-                    @inbounds μ[a_ind_zero_μ, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += (1.0 - ρ) * G_e_1[e_1_p_i] * G_e_2[e_2_p_i] * (e_3_p_i == ((e_3_size + 1) / 2)) * (ν_p_i == 2) * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
+                    @inbounds μ[a_ind_zero_μ, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += (1.0 - ρ) * G_e_1[e_1_p_i] * G_e_2[e_2_p_i] * G_e_3[e_3_p_i] * G_ν[ν_p_i] * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
                 end
             end
         end

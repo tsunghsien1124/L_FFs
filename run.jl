@@ -38,8 +38,8 @@ end
 #=======#
 Indicator_solve_equlibria_λ_min_and_max = false
 Indicator_solve_equlibrium_given_λ = false
-Indicator_solve_stationary_equlibrium = true
-Indicator_solve_stationary_equlibria_across_η = false
+Indicator_solve_stationary_equlibrium = false
+Indicator_solve_stationary_equlibria_across_η = true
 Indicator_solve_transitional_dynamics = false
 
 # print out the number of threads

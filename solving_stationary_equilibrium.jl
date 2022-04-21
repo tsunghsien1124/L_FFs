@@ -42,7 +42,7 @@ function parameters_function(;
     θ::Real = 1.0 / 3.0,            # diverting fraction
     p_h::Real = 1.0 / 7.0,          # prob. of history erased
     κ::Real = 0.02,                 # filing cost
-    ζ_d::Real = 0.2367311,          # EV scale parameter (default)
+    ζ_d::Real = 0.23673,            # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock

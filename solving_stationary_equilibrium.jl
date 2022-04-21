@@ -1069,7 +1069,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         η = η_grid[η_i]
         parameters_η = parameters_function(η = η)
         λ_min_adhoc_η = η_i > 1 ? results_A_FF[3,η_i-1] : -Inf
-        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_η; λ_min_adhoc = λ_min_adhoc_η)
+        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_η; λ_min_adhoc = λ_min_adhoc_η, slow_updating = slow_updating)
 
         # save results
         results_A_NFF[1, η_i] = parameters_η.η

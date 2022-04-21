@@ -37,8 +37,9 @@ end
 # Tasks #
 #=======#
 Indicator_solve_equlibria_λ_min_and_max = false
-Indicator_solve_equlibrium_given_λ = true
+Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
+Indicator_solve_stationary_equlibria_across_η = true
 Indicator_solve_transitional_dynamics = false
 
 # print out the number of threads
@@ -79,7 +80,7 @@ if Indicator_solve_equlibrium_given_λ == true
 
     parameters = parameters_function()
     variables = variables_function(parameters; λ = 0.0169193350971958)
-    solve_economy_function!(variables, parameters; slow_updaing = slow_updating)
+    ED_KL_to_D_ratio, ED_leverage_ratio = solve_economy_function!(variables, parameters; slow_updating = slow_updating)
     flag = 3
 
     calibration_results = [
@@ -105,9 +106,9 @@ end
 #================#
 # Checking Plots #
 #================#
-# a_neg_index = 201
-# plot(parameters.a_grid_neg[a_neg_index:end], variables_min.q[a_neg_index:parameters.a_ind_zero,2,:], legend=:none)
-# plot(parameters.a_grid_neg[a_neg_index:end], variables_min.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
+# a_neg_index = 1
+# plot(parameters.a_grid_neg[a_neg_index:end], variables.q[a_neg_index:parameters.a_ind_zero,2,:], legend=:none)
+# plot(parameters.a_grid_neg[a_neg_index:end], variables.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
 
 #============================================#
 # Solve stationary equilibrium (calibration) #
@@ -162,11 +163,17 @@ end
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-# var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = 0.10, η_max = 0.90, η_step = 0.10)
-# cd(homedir() * "/financial_frictions/")
-# cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
-# @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+if Indicator_solve_stationary_equlibria_across_η == true
+
+    η_min_search = 0.15
+    η_max_search = 0.45
+    η_step_search = 0.10
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search)
+
+    @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    # @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+end
 
 #=============================#
 # Solve transitional dynamics #

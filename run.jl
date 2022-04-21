@@ -37,8 +37,8 @@ end
 # Tasks #
 #=======#
 Indicator_solve_equlibria_λ_min_and_max = false
-Indicator_solve_equlibrium_given_λ = false
-Indicator_solve_stationary_equlibrium = true
+Indicator_solve_equlibrium_given_λ = true
+Indicator_solve_stationary_equlibrium = false
 Indicator_solve_transitional_dynamics = false
 
 # print out the number of threads
@@ -78,7 +78,7 @@ end
 if Indicator_solve_equlibrium_given_λ == true
 
     parameters = parameters_function()
-    variables = variables_function(parameters; λ = 0.0189904)
+    variables = variables_function(parameters; λ = 0.0169193350971958)
     solve_economy_function!(variables, parameters; slow_updaing = slow_updating)
     flag = 3
 
@@ -171,18 +171,23 @@ end
 #=============================#
 # Solve transitional dynamics #
 #=============================#
-# # old stationary equilibrium
-# println("Solving initial steady state...")
-# parameters_old = parameters_function()
-# variables_old = variables_function(parameters_old; λ = 0.0)
-# solve_economy_function!(variables_old, parameters_old)
-#
-# # new stationary equilibrium
-# println("Solving new steady state...")
-# parameters_new = parameters_function()
-# variables_new = variables_function(parameters_new; λ = 0.0)
-# solve_economy_function!(variables_new, parameters_new)
-#
-# # solve transitional dynamics
-# variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 240)
-# # transitional_dynamic_λ_function!(variables_T, parameters_new; iter_max = 4, slow_updating = 0.5)
+
+if Indicator_solve_transitional_dynamics == true
+
+    # old stationary equilibrium
+    println("Solving initial steady state...")
+    parameters_old = parameters_function()
+    variables_old = variables_function(parameters_old; λ = 0.0)
+    solve_economy_function!(variables_old, parameters_old)
+
+    # new stationary equilibrium
+    println("Solving new steady state...")
+    parameters_new = parameters_function()
+    variables_new = variables_function(parameters_new; λ = 0.0)
+    solve_economy_function!(variables_new, parameters_new)
+
+    # solve transitional dynamics
+    variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 240)
+    # transitional_dynamic_λ_function!(variables_T, parameters_new; iter_max = 4, slow_updating = 0.5)
+
+end

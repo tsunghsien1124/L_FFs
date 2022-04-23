@@ -530,7 +530,8 @@ function value_and_policy_function(
             end
 
             # compute defaulting value
-            @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y - κ ? utility_function((1.0 - η) * (y - κ), σ) + V_hat_pos[1] : -Inf
+            # c_d = (1.0 - η) * (y - κ)
+            @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < - η * y - κ ? utility_function((1.0 - η) * (y - κ), σ) + V_hat_pos[1] : -Inf
             # @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y - κ ? (1.0 - ν*β*ρ) * utility_function((1.0 - η) * (y - κ), σ) + V_hat_pos[1] : -Inf
 
             V_max = max(V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i], V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i])
@@ -858,6 +859,8 @@ function solve_aggregate_variable_function(
                 # total deposits
                 if a_p > 0.0
                     @inbounds D += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
+                    # @inbounds D += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * qa_function_itp(a_p))
+
                 end
             end
 
@@ -1071,7 +1074,8 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
     for η_i = 1:η_size
         η = η_grid[η_i]
         parameters_η = parameters_function(η = η)
-        λ_min_adhoc_η = η_i > 1 ? results_A_FF[3,η_i-1] : -Inf
+        # λ_min_adhoc_η = η_i > 1 ? results_A_FF[3,η_i-1] : -Inf
+        λ_min_adhoc_η = -Inf
         variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_η; λ_min_adhoc = λ_min_adhoc_η, slow_updating = slow_updating)
 
         # save results

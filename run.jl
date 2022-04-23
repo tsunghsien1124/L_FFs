@@ -28,7 +28,8 @@ include("solving_transitional_dynamics.jl")
 #===================#
 Indicator_local_machine = true
 if Indicator_local_machine == true
-    cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+    # cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+    cd(homedir() * "/Dropbox/Dissertation/Chapter 3 - Consumer Bankruptcy with Financial Frictions/")
 else
     cd(homedir() * "/financial_frictions/")
 end
@@ -39,7 +40,7 @@ end
 Indicator_solve_equlibria_λ_min_and_max = false
 Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
-Indicator_solve_stationary_equlibria_across_η = true
+Indicator_solve_stationary_equlibria_across_η = false
 Indicator_solve_transitional_dynamics = false
 
 # print out the number of threads
@@ -158,6 +159,7 @@ if Indicator_solve_stationary_equlibrium == true
     end
 
     CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
+
 end
 
 #======================================================#
@@ -166,13 +168,12 @@ end
 
 if Indicator_solve_stationary_equlibria_across_η == true
 
-    η_min_search = 0.15
-    η_max_search = 0.45
-    η_step_search = 0.10
+    η_min_search = 0.20
+    η_max_search = 0.30
+    η_step_search = 0.05
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search)
-
     @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
-    # @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
 end
 
 #=============================#
@@ -181,20 +182,26 @@ end
 
 if Indicator_solve_transitional_dynamics == true
 
+    @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    # specily the new and old policies
+    η_old, λ_old = results_A_FF[1,2], results_A_FF[3,2]
+    η_new, λ_new = results_A_FF[1,1], results_A_FF[3,1]
+
     # old stationary equilibrium
-    println("Solving initial steady state...")
-    parameters_old = parameters_function()
-    variables_old = variables_function(parameters_old; λ = 0.0)
+    println("Solving old steady state...")
+    parameters_old = parameters_function(η = η_old)
+    variables_old = variables_function(parameters_old; λ = λ_old)
     solve_economy_function!(variables_old, parameters_old)
 
     # new stationary equilibrium
     println("Solving new steady state...")
-    parameters_new = parameters_function()
-    variables_new = variables_function(parameters_new; λ = 0.0)
+    parameters_new = parameters_function(η = η_new)
+    variables_new = variables_function(parameters_new; λ = λ_new)
     solve_economy_function!(variables_new, parameters_new)
 
     # solve transitional dynamics
-    variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 240)
-    # transitional_dynamic_λ_function!(variables_T, parameters_new; iter_max = 4, slow_updating = 0.5)
+    variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 60)
+    transitional_dynamic_λ_function!(variables_T, variables_new, parameters_new; iter_max = 10, slow_updating = slow_updating)
 
 end

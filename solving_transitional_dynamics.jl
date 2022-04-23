@@ -54,19 +54,12 @@ mutable struct Mutable_Variables_T
     μ::Array{Float64,7}
 end
 
-function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer)
+function aggregate_price_update(leverage_ratio_λ::Array{Float64,1}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple)
     """
-    construct a mutable object containing endogenous variables of periods T
+    update aggregate prices given a series of leverage ratio
     """
 
-    # unpack parameters from new steady state
-    @unpack a_size, a_size_pos, a_size_neg, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, ρ, θ, ψ, r_f, E, δ, α = parameters_new
-
-    # compute adjusted time periods
-    T_size = T_size + 2
-
-    # define aggregate prices
-    leverage_ratio_λ = collect(range(variables_old.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
+    T_size = length(leverage_ratio_λ)
 
     λ = zeros(T_size)
     λ[1] = variables_old.aggregate_prices.λ
@@ -98,6 +91,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
 
     w_λ = zeros(T_size)
     w_λ[1] = variables_old.aggregate_prices.w_λ
+    w_λ[2] = variables_old.aggregate_prices.w_λ
     w_λ[end] = variables_new.aggregate_prices.w_λ
 
     for T_i in (T_size-1):(-1):2
@@ -110,6 +104,25 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
         K_p_λ[T_i] = E * ((r_k_λ[T_i] + δ) / α)^(1.0 / (α - 1.0))
         w_λ[T_i+1] = (1.0 - α) * (K_p_λ[T_i] / E)^α
     end
+
+    return λ, ξ_λ, Λ_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ
+end
+
+function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer)
+    """
+    construct a mutable object containing endogenous variables of periods T
+    """
+
+    # unpack parameters from new steady state
+    @unpack a_size, a_size_pos, a_size_neg, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, ρ, θ, ψ, r_f, E, δ, α = parameters_new
+
+    # compute adjusted time periods
+    T_size = T_size + 2
+
+    # define aggregate prices
+    leverage_ratio_λ = collect(range(variables_old.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
+
+    λ, ξ_λ, Λ_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ = aggregate_price_update(leverage_ratio_λ, variables_old, variables_new, parameters_new)
 
     aggregate_prices = Mutable_Aggregate_Prices_T(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ)
 
@@ -220,13 +233,14 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     return variables_T
 end
 
-function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer = 240, tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = true)
+function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_new::Mutable_Variables, parameters_new::NamedTuple; tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = false)
     """
     solve transitional dynamics of periods T from initial to new steady states
     """
 
     # unpack parameters
     @unpack θ, ψ, r_f, E, δ, α = parameters_new
+    T_size = size(variables_T.V)[end]
 
     # initialize the iteration number and criterion
     search_iter = 0
@@ -241,25 +255,30 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
         copyto!(leverage_ratio_λ_p, variables_T.aggregate_prices.leverage_ratio_λ)
 
         # solve individual-level problems backward
-        println("Solving individual-level problems backward...")
         for T_i = (T_size-1):(-1):2
 
+            # report progress
+            println("Solving individual-level problems backward... period $(T_i-1) / $(T_size-2)")
+
             # pricing function and borrowing risky limit
-            variables_T.R[:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i] = pricing_and_rbl_function(variables_T.policy_d[:,:,:,:,:,T_i+1], variables.aggregate_prices.w_λ[T_i+1], variables.aggregate_prices.ι_λ[T_i], parameters_new)
+            variables_T.R[:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i] = pricing_and_rbl_function(variables_T.policy_d[:,:,:,:,:,T_i+1], variables_T.aggregate_prices.w_λ[T_i+1], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
 
             # value and policy functions
             variables_T.V[:,:,:,:,:,T_i], variables_T.V_d[:,:,:,:,:,T_i], variables_T.V_nd[:,:,:,:,:,T_i], variables_T.V_pos[:,:,:,:,:,T_i], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i] = value_and_policy_function(variables_T.V[:,:,:,:,:,T_i+1], variables_T.V_d[:,:,:,:,:,T_i+1], variables_T.V_nd[:,:,:,:,:,T_i+1], variables_T.V_pos[:,:,:,:,:,T_i+1], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.aggregate_prices.w_λ[T_i], parameters_new)
         end
 
         # solve distribution forward and update aggregate variables and prices
-        println("Solving distribution and aggregate variables/prices forward...")
+
         for T_i = 2:(T_size-1)
+
+            # report progress
+            println("Solving distribution and aggregate variables/prices forward... period $(T_i-1) / $(T_size-2)")
 
             # update stationary distribution
             variables_T.μ[:,:,:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], parameters_new)
 
             # compute aggregate variables
-            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i], variables_T.aggregate_prices.K_λ[T_i], variables_T.aggregate_prices.w_λ[T_i], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
+            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i], variables_T.aggregate_prices.K_p_λ[T_i], variables_T.aggregate_prices.w_λ[T_i], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
 
             variables_T.aggregate_variables.K_p[T_i] = aggregate_variables.K
             variables_T.aggregate_variables.L_p[T_i] = aggregate_variables.L
@@ -293,16 +312,7 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
         variables_T.aggregate_prices.leverage_ratio_λ = slow_updating * leverage_ratio_λ_p + (1.0 - slow_updating) * variables_T.aggregate_variables.leverage_ratio
 
         # update aggregate prices
-        variables_T.aggregate_prices.ξ = θ .* variables_T.aggregate_prices.leverage_ratio_λ
-        variables_T.aggregate_prices.Λ = β_f .* (1.0 .- ψ .+ ψ .* variables_T.aggregate_prices.ξ)
-        variables_T.aggregate_prices.KL_to_D_ratio_λ = variables_T.aggregate_prices.leverage_ratio_λ ./ (variables_T.aggregate_prices.leverage_ratio_λ .- 1.0)
-        for T_i = 2:(T_size-1)
-            variables_T.aggregate_prices.λ[T_i] = 1.0 - (1.0 - ψ + ψ*variables_T.aggregate_prices.ξ[T_i+1]) / variables_T.aggregate_prices.ξ[T_i]
-            variables_T.aggregate_prices.ι[T_i] = variables_T.aggregate_prices.λ[T_i] * θ / variables_T.aggregate_prices.Λ[T_i+1]
-        end
-        variables_T.aggregate_prices.r_k = r_f .+ variables_T.aggregate_prices.ι
-        variables_T.aggregate_prices.K_λ = E .* ((variables_T.aggregate_prices.r_k .+ δ) ./ α).^(1.0 / (α - 1.0))
-        variables_T.aggregate_prices.w = (1.0 - α) .* ((variables_T.aggregate_prices.K_λ ./ E).^α)
+        variables_T.aggregate_prices.λ, variables_T.aggregate_prices.ξ_λ, variables_T.aggregate_prices.Λ_λ, variables_T.aggregate_prices.KL_to_D_ratio_λ, variables_T.aggregate_prices.ι_λ, variables_T.aggregate_prices.r_k_λ, variables_T.aggregate_prices.K_p_λ, variables_T.aggregate_prices.w_λ = aggregate_price_update(variables_T.aggregate_prices.leverage_ratio_λ, variables_old, variables_new, parameters_new)
 
         # tracking figures
         if figure_track == true

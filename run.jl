@@ -21,6 +21,7 @@ using Plots
 # Import functions #
 #==================#
 include("solving_stationary_equilibrium.jl")
+# include("solving_stationary_equilibrium_fixed_cost.jl")
 include("solving_transitional_dynamics.jl")
 
 #===================#
@@ -28,8 +29,8 @@ include("solving_transitional_dynamics.jl")
 #===================#
 Indicator_local_machine = true
 if Indicator_local_machine == true
-    # cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-    cd(homedir() * "/Dropbox/Dissertation/Chapter 3 - Consumer Bankruptcy with Financial Frictions/")
+    cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+    # cd(homedir() * "/Dropbox/Dissertation/Chapter 3 - Consumer Bankruptcy with Financial Frictions/")
 else
     cd(homedir() * "/financial_frictions/")
 end
@@ -37,7 +38,7 @@ end
 #=======#
 # Tasks #
 #=======#
-Indicator_solve_equlibria_λ_min_and_max = false
+Indicator_solve_equlibria_λ_min_and_max = true
 Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
 Indicator_solve_stationary_equlibria_across_η = false
@@ -107,9 +108,10 @@ end
 #================#
 # Checking Plots #
 #================#
-# a_neg_index = 1
-# plot(parameters.a_grid_neg[a_neg_index:end], variables.q[a_neg_index:parameters.a_ind_zero,2,:], legend=:none)
-# plot(parameters.a_grid_neg[a_neg_index:end], variables.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
+a_neg_index = 76
+plot(parameters.a_grid_neg[a_neg_index:end], variables_min.q[a_neg_index:parameters.a_ind_zero,2,:], legend=:none)
+
+# plot(parameters.a_grid_neg[a_neg_index:end], variables_min.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
 
 #============================================#
 # Solve stationary equilibrium (calibration) #
@@ -119,8 +121,8 @@ if Indicator_solve_stationary_equlibrium == true
     β_search = 0.940 / 0.980 # collect(0.94:0.01:0.97)
     θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
     η_search = 0.25 # collect(0.20:0.05:0.40)
-    ζ_d_search = collect(0.2367100:0.0000100:0.2367300)
-    ν_p_search = 0.1337900 # collect(0.13370:0.00002:0.13378)
+    ζ_d_search = 0.001 # collect(0.2367100:0.0000100:0.2367300)
+    ν_p_search = collect(0.0090:0.0005:0.0150)
 
     β_search_size = length(β_search)
     θ_search_size = length(θ_search)

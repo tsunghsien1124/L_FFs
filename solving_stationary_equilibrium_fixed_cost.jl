@@ -29,20 +29,22 @@ function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real = 0.0)
 end
 
 function parameters_function(;
-    β::Real = 0.940 / 0.980,        # discount factor (households)
-    ρ::Real = 0.980,                # survival rate
-    r_f::Real = 0.04,               # risk-free rate # 1.04*ρ-1.0
+    β::Real = 0.940,                # discount factor (households)
+    ρ::Real = 0.975,                # survival rate
+    r_f::Real = 1.04*ρ-1.0,         # risk-free rate # 1.04*ρ-1.0
     β_f::Real = 1.0 / (1.0 + r_f),  # discount factor (bank)
-    τ::Real = 0.04,                 # transaction cost
+    τ::Real = 1.04*ρ-1.0,           # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.25,                 # garnishment rate
+    η::Real = 0.00,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 1.0 - 1.0 / 20.0,     # exogenous retention ratio
     θ::Real = 1.0 / 3.0,            # diverting fraction
-    p_h::Real = 1.0 / 10.0,         # prob. of history erased
-    κ::Real = 0.00,                 # filing cost
-    ζ_d::Real = 0.01500,            # EV scale parameter (default)
+    p_h::Real = 1.0 / 7.0,          # prob. of history erased
+    κ::Real = 0.02,                 # filing cost
+    χ::Real = 0.16,                 # recovery rate
+    ζ_d::Real = 0.0005,             # EV scale parameter (default)
+    γ_d::Real = 0.00,               # utility costs
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -50,14 +52,14 @@ function parameters_function(;
     e_2_size::Integer = 3,          # number of persistent endowment shock
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
-    ν_s::Real = 0.0000,             # scale of patience
-    ν_p::Real = 0.0100,             # probability of patience
+    ν_s::Real = 1.0000,             # scale of patience
+    ν_p::Real = 0.0000,             # probability of patience
     ν_size::Integer = 2,            # number of preference shock
-    a_min::Real = -10.0,            # min of asset holding
+    a_min::Real = -2.0,             # min of asset holding
     a_max::Real = 500.0,            # max of asset holding
-    a_size_neg::Integer = 101,      # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 301,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 101,      # number of grid of positive asset holding for VFI
-    a_degree::Integer = 2,          # curvature of the positive asset gridpoints
+    a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     μ_scale::Integer = 1,           # scale for the asset holding gridpoints for distribution
 )
     """
@@ -126,7 +128,9 @@ function parameters_function(;
         θ = θ,
         p_h = p_h,
         κ = κ,
+        χ = χ,
         ζ_d = ζ_d,
+        γ_d = γ_d,
         e_1_σ = e_1_σ,
         e_1_size = e_1_size,
         e_1_Γ = e_1_Γ,
@@ -222,7 +226,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 500, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 120, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """
@@ -241,39 +245,6 @@ function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid
         @inbounds lb = grid[obj_index-obj_range]
         @inbounds ub = grid[obj_index+obj_range]
     end
-    return lb, ub
-end
-
-# function min_bounds_function(obj::Function, a_grid::Array{Float64,1}, grid_min::Real, grid_max::Real; obj_range::Integer = 1)
-#     """
-#     compute bounds for minimization
-#     """
-#     grid_min_ind = findfirst(grid_min .<= a_grid)[]
-#     grid_max_ind = findlast(a_grid .<= grid_max)[]
-#     grid_adj = a_grid[grid_min_ind:grid_max_ind]
-#     grid_size = length(grid_adj)
-#     obj_grid = obj.(grid_adj)
-#     obj_index = argmin(obj_grid)
-#     if obj_index < (1 + obj_range)
-#         lb = grid_min
-#         @inbounds ub = grid_adj[obj_index+obj_range]
-#     elseif obj_index > (grid_size - obj_range)
-#         @inbounds lb = grid_adj[obj_index-obj_range]
-#         ub = grid_max
-#     else
-#         @inbounds lb = grid_adj[obj_index-obj_range]
-#         @inbounds ub = grid_adj[obj_index+obj_range]
-#     end
-#     return lb, ub
-# end
-
-function zero_bounds_function(V_d::Real, V_nd::Array{Float64,1}, a_grid::Array{Float64,1})
-    """
-    compute bounds for (zero) root finding
-    """
-
-    @inbounds lb = a_grid[minimum(findall(V_nd .> V_d))]
-    @inbounds ub = a_grid[maximum(findall(V_nd .< V_d))]
     return lb, ub
 end
 
@@ -382,14 +353,14 @@ function variables_function(parameters::NamedTuple; λ::Real)
     q = ones(a_size, e_1_size, e_2_size) .* ρ ./ (1.0 + r_f)
     rbl = zeros(e_1_size, e_2_size, 2)
     for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-        for a_p_i = 1:(a_size_neg-1)
-            @inbounds a_p = a_grid_neg[a_p_i]
-            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_1_p_i = 1:e_1_size
-                @inbounds threshold = log_function(-a_p / w_λ) - e_1_grid[e_1_p_i] - e_3_grid[e_3_p_i]
-                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_i, e_3_p_i, a_p, threshold, w_λ, parameters)
-            end
-            @inbounds q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + τ + ι_λ))
-        end
+        # for a_p_i = 1:(a_size_neg-1)
+        #     @inbounds a_p = a_grid_neg[a_p_i]
+        #     for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_1_p_i = 1:e_1_size
+        #         @inbounds threshold = log_function(-a_p / w_λ) - e_1_grid[e_1_p_i] - e_3_grid[e_3_p_i]
+        #         @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_i, e_3_p_i, a_p, threshold, w_λ, parameters)
+        #     end
+        #     @inbounds q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + τ + ι_λ))
+        # end
 
         qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
         qa_funcion(a_p) = qa_funcion_itp(a_p)
@@ -470,7 +441,7 @@ function value_and_policy_function(
     """
 
     # unpack parameters
-    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_grid, ν_Γ, ρ, β, σ, η, r_f, p_h, κ, ζ_d = parameters
+    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_grid, ν_Γ, ρ, β, σ, η, r_f, p_h, κ, χ, ζ_d, γ_d = parameters
 
     # construct containers
     V = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
@@ -512,8 +483,8 @@ function value_and_policy_function(
 
             # compute non-defaulting value
             if (CoH - rbl_qa) >= 0.0
-                object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
-                # object_nd(a_p) = -((1.0 - ν*β*ρ) * utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
+                # object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
+                object_nd(a_p) = -((1.0 - ν*β*ρ) * utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
                 if ν == 0.0
                     V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -object_nd(rbl_a)
                     policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = rbl_a
@@ -529,9 +500,10 @@ function value_and_policy_function(
             end
 
             # compute defaulting value
-            # c_d = (1.0 - η) * (y - κ)
-            @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < - η * y - κ ? utility_function((1.0 - η) * (y - κ), σ) + V_hat_pos[1] : -Inf
-            # @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < -η * y - κ ? (1.0 - ν*β*ρ) * utility_function((1.0 - η) * (y - κ), σ) + V_hat_pos[1] : -Inf
+            c_d = (1.0 - η) * (χ * a + y - κ)
+            d_thres = c_d - y
+            # @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < d_thres ? utility_function(c_d, σ) + V_hat_pos[1] - γ_d : -Inf
+            @inbounds V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = a < d_thres ? (1.0 - ν*β*ρ) * utility_function(c_d, σ) + V_hat_pos[1] - γ_d : -Inf
 
             V_max = max(V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i], V_d[a_i, e_1_i, e_2_i, e_3_i, ν_i])
             if V_max == -Inf
@@ -546,8 +518,8 @@ function value_and_policy_function(
             # bad credit history
             if a_i >= a_ind_zero
                 a_pos_i = a_i - a_ind_zero + 1
-                object_pos(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
-                # object_pos(a_p) = -((1.0 - ν*β*ρ) * utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
+                # object_pos(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
+                object_pos(a_p) = -((1.0 - ν*β*ρ) * utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
                 if ν == 0.0
                     @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -object_pos(0.0)
                     @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
@@ -579,7 +551,7 @@ function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, ι::Real,
     """
 
     # unpack parameters
-    @unpack ρ, r_f, τ, η, a_ind_zero, a_size, a_grid, a_size_neg, a_grid_neg, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ = parameters
+    @unpack ρ, r_f, τ, η, a_ind_zero, a_size, a_grid, a_size_neg, a_grid_neg, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ, χ = parameters
 
     # contruct containers
     R = zeros(a_size_neg, e_1_size, e_2_size)
@@ -591,12 +563,18 @@ function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, ι::Real,
         for a_p_i = 1:(a_size_neg-1)
             @inbounds a_p = a_grid[a_p_i]
             for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size, e_1_p_i = 1:e_1_size
+                # @inbounds R[a_p_i, e_1_i, e_2_i] +=
+                #     e_1_Γ[e_1_i, e_1_p_i] *
+                #     e_2_Γ[e_2_i, e_2_p_i] *
+                #     e_3_Γ[e_3_p_i] *
+                #     ν_Γ[ν_p_i] *
+                #     (policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i] * η * w * exp(e_1_grid[e_1_p_i] + e_2_grid[e_2_p_i] + e_3_grid[e_3_p_i]) + (1.0 - policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i]) * (-a_p))
                 @inbounds R[a_p_i, e_1_i, e_2_i] +=
                     e_1_Γ[e_1_i, e_1_p_i] *
                     e_2_Γ[e_2_i, e_2_p_i] *
                     e_3_Γ[e_3_p_i] *
                     ν_Γ[ν_p_i] *
-                    (policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i] * η * w * exp(e_1_grid[e_1_p_i] + e_2_grid[e_2_p_i] + e_3_grid[e_3_p_i]) + (1.0 - policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i]) * (-a_p))
+                    (policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i] * χ * (-a_p) + (1.0 - policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i]) * (-a_p))
             end
             @inbounds q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + τ + ι))
         end

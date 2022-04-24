@@ -51,7 +51,7 @@ function parameters_function(;
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.0000,             # scale of patience
-    ν_p::Real = 0.0100,             # probability of patience
+    ν_p::Real = 0.0105,             # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -10.0,            # min of asset holding
     a_max::Real = 500.0,            # max of asset holding
@@ -916,7 +916,7 @@ function solve_aggregate_variable_function(
     return aggregate_variables
 end
 
-function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-5, tol_μ::Real = 1E-8, slow_updating::Real = 1.0)
+function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-8, tol_μ::Real = 1E-10, slow_updating::Real = 1.0)
     """
     solve the economy with given liquidity multiplier ι
     """
@@ -994,11 +994,12 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
         λ_optimal = (λ_lower + λ_upper) / 2
 
         # compute the associated results
-        if search_iter == 0
-            variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
-        else
-            variables_function_update!(variables_λ_optimal, parameters; λ = λ_optimal)
-        end
+        # if search_iter == 0
+        #     variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
+        # else
+        #     variables_function_update!(variables_λ_optimal, parameters; λ = λ_optimal)
+        # end
+        variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
         ED_KL_to_D_ratio_λ_optimal, ED_leverage_ratio_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters; slow_updating = slow_updating)
 
         # update search region

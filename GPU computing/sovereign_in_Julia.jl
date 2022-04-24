@@ -144,7 +144,7 @@ while (err > tol) & (iter < maxIter)
     Price = δ * Price + (1-δ) * Price0
     V = δ * V + (1-δ) * V0
     iter = iter + 1
-    println("Errors of round $iter: Value error: $err, price error: $PriceErr, Vd error: $VdErr")
+    # println("Errors of round $iter: Value error: $err, price error: $PriceErr, Vd error: $VdErr")
 
 end
 
@@ -153,20 +153,20 @@ println("Total Round ",iter)
 
 Vd = Vd[:,:]
 
-println("Vr: ====================")
-display(Vr)
-println("Vd: ==================")
-display(Vd)
-println("Decision: ==================")
-display(decision)
-println("Price: ==================")
-display(Price)
+# println("Vr: ====================")
+# display(Vr)
+# println("Vd: ==================")
+# display(Vd)
+# println("Decision: ==================")
+# display(decision)
+# println("Price: ==================")
+# display(Price)
 
-return Vr,Vd,decision,Price
+return B, Vr, Vd, decision, Price
 
 end
 
-@time VReturn, VDefault, Decision, Price = main()
+@time B, VReturn, VDefault, Decision, Price = main()
 
 #= Storing as CSV
 

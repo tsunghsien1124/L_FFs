@@ -412,3 +412,12 @@ if Indicator_simulation == true
     @save "simulations.jld2" panel_asset panel_history panel_default panel_age panel_consumption shock_ρ shock_e_1 shock_e_2 shock_e_3 shock_ν
 
 end
+
+
+period_all = size(panel_asset)[2]
+
+fraction_full_default_sim_all_periods = zeros(period_all)
+for i in 1:period_all
+    fraction_full_default_sim_all_periods[i] = sum(panel_default[:,i] .== 1)/num_hh*100
+end
+fraction_full_default_sim_all_periods_ave = sum(fraction_full_default_sim_all_periods)/period_all

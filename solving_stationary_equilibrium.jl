@@ -42,7 +42,7 @@ function parameters_function(;
     θ::Real = 1.0 / 3.0,            # diverting fraction
     p_h::Real = 1.0 / 10.0,         # prob. of history erased
     κ::Real = 0.00,                 # filing cost
-    ζ_d::Real = 0.01500,            # EV scale parameter (default)
+    ζ_d::Real = 0.02000,            # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -51,7 +51,7 @@ function parameters_function(;
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.0000,             # scale of patience
-    ν_p::Real = 0.0105,             # probability of patience
+    ν_p::Real = 0.0100,             # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -10.0,            # min of asset holding
     a_max::Real = 500.0,            # max of asset holding
@@ -916,7 +916,7 @@ function solve_aggregate_variable_function(
     return aggregate_variables
 end
 
-function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-8, tol_μ::Real = 1E-10, slow_updating::Real = 1.0)
+function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-6, tol_μ::Real = 1E-8, slow_updating::Real = 1.0)
     """
     solve the economy with given liquidity multiplier ι
     """
@@ -952,7 +952,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     return ED_KL_to_D_ratio, ED_leverage_ratio
 end
 
-function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-5, iter_max::Real = 500, slow_updating::Real = 1.0)
+function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-5, iter_max::Real = 200, slow_updating::Real = 1.0)
     """
     solve for optimal liquidity multiplier
     """

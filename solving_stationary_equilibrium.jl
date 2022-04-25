@@ -40,9 +40,9 @@ function parameters_function(;
     α::Real = 0.36,                 # capital share
     ψ::Real = 1.0 - 1.0 / 20.0,     # exogenous retention ratio
     θ::Real = 1.0 / 3.0,            # diverting fraction
-    p_h::Real = 1.0 / 7.0,          # prob. of history erased
+    p_h::Real = 1.0 / 10.0,         # prob. of history erased
     κ::Real = 0.00,                 # filing cost
-    ζ_d::Real = 0.01400,            # EV scale parameter (default)
+    ζ_d::Real = 0.01500,            # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock

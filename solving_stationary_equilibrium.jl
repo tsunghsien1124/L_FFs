@@ -40,9 +40,9 @@ function parameters_function(;
     α::Real = 0.36,                 # capital share
     ψ::Real = 1.0 - 1.0 / 20.0,     # exogenous retention ratio
     θ::Real = 1.0 / 3.0,            # diverting fraction
-    p_h::Real = 1.0 / 10.0,         # prob. of history erased
+    p_h::Real = 1.0 / 7.0,          # prob. of history erased
     κ::Real = 0.00,                 # filing cost
-    ζ_d::Real = 0.02000,            # EV scale parameter (default)
+    ζ_d::Real = 0.01400,            # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -51,7 +51,7 @@ function parameters_function(;
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.0000,             # scale of patience
-    ν_p::Real = 0.0100,             # probability of patience
+    ν_p::Real = 0.0104,             # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -10.0,            # min of asset holding
     a_max::Real = 500.0,            # max of asset holding
@@ -222,7 +222,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 500, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 720, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """

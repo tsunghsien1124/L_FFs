@@ -222,7 +222,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 900, obj_range::Integer = 1)
+function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer = 1200, obj_range::Integer = 1)
     """
     compute bounds for minimization
     """

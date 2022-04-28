@@ -115,7 +115,7 @@ end
 #================#
 # Checking Plots #
 #================#
-a_neg_index = 126
+a_neg_index = 1
 plot(parameters.a_grid_neg[a_neg_index:end], variables_min.q[a_neg_index:parameters.a_ind_zero,1,:], legend=:none)
 
 # plot(parameters.a_grid_neg[a_neg_index:end], variables_min.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
@@ -128,8 +128,8 @@ if Indicator_solve_stationary_equlibrium == true
     β_search = 0.940 / 0.980 # collect(0.94:0.01:0.97)
     θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
     η_search = 0.25 # collect(0.20:0.05:0.40)
-    ζ_d_search = collect(0.03400:0.00100:0.03600)
-    ν_p_search = collect(0.00900:0.00100:0.01100)
+    ζ_d_search = 0.03100 # collect(0.03000:0.00100:0.03100)
+    ν_p_search = 0.010205 # collect(0.01021:0.00001:0.01023)
 
     β_search_size = length(β_search)
     θ_search_size = length(θ_search)

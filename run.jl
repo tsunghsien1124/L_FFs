@@ -129,7 +129,7 @@ if Indicator_solve_stationary_equlibrium == true
     θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
     η_search = 0.25 # collect(0.20:0.05:0.40)
     ζ_d_search = 0.03100 # collect(0.03000:0.00100:0.03100)
-    ν_p_search = 0.010205 # collect(0.01021:0.00001:0.01023)
+    ν_p_search = collect(0.010201:0.00001:0.010204)
 
     β_search_size = length(β_search)
     θ_search_size = length(θ_search)

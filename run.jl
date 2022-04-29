@@ -42,9 +42,9 @@ end
 #=======#
 Indicator_solve_equlibria_λ_min_and_max = false
 Indicator_solve_equlibrium_given_λ = false
-Indicator_solve_stationary_equlibrium = true
+Indicator_solve_stationary_equlibrium = false
 Indicator_solve_stationary_equlibria_across_η = false
-Indicator_solve_transitional_dynamics = false
+Indicator_solve_transitional_dynamics = true
 Indicator_simulation = false
 Indicator_simulation_results = false
 
@@ -115,8 +115,8 @@ end
 #================#
 # Checking Plots #
 #================#
-a_neg_index = 1
-plot(parameters.a_grid_neg[a_neg_index:end], variables_min.q[a_neg_index:parameters.a_ind_zero,1,:], legend=:none)
+# a_neg_index = 1
+# plot(parameters.a_grid_neg[a_neg_index:end], variables_min.q[a_neg_index:parameters.a_ind_zero,1,:], legend=:none)
 
 # plot(parameters.a_grid_neg[a_neg_index:end], variables_min.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
 
@@ -128,8 +128,8 @@ if Indicator_solve_stationary_equlibrium == true
     β_search = 0.940 / 0.980 # collect(0.94:0.01:0.97)
     θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
     η_search = 0.25 # collect(0.20:0.05:0.40)
-    ζ_d_search = 0.03100 # collect(0.03000:0.00100:0.03100)
-    ν_p_search = collect(0.010201:0.00001:0.010204)
+    ζ_d_search = 0.03000 # collect(0.03000:0.00100:0.03100)
+    ν_p_search = 0.01018 # collect(0.010202:0.000001:0.010204)
 
     β_search_size = length(β_search)
     θ_search_size = length(θ_search)

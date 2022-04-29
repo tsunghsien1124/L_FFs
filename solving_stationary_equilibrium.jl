@@ -42,7 +42,7 @@ function parameters_function(;
     θ::Real = 1.0 / 3.0,            # diverting fraction
     p_h::Real = 1.0 / 10.0,         # prob. of history erased
     κ::Real = 0.00,                 # filing cost
-    ζ_d::Real = 0.03500,            # EV scale parameter (default)
+    ζ_d::Real = 0.03000,            # EV scale parameter (default)
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -51,7 +51,7 @@ function parameters_function(;
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
     ν_s::Real = 0.0000,             # scale of patience
-    ν_p::Real = 0.0100,             # probability of patience
+    ν_p::Real = 0.01018,            # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -4.0,             # min of asset holding
     a_max::Real = 400.0,            # max of asset holding

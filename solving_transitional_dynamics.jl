@@ -59,6 +59,8 @@ function aggregate_price_update(leverage_ratio_λ::Array{Float64,1}, variables_o
     update aggregate prices given a series of leverage ratio
     """
 
+    @unpack a_size, a_size_pos, a_size_neg, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, ρ, θ, ψ, r_f, E, δ, α = parameters_new
+
     T_size = length(leverage_ratio_λ)
 
     λ = zeros(T_size)
@@ -114,7 +116,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     """
 
     # unpack parameters from new steady state
-    @unpack a_size, a_size_pos, a_size_neg, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, ρ, θ, ψ, r_f, E, δ, α = parameters_new
+    @unpack a_size, a_size_pos, a_size_neg, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, ρ, r_f = parameters_new
 
     # compute adjusted time periods
     T_size = T_size + 2
@@ -258,7 +260,7 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
         for T_i = (T_size-1):(-1):2
 
             # report progress
-            println("Solving individual-level problems backward... period $(T_i-1) / $(T_size-2)")
+            # println("Solving individual-level problems backward... period $(T_i-1) / $(T_size-2)")
 
             # pricing function and borrowing risky limit
             variables_T.R[:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i] = pricing_and_rbl_function(variables_T.policy_d[:,:,:,:,:,T_i+1], variables_T.aggregate_prices.w_λ[T_i+1], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
@@ -272,7 +274,7 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
         for T_i = 2:(T_size-1)
 
             # report progress
-            println("Solving distribution and aggregate variables/prices forward... period $(T_i-1) / $(T_size-2)")
+            # println("Solving distribution and aggregate variables/prices forward... period $(T_i-1) / $(T_size-2)")
 
             # update stationary distribution
             variables_T.μ[:,:,:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], parameters_new)
@@ -309,7 +311,7 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
         println("Solving transitional dynamics: search_iter = $search_iter and crit = $crit > tol = $tol")
 
         # update leverage ratio
-        variables_T.aggregate_prices.leverage_ratio_λ = slow_updating * leverage_ratio_λ_p + (1.0 - slow_updating) * variables_T.aggregate_variables.leverage_ratio
+        variables_T.aggregate_prices.leverage_ratio_λ = (1.0 - slow_updating) * leverage_ratio_λ_p + slow_updating * variables_T.aggregate_variables.leverage_ratio
 
         # update aggregate prices
         variables_T.aggregate_prices.λ, variables_T.aggregate_prices.ξ_λ, variables_T.aggregate_prices.Λ_λ, variables_T.aggregate_prices.KL_to_D_ratio_λ, variables_T.aggregate_prices.ι_λ, variables_T.aggregate_prices.r_k_λ, variables_T.aggregate_prices.K_p_λ, variables_T.aggregate_prices.w_λ = aggregate_price_update(variables_T.aggregate_prices.leverage_ratio_λ, variables_old, variables_new, parameters_new)

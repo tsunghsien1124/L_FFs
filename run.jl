@@ -115,8 +115,8 @@ end
 #================#
 # Checking Plots #
 #================#
-# a_neg_index = 1
-# plot(parameters.a_grid_neg[a_neg_index:end], variables_min.q[a_neg_index:parameters.a_ind_zero,1,:], legend=:none)
+a_neg_index = 1
+plot(parameters_new.a_grid_neg[a_neg_index:end], variables_new.q[a_neg_index:parameters_new.a_ind_zero,2,:], legend=:none)
 
 # plot(parameters.a_grid_neg[a_neg_index:end], variables_min.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
 
@@ -194,8 +194,8 @@ if Indicator_solve_transitional_dynamics == true
     @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
     # specily the new and old policies
-    η_old, λ_old = results_A_FF[1,2], results_A_FF[3,2]
-    η_new, λ_new = results_A_FF[1,1], results_A_FF[3,1]
+    η_old, λ_old = results_A_FF[1,2], results_A_FF[3,2] # η = 0.25
+    η_new, λ_new = results_A_FF[1,1], results_A_FF[3,1] # η = 0.30
 
     # old stationary equilibrium
     println("Solving old steady state...")
@@ -210,8 +210,9 @@ if Indicator_solve_transitional_dynamics == true
     solve_economy_function!(variables_new, parameters_new)
 
     # solve transitional dynamics
-    variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 60)
-    transitional_dynamic_λ_function!(variables_T, variables_new, parameters_new; iter_max = 10, slow_updating = slow_updating)
+    slow_updating_transitional_dynamics = 0.05
+    variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 120)
+    transitional_dynamic_λ_function!(variables_T, variables_new, parameters_new; iter_max = 250, slow_updating = slow_updating_transitional_dynamics)
 
 end
 

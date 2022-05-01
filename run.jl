@@ -185,6 +185,16 @@ if Indicator_solve_stationary_equlibria_across_η == true
 
 end
 
+if Indicator_solve_stationary_equlibria_across_p_h == true
+
+    p_h_min_search = 7.0
+    p_h_max_search = 13.0
+    p_h_step_search = 3.0
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_p_h_function(p_h_min = p_h_min_search, p_h_max = p_h_max_search, p_h_step = p_h_step_search)
+    @save "results_p_h.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+end
+
 #=============================#
 # Solve transitional dynamics #
 #=============================#

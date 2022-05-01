@@ -1071,7 +1071,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
     # compute the optimal multipliers with different η
     for η_i = 1:η_size
-        
+
         η = η_grid[η_i]
         parameters_η = parameters_function(η = η)
         # λ_min_adhoc_η = η_i > 1 ? results_A_FF[3,η_i-1] : -Inf
@@ -1126,7 +1126,8 @@ function results_p_h_function(; p_h_min::Real, p_h_max::Real, p_h_step::Real)
     """
 
     # initialize p_h grid
-    p_h_grid = collect(p_h_max:-p_h_step:p_h_min)
+    p_h_grid_ = collect(p_h_max:-p_h_step:p_h_min)
+    p_h_grid = 1.0 ./ p_h_grid_
     p_h_size = length(p_h_grid)
 
     # initialize pparameters

@@ -44,7 +44,7 @@ Indicator_solve_equlibria_λ_min_and_max = false
 Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
 Indicator_solve_stationary_equlibria_across_η = false
-Indicator_solve_transitional_dynamics = true
+Indicator_solve_transitional_dynamics = false
 Indicator_simulation = false
 Indicator_simulation_results = false
 
@@ -115,8 +115,8 @@ end
 #================#
 # Checking Plots #
 #================#
-a_neg_index = 1
-plot(parameters_new.a_grid_neg[a_neg_index:end], variables_new.q[a_neg_index:parameters_new.a_ind_zero,2,:], legend=:none)
+# a_neg_index = 1
+# plot(parameters_new.a_grid_neg[a_neg_index:end], variables_new.q[a_neg_index:parameters_new.a_ind_zero,2,:], legend=:none)
 
 # plot(parameters.a_grid_neg[a_neg_index:end], variables_min.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
 
@@ -194,25 +194,40 @@ if Indicator_solve_transitional_dynamics == true
     @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
     # specily the new and old policies
-    η_old, λ_old = results_A_FF[1,2], results_A_FF[3,2] # η = 0.25
-    η_new, λ_new = results_A_FF[1,1], results_A_FF[3,1] # η = 0.30
+    η_20, λ_20 = results_A_FF[1,3], results_A_FF[3,3] # η = 0.20
+    η_25, λ_25 = results_A_FF[1,2], results_A_FF[3,2] # η = 0.25
+    η_30, λ_30 = results_A_FF[1,1], results_A_FF[3,1] # η = 0.30
 
-    # old stationary equilibrium
-    println("Solving old steady state...")
-    parameters_old = parameters_function(η = η_old)
-    variables_old = variables_function(parameters_old; λ = λ_old)
-    solve_economy_function!(variables_old, parameters_old)
+    # stationary equilibrium when η = 0.20
+    println("Solving steady state when η = $η_20...")
+    parameters_20 = parameters_function(η = η_20)
+    variables_20 = variables_function(parameters_20; λ = λ_20)
+    solve_economy_function!(variables_20, parameters_20)
 
-    # new stationary equilibrium
-    println("Solving new steady state...")
-    parameters_new = parameters_function(η = η_new)
-    variables_new = variables_function(parameters_new; λ = λ_new)
-    solve_economy_function!(variables_new, parameters_new)
+    # stationary equilibrium when η = 0.25
+    println("Solving steady state when η = $η_25...")
+    parameters_25 = parameters_function(η = η_25)
+    variables_25 = variables_function(parameters_25; λ = λ_25)
+    solve_economy_function!(variables_25, parameters_25)
+
+    # stationary equilibrium when η = 0.30
+    println("Solving steady state when η = $η_30...")
+    parameters_30 = parameters_function(η = η_30)
+    variables_30 = variables_function(parameters_30; λ = λ_30)
+    solve_economy_function!(variables_30, parameters_30)
 
     # solve transitional dynamics
     slow_updating_transitional_dynamics = 0.05
-    variables_T = variables_T_function(variables_old, variables_new, parameters_new; T_size = 120)
-    transitional_dynamic_λ_function!(variables_T, variables_new, parameters_new; iter_max = 250, slow_updating = slow_updating_transitional_dynamics)
+
+    # from η = 0.25 to η = 0.30
+    println("Solving transitions from η = $η_25 to η = $η_30...")
+    variables_T_25_30 = variables_T_function(variables_25, variables_30, parameters_30; T_size = 200, T_degree = 7.0)
+    transitional_dynamic_λ_function!(variables_T_25_30, variables_25, variables_30, parameters_30; iter_max = 1000, slow_updating = slow_updating_transitional_dynamics)
+
+    # from η = 0.25 to η = 0.20
+    println("Solving transitions from η = $η_25 to η = $η_20...")
+    variables_T_25_20 = variables_T_function(variables_25, variables_20, parameters_20; T_size = 200, T_degree = 7.0)
+    transitional_dynamic_λ_function!(variables_T_25_20, variables_25, variables_20, parameters_20; iter_max = 1000, slow_updating = slow_updating_transitional_dynamics)
 
 end
 

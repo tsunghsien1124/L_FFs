@@ -89,6 +89,7 @@ function aggregate_price_update(leverage_ratio_λ::Array{Float64,1}, variables_o
 
     K_p_λ = zeros(T_size)
     K_p_λ[1] = variables_old.aggregate_prices.K_λ
+    K_p_λ[end-1] = variables_old.aggregate_prices.K_λ
     K_p_λ[end] = variables_new.aggregate_prices.K_λ
 
     w_λ = zeros(T_size)
@@ -107,10 +108,21 @@ function aggregate_price_update(leverage_ratio_λ::Array{Float64,1}, variables_o
         w_λ[T_i+1] = (1.0 - α) * (K_p_λ[T_i] / E)^α
     end
 
+    # for T_i in (T_size-1):(-1):2
+    #     ξ_λ[T_i] = θ * leverage_ratio_λ[T_i]
+    #     λ[T_i] = 1.0 - (1.0 - ψ + ψ * ξ_λ[T_i+1]) / ξ_λ[T_i]
+    #     Λ_λ[T_i] = (1.0 - ψ + ψ * ξ_λ[T_i]) / (1.0 + r_f)
+    #     KL_to_D_ratio_λ[T_i] = leverage_ratio_λ[T_i] / (leverage_ratio_λ[T_i] - 1.0)
+    #     ι_λ[T_i] = θ * λ[T_i] / Λ_λ[T_i+1]
+    #     r_k_λ[T_i] = r_f + ι_λ[T_i]
+    #     K_p_λ[T_i] = E * ((r_k_λ[T_i] + δ) / α)^(1.0 / (α - 1.0))
+    #     w_λ[T_i+1] = (1.0 - α) * (K_p_λ[T_i] / E)^α
+    # end
+
     return λ, ξ_λ, Λ_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ
 end
 
-function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer)
+function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer = 80, T_degree::Real = 1.0)
     """
     construct a mutable object containing endogenous variables of periods T
     """
@@ -122,7 +134,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     T_size = T_size + 2
 
     # define aggregate prices
-    leverage_ratio_λ = collect(range(variables_old.aggregate_variables.leverage_ratio, variables_new.aggregate_variables.leverage_ratio, length = T_size))
+    leverage_ratio_λ = variables_new.aggregate_variables.leverage_ratio .+ ((range(T_size - 1, stop = 0.0, length = T_size) / (T_size - 1)) .^ T_degree) .* (variables_old.aggregate_variables.leverage_ratio - variables_new.aggregate_variables.leverage_ratio)
 
     λ, ξ_λ, Λ_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ = aggregate_price_update(leverage_ratio_λ, variables_old, variables_new, parameters_new)
 
@@ -235,7 +247,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     return variables_T
 end
 
-function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_new::Mutable_Variables, parameters_new::NamedTuple; tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = false)
+function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; tol::Real = 1E-4, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = false)
     """
     solve transitional dynamics of periods T from initial to new steady states
     """

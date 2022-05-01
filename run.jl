@@ -30,8 +30,8 @@ include("simulation.jl")
 #===================#
 Indicator_local_machine = true
 if Indicator_local_machine == true
-    cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-    # cd(homedir() * "/Dropbox/Dissertation/Chapter 3 - Consumer Bankruptcy with Financial Frictions/")
+    # cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+    cd(homedir() * "/Dropbox/Dissertation/Chapter 3 - Consumer Bankruptcy with Financial Frictions/")
 else
     cd(homedir() * "/financial_frictions/")
 end
@@ -43,6 +43,7 @@ Indicator_solve_equlibria_λ_min_and_max = false
 Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
 Indicator_solve_stationary_equlibria_across_η = false
+Indicator_solve_stationary_equlibria_across_p_h = true
 Indicator_solve_transitional_dynamics = false
 Indicator_simulation = false
 Indicator_simulation_results = false

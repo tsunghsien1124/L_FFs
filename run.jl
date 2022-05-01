@@ -22,7 +22,6 @@ using Random
 # Import functions #
 #==================#
 include("solving_stationary_equilibrium.jl")
-# include("solving_stationary_equilibrium_fixed_cost.jl")
 include("solving_transitional_dynamics.jl")
 include("simulation.jl")
 
@@ -80,6 +79,7 @@ if Indicator_solve_equlibria_λ_min_and_max == true
     ]
 
     pretty_table(data_spec; header = ["Name", "λ minimum", "λ maximum"], alignment = [:c, :c, :c], formatters = ft_round(8), body_hlines = [3,5,9])
+
 end
 
 if Indicator_solve_equlibrium_given_λ == true
@@ -223,11 +223,15 @@ if Indicator_solve_transitional_dynamics == true
     println("Solving transitions from η = $η_25 to η = $η_30...")
     variables_T_25_30 = variables_T_function(variables_25, variables_30, parameters_30; T_size = 200, T_degree = 7.0)
     transitional_dynamic_λ_function!(variables_T_25_30, variables_25, variables_30, parameters_30; iter_max = 1000, slow_updating = slow_updating_transitional_dynamics)
+    transtion_path_eta_25_30 = variables_T_25_30.aggregate_prices.leverage_ratio_λ
 
     # from η = 0.25 to η = 0.20
     println("Solving transitions from η = $η_25 to η = $η_20...")
     variables_T_25_20 = variables_T_function(variables_25, variables_20, parameters_20; T_size = 200, T_degree = 7.0)
     transitional_dynamic_λ_function!(variables_T_25_20, variables_25, variables_20, parameters_20; iter_max = 1000, slow_updating = slow_updating_transitional_dynamics)
+    transtion_path_eta_25_20 = variables_T_25_20.aggregate_prices.leverage_ratio_λ
+
+    @save "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
 
 end
 

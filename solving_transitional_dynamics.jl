@@ -247,7 +247,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     return variables_T
 end
 
-function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; tol::Real = 1E-3, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = false)
+function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; tol::Real = 1E-2, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = false)
     """
     solve transitional dynamics of periods T from initial to new steady states
     """

@@ -1071,6 +1071,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
 
     # compute the optimal multipliers with different η
     for η_i = 1:η_size
+        
         η = η_grid[η_i]
         parameters_η = parameters_function(η = η)
         # λ_min_adhoc_η = η_i > 1 ? results_A_FF[3,η_i-1] : -Inf
@@ -1113,6 +1114,99 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         results_V_FF[:, :, :, :, :, η_i] = variables_FF.V
         results_V_pos_FF[:, :, :, :, :, η_i] = variables_FF.V_pos
         results_μ_FF[:, :, :, :, :, :, η_i] = variables_FF.μ
+    end
+
+    # return results
+    return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
+end
+
+function results_p_h_function(; p_h_min::Real, p_h_max::Real, p_h_step::Real)
+    """
+    compute stationary equilibrium with various p_h
+    """
+
+    # initialize p_h grid
+    p_h_grid = collect(p_h_max:-p_h_step:p_h_min)
+    p_h_size = length(p_h_grid)
+
+    # initialize pparameters
+    parameters = parameters_function()
+    @unpack a_size, a_size_pos, a_size_μ, e_1_size, e_2_size, e_3_size, ν_size = parameters
+
+    # initialize variables that will be saved
+    var_names = [
+        "Prob. of Bad Record Removal", #=1=#
+        "Rental Rate", #=2=#
+        "Liquidity Multiplier", #=3=#
+        "Liquidity Premium", #=4=#
+        "Capital", #=5=#
+        "Loans", #=6=#
+        "Deposits", #=7=#
+        "Net Worth", #=8=#
+        "Leverage Ratio", #=9=#
+        "Share of Filers", #=10=#
+        "Sahre in Debt", #=11=#
+        "Debt-to-Earning Ratio", #=12=#
+        "Average Loan Rate", #=13=#
+        "Flag",  #=14=#
+    ]
+    var_size = length(var_names)
+
+    # initialize containers
+    results_A_NFF = zeros(var_size, p_h_size)
+    results_V_NFF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, p_h_size)
+    results_V_pos_NFF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, p_h_size)
+    results_μ_NFF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, p_h_size)
+    results_A_FF = zeros(var_size, p_h_size)
+    results_V_FF = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, p_h_size)
+    results_V_pos_FF = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, p_h_size)
+    results_μ_FF = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, p_h_size)
+
+    # compute the optimal multipliers with different p_h
+    for p_h_i = 1:p_h_size
+
+        p_h = p_h_grid[p_h_i]
+        parameters_p_h = parameters_function(p_h = p_h)
+        # λ_min_adhoc_p_h = p_h_i > 1 ? results_A_FF[3,p_h_i-1] : -Inf
+        λ_min_adhoc_p_h = -Inf
+        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_p_h; λ_min_adhoc = λ_min_adhoc_p_h, slow_updating = slow_updating)
+
+        # save results
+        results_A_NFF[1, p_h_i] = parameters_p_h.p_h
+        results_A_NFF[2, p_h_i] = variables_NFF.aggregate_prices.r_k_λ
+        results_A_NFF[3, p_h_i] = variables_NFF.aggregate_prices.λ
+        results_A_NFF[4, p_h_i] = variables_NFF.aggregate_prices.ι_λ
+        results_A_NFF[5, p_h_i] = variables_NFF.aggregate_variables.K
+        results_A_NFF[6, p_h_i] = variables_NFF.aggregate_variables.L
+        results_A_NFF[7, p_h_i] = variables_NFF.aggregate_variables.D
+        results_A_NFF[8, p_h_i] = variables_NFF.aggregate_variables.N
+        results_A_NFF[9, p_h_i] = variables_NFF.aggregate_variables.leverage_ratio
+        results_A_NFF[10, p_h_i] = variables_NFF.aggregate_variables.share_of_filers
+        results_A_NFF[11, p_h_i] = variables_NFF.aggregate_variables.share_in_debts
+        results_A_NFF[12, p_h_i] = variables_NFF.aggregate_variables.debt_to_earning_ratio
+        results_A_NFF[13, p_h_i] = variables_NFF.aggregate_variables.avg_loan_rate
+        results_A_NFF[14, p_h_i] = 1
+        results_V_NFF[:, :, :, :, :, p_h_i] = variables_NFF.V
+        results_V_pos_NFF[:, :, :, :, :, p_h_i] = variables_NFF.V_pos
+        results_μ_NFF[:, :, :, :, :, :, p_h_i] = variables_NFF.μ
+
+        results_A_FF[1, p_h_i] = parameters_p_h.p_h
+        results_A_FF[2, p_h_i] = variables_FF.aggregate_prices.r_k_λ
+        results_A_FF[3, p_h_i] = variables_FF.aggregate_prices.λ
+        results_A_FF[4, p_h_i] = variables_FF.aggregate_prices.ι_λ
+        results_A_FF[5, p_h_i] = variables_FF.aggregate_variables.K
+        results_A_FF[6, p_h_i] = variables_FF.aggregate_variables.L
+        results_A_FF[7, p_h_i] = variables_FF.aggregate_variables.D
+        results_A_FF[8, p_h_i] = variables_FF.aggregate_variables.N
+        results_A_FF[9, p_h_i] = variables_FF.aggregate_variables.leverage_ratio
+        results_A_FF[10, p_h_i] = variables_FF.aggregate_variables.share_of_filers
+        results_A_FF[11, p_h_i] = variables_FF.aggregate_variables.share_in_debts
+        results_A_FF[12, p_h_i] = variables_FF.aggregate_variables.debt_to_earning_ratio
+        results_A_FF[13, p_h_i] = variables_FF.aggregate_variables.avg_loan_rate
+        results_A_FF[14, p_h_i] = flag
+        results_V_FF[:, :, :, :, :, p_h_i] = variables_FF.V
+        results_V_pos_FF[:, :, :, :, :, p_h_i] = variables_FF.V_pos
+        results_μ_FF[:, :, :, :, :, :, p_h_i] = variables_FF.μ
     end
 
     # return results

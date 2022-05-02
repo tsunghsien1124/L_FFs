@@ -247,7 +247,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     return variables_T
 end
 
-function variables_T_function(transtion_path_eta::Array{Float64,1}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple)
+function variables_T_function(initial_transtion_path::Array{Float64,1}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple)
     """
     construct a mutable object containing endogenous variables of periods T given initial guess
     """
@@ -256,10 +256,10 @@ function variables_T_function(transtion_path_eta::Array{Float64,1}, variables_ol
     @unpack a_size, a_size_pos, a_size_neg, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, ρ, r_f = parameters_new
 
     # compute adjusted time periods
-    T_size = length(transtion_path_eta)
+    T_size = length(initial_transtion_path)
 
     # define aggregate prices
-    leverage_ratio_λ = transtion_path_eta
+    leverage_ratio_λ = initial_transtion_path
 
     λ, ξ_λ, Λ_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ = aggregate_price_update(leverage_ratio_λ, variables_old, variables_new, parameters_new)
 

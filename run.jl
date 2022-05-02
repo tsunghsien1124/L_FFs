@@ -46,8 +46,8 @@ Indicator_solve_stationary_equlibria_across_η = false
 Indicator_solve_stationary_equlibria_across_p_h = false
 Indicator_solve_transitional_dynamics_across_η = false
 Indicator_solve_transitional_dynamics_across_p_h = false
-Indicator_simulation = false
-Indicator_simulation_results = false
+Indicator_simulation_benchmark = true
+Indicator_simulation_benchmark_results = false
 
 # print out the number of threads
 println("Julia is running with $(Threads.nthreads()) threads...")
@@ -262,7 +262,7 @@ if Indicator_solve_transitional_dynamics_across_η == true
 
     # save transition path
     @save "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
-    
+
 end
 
 if Indicator_solve_transitional_dynamics_across_p_h == true
@@ -332,106 +332,101 @@ end
 # Simulation #
 #============#
 
-if Indicator_simulation == true
+if Indicator_simulation_benchmark == true
 
     # specify parameters
-    num_hh = 20000
-    num_periods = 2100
+    num_hh = 40000
+    num_periods = 5100
     burn_in = 100
 
-    # simulate the model
-    variables.q[1:(parameters.a_ind_zero-1),:,:] .= variables.q[1:(parameters.a_ind_zero-1)] .* (1.0 + parameters.τ + variables.aggregate_prices.ι_λ) ./ (1.0 + parameters.τ)
-    panel_asset, panel_history, panel_default, panel_age, panel_consumption, shock_ρ, shock_e_1, shock_e_2, shock_e_3, shock_ν = simulation(variables, parameters; num_hh = num_hh, num_periods = num_periods, burn_in = burn_in)
+    # load stationary equilibria across η
+    @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    # extract equilibria with financial fricitons
+    η, λ_FF = results_A_FF[1,2], results_A_FF[3,2]
+
+    # stationary equilibrium when η = 0.25 with and without financial frictions
+    parameters = parameters_function(η = η)
+    println("Solving steady state with benchmark calibration (η = $η) and financial frictions...")
+    variables_FF = variables_function(parameters; λ = λ_FF)
+    solve_economy_function!(variables_FF, parameters)
+    println("Solving steady state with benchmark calibration (η = $η) and no financial frictions...")
+    variables_NFF = variables_function(parameters; λ = 0.0)
+    solve_economy_function!(variables_NFF, parameters)
+
+    # simulate models
+    panel_asset_FF, panel_history_FF, panel_default_FF, panel_age_FF, panel_consumption_FF, shock_ρ_FF, shock_e_1_FF, shock_e_2_FF, shock_e_3_FF, shock_ν_FF = simulation(variables_FF, parameters; num_hh = num_hh, num_periods = num_periods, burn_in = burn_in)
+    panel_asset_NFF, panel_history_NFF, panel_default_NFF, panel_age_NFF, panel_consumption_NFF, shock_ρ_NFF, shock_e_1_NFF, shock_e_2_NFF, shock_e_3_NFF, shock_ν_NFF = simulation(variables_NFF, parameters; num_hh = num_hh, num_periods = num_periods, burn_in = burn_in)
 
     # save simulation results
-    # @save "simulations.jld2" panel_asset panel_history panel_default panel_age panel_consumption shock_ρ shock_e_1 shock_e_2 shock_e_3 shock_ν
-    @save "simulations_r_f.jld2" panel_asset panel_history panel_default panel_age panel_consumption shock_ρ shock_e_1 shock_e_2 shock_e_3 shock_ν
-    # @save "simulations_NFF.jld2" panel_asset panel_history panel_default panel_age panel_consumption shock_ρ shock_e_1 shock_e_2 shock_e_3 shock_ν
+    @save "simulations_benchmark_FF.jld2" panel_asset_FF panel_history_FF panel_default_FF panel_age_FF panel_consumption_FF shock_ρ_FF shock_e_1_FF shock_e_2_FF shock_e_3_FF shock_ν_FF
+    @save "simulations_benchmark_NFF.jld2" panel_asset_NFF panel_history_NFF panel_default_NFF panel_age_NFF panel_consumption_NFF shock_ρ_NFF shock_e_1_NFF shock_e_2_NFF shock_e_3_NFF shock_ν_NFF
 
 end
 
-if Indicator_simulation_results == true
+if Indicator_simulation_benchmark_results == true
 
     # load simulation results
-    @load "simulations.jld2" panel_asset panel_history panel_default panel_age panel_consumption shock_ρ shock_e_1 shock_e_2 shock_e_3 shock_ν
-    @load "simulations_r_f.jld2" panel_asset panel_history panel_default panel_age panel_consumption shock_ρ shock_e_1 shock_e_2 shock_e_3 shock_ν
-    @load "simulations_NFF.jld2" panel_asset panel_history panel_default panel_age panel_consumption shock_ρ shock_e_1 shock_e_2 shock_e_3 shock_ν
+    @load "simulations_benchmark_FF.jld2" panel_asset_FF panel_history_FF panel_default_FF panel_age_FF panel_consumption_FF shock_ρ_FF shock_e_1_FF shock_e_2_FF shock_e_3_FF shock_ν_FF
+    @load "simulations_benchmark_NFF.jld2" panel_asset_NFF panel_history_NFF panel_default_NFF panel_age_NFF panel_consumption_NFF shock_ρ_NFF shock_e_1_NFF shock_e_2_NFF shock_e_3_NFF shock_ν_NFF
 
-    # number of total periods
-    period_all = size(panel_asset)[2]
+    # set parameters
+    parameters = parameters_function()
+    num_periods = size(panel_asset_FF)[2]
+    num_hh = size(panel_asset_FF)[1]
 
     # share of defaulters
-    fraction_default_sim_all_periods = zeros(period_all)
-    for i in 1:period_all
-        fraction_default_sim_all_periods[i] = sum(panel_default[:,i]) / num_hh * 100
+    fraction_default_sim_FF = zeros(num_periods)
+    fraction_default_sim_NFF = zeros(num_periods)
+    for i in 1:num_periods
+        fraction_default_sim_FF[i] = sum(panel_default_FF[:,i]) / num_hh * 100
+        fraction_default_sim_NFF[i] = sum(panel_default_NFF[:,i]) / num_hh * 100
     end
-    fraction_default_sim_all_periods_ave = sum(fraction_default_sim_all_periods) / period_all
+    fraction_default_sim_FF_avg = sum(fraction_default_sim_FF) / num_periods
+    fraction_default_sim_NFF_avg = sum(fraction_default_sim_NFF) / num_periods
 
     # share in debts
-    fraction_debts_sim_all_periods = zeros(period_all)
-    for i in 1:period_all
-        fraction_debts_sim_all_periods[i] = sum(panel_asset[:,i] .< parameters.a_ind_zero) / num_hh * 100
+    fraction_debts_sim_FF = zeros(num_periods)
+    fraction_debts_sim_NFF = zeros(num_periods)
+    for i in 1:num_periods
+        fraction_debts_sim_FF[i] = sum(panel_asset_FF[:,i] .< parameters.a_ind_zero) / num_hh * 100
+        fraction_debts_sim_NFF[i] = sum(panel_asset_NFF[:,i] .< parameters.a_ind_zero) / num_hh * 100
     end
-    fraction_debts_sim_all_periods_ave = sum(fraction_debts_sim_all_periods) / period_all
+    fraction_debts_sim_FF_avg = sum(fraction_debts_sim_FF) / num_periods
+    fraction_debts_sim_NFF_avg = sum(fraction_debts_sim_NFF) / num_periods
 
-    # consumption
+    # share of defaulters, conditional borrowing
+    fraction_cond_default_sim_FF_avg = fraction_default_sim_FF_avg / fraction_debts_sim_FF_avg * 100
+    fraction_cond_default_sim_NFF_avg = fraction_default_sim_NFF_avg / fraction_debts_sim_NFF_avg * 100
+
+    # consumption over life cycle
     age_max = 50
-    mean_consumption_age = zeros(age_max)
-    variance_consumption_age = zeros(age_max)
-    panel_log_consumption = log.(panel_consumption)
-    mean_log_consumption_age = zeros(age_max)
-    variance_log_consumption_age = zeros(age_max)
+    mean_consumption_age_FF, mean_consumption_age_NFF = zeros(age_max), zeros(age_max)
+    variance_consumption_age_FF, variance_consumption_age_NFF = zeros(age_max), zeros(age_max)
+    panel_log_consumption_FF, panel_log_consumption_NFF = log.(panel_consumption_FF), log.(panel_consumption_NFF)
+    mean_log_consumption_age_FF, mean_log_consumption_age_NFF = zeros(age_max), zeros(age_max)
+    variance_log_consumption_age_FF, variance_log_consumption_age_NFF = zeros(age_max), zeros(age_max)
     for age_i in 1:age_max
-        age_bool = (panel_age .== age_i)
-        mean_consumption_age[age_i] = sum(panel_consumption[age_bool]) / sum(age_bool)
-        variance_consumption_age[age_i] = sum((panel_consumption[age_bool] .- mean_consumption_age[age_i]).^2) / sum(age_bool)
-        mean_log_consumption_age[age_i] = sum(panel_log_consumption[age_bool]) / sum(age_bool)
-        variance_log_consumption_age[age_i] = sum((panel_log_consumption[age_bool] .- mean_log_consumption_age[age_i]).^2) / sum(age_bool)
-    end
-
-    age_max = 80
-    mean_consumption_age_r_f = zeros(age_max)
-    variance_consumption_age_r_f = zeros(age_max)
-    panel_log_consumption_r_f = log.(panel_consumption)
-    mean_log_consumption_age_r_f = zeros(age_max)
-    variance_log_consumption_age_r_f = zeros(age_max)
-    for age_i in 1:age_max
-        age_bool_r_f = (panel_age .== age_i)
-        mean_consumption_age_r_f[age_i] = sum(panel_consumption[age_bool_r_f]) / sum(age_bool_r_f)
-        variance_consumption_age_r_f[age_i] = sum((panel_consumption[age_bool_r_f] .- mean_consumption_age_r_f[age_i]).^2) / sum(age_bool_r_f)
-        mean_log_consumption_age_r_f[age_i] = sum(panel_log_consumption_r_f[age_bool_r_f]) / sum(age_bool_r_f)
-        variance_log_consumption_age_r_f[age_i] = sum((panel_log_consumption_r_f[age_bool_r_f] .- mean_log_consumption_age_r_f[age_i]).^2) / sum(age_bool_r_f)
-    end
-
-    age_max = 50
-    mean_consumption_age_NFF = zeros(age_max)
-    variance_consumption_age_NFF = zeros(age_max)
-    panel_log_consumption_NFF = log.(panel_consumption)
-    mean_log_consumption_age_NFF = zeros(age_max)
-    variance_log_consumption_age_NFF = zeros(age_max)
-    for age_i in 1:age_max
-        age_bool_NFF = (panel_age .== age_i)
-        mean_consumption_age_NFF[age_i] = sum(panel_consumption[age_bool_NFF]) / sum(age_bool_NFF)
-        variance_consumption_age_NFF[age_i] = sum((panel_consumption[age_bool_NFF] .- mean_consumption_age_NFF[age_i]).^2) / sum(age_bool_NFF)
+        age_bool_FF = (panel_age_FF .== age_i)
+        mean_consumption_age_FF[age_i] = sum(panel_consumption_FF[age_bool_FF]) / sum(age_bool_FF)
+        variance_consumption_age_FF[age_i] = sum((panel_consumption_FF[age_bool_FF] .- mean_consumption_age_FF[age_i]).^2) / sum(age_bool_FF)
+        mean_log_consumption_age_FF[age_i] = sum(panel_log_consumption_FF[age_bool_FF]) / sum(age_bool_FF)
+        variance_log_consumption_age_FF[age_i] = sum((panel_log_consumption_FF[age_bool_FF] .- mean_log_consumption_age_FF[age_i]).^2) / sum(age_bool_FF)
+        age_bool_NFF = (panel_age_NFF .== age_i)
+        mean_consumption_age_NFF[age_i] = sum(panel_consumption_NFF[age_bool_NFF]) / sum(age_bool_NFF)
+        variance_consumption_age_NFF[age_i] = sum((panel_consumption_NFF[age_bool_NFF] .- mean_consumption_age_NFF[age_i]).^2) / sum(age_bool_NFF)
         mean_log_consumption_age_NFF[age_i] = sum(panel_log_consumption_NFF[age_bool_NFF]) / sum(age_bool_NFF)
         variance_log_consumption_age_NFF[age_i] = sum((panel_log_consumption_NFF[age_bool_NFF] .- mean_log_consumption_age_NFF[age_i]).^2) / sum(age_bool_NFF)
     end
 
-    plot_consumption = plot(1:age_max, mean_consumption_age, legend=:bottomright, label="with financial frictions", xlabel="working age", ylabel="consumption")
-    # plot!(1:age_max, mean_consumption_age_r_f, label="with financial frictions (fixed r_f)")
+    plot_consumption = plot(1:age_max, mean_consumption_age_FF, legend=:bottomright, label="with financial frictions", xlabel="working age", ylabel="consumption")
     plot_consumption = plot!(1:age_max, mean_consumption_age_NFF, label="without financial frictions")
+    plot_consumption
     Plots.savefig(plot_consumption, pwd() * "\\figures\\plot_consumption.pdf")
 
-    age_max_ind = 5
-    mean_consumption_age_adj = mean_consumption_age .- mean(mean_consumption_age)
-    mean_consumption_age_NFF_adj = mean_consumption_age_NFF .- mean(mean_consumption_age_NFF)
-    plot(1:age_max_ind, mean_consumption_age_adj[1:age_max_ind], legend=:bottomright, label="with financial frictions", xlabel="age", ylabel="consumption")
-    # plot!(1:age_max, mean_consumption_age_r_f, label="with financial frictions (fixed r_f)")
-    plot!(1:age_max_ind, mean_consumption_age_NFF_adj[1:age_max_ind], label="without financial frictions")
-
-    plot_var_log_consumption = plot(1:age_max, variance_log_consumption_age, legend=:bottomright, label="with financial frictions", xlabel="working age", ylabel="variance of log consumption")
-    # plot!(1:age_max, variance_log_consumption_age_r_f, label="with financial frictions (fixed r_f)")
+    plot_var_log_consumption = plot(1:age_max, variance_log_consumption_age_FF, legend=:bottomright, label="with financial frictions", xlabel="working age", ylabel="variance of log consumption")
     plot_var_log_consumption = plot!(1:age_max, variance_log_consumption_age_NFF, label="without financial frictions")
+    plot_var_log_consumption
     Plots.savefig(plot_var_log_consumption, pwd() * "\\figures\\plot_var_log_consumption.pdf")
 
 end

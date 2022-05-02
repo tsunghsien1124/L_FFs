@@ -49,7 +49,7 @@ Indicator_solve_stationary_equlibria_across_p_h = false
 Indicator_solve_transitional_dynamics_across_η = false
 Indicator_solve_transitional_dynamics_across_p_h = false
 Indicator_simulation_benchmark = false
-Indicator_simulation_benchmark_results = false
+Indicator_simulation_benchmark_results = true
 
 # print out the number of threads
 println("Julia is running with $(Threads.nthreads()) threads...")

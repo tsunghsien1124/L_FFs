@@ -17,6 +17,8 @@ using CSV
 using Tables
 using Plots
 using Random
+using GLM
+using DataFrames
 
 #==================#
 # Import functions #
@@ -46,7 +48,7 @@ Indicator_solve_stationary_equlibria_across_η = false
 Indicator_solve_stationary_equlibria_across_p_h = false
 Indicator_solve_transitional_dynamics_across_η = false
 Indicator_solve_transitional_dynamics_across_p_h = false
-Indicator_simulation_benchmark = true
+Indicator_simulation_benchmark = false
 Indicator_simulation_benchmark_results = false
 
 # print out the number of threads
@@ -400,7 +402,7 @@ if Indicator_simulation_benchmark_results == true
     fraction_cond_default_sim_NFF_avg = fraction_default_sim_NFF_avg / fraction_debts_sim_NFF_avg * 100
 
     # consumption over life cycle
-    age_max = 50
+    age_max = convert(Int64, ceil(1.0 / (1.0 - parameters.ρ)))
     mean_consumption_age_FF, mean_consumption_age_NFF = zeros(age_max), zeros(age_max)
     variance_consumption_age_FF, variance_consumption_age_NFF = zeros(age_max), zeros(age_max)
     panel_log_consumption_FF, panel_log_consumption_NFF = log.(panel_consumption_FF), log.(panel_consumption_NFF)
@@ -424,9 +426,23 @@ if Indicator_simulation_benchmark_results == true
     plot_consumption
     Plots.savefig(plot_consumption, pwd() * "\\figures\\plot_consumption.pdf")
 
+    df = DataFrame(x = 1:age_max)
+    df.y = (mean_consumption_age_NFF .- mean_consumption_age_FF) ./ mean_consumption_age_FF .* 100
+    model = lm(@formula(y ~ 1 + x), df)
+    plot_consumption_comparison = plot(df.x, df.y, label=:none, xlabel="working age", ylabel="relative consumption gain (%)")
+    plot_consumption_comparison = plot!(df.x, predict(model, df), label="fitted linear model")
+    Plots.savefig(plot_consumption_comparison, pwd() * "\\figures\\plot_consumption_comparison.pdf")
+
     plot_var_log_consumption = plot(1:age_max, variance_log_consumption_age_FF, legend=:bottomright, label="with financial frictions", xlabel="working age", ylabel="variance of log consumption")
     plot_var_log_consumption = plot!(1:age_max, variance_log_consumption_age_NFF, label="without financial frictions")
     plot_var_log_consumption
     Plots.savefig(plot_var_log_consumption, pwd() * "\\figures\\plot_var_log_consumption.pdf")
+
+    df = DataFrame(x = 1:age_max)
+    df.y = (variance_log_consumption_age_NFF .- variance_log_consumption_age_FF) ./ variance_log_consumption_age_FF .* 100
+    model = lm(@formula(y ~ 1 + x), df)
+    plot_var_log_consumption_comparison = plot(df.x, df.y, label=:none, xlabel="working age", ylabel="relative variance of log(c) gain (%)")
+    plot_var_log_consumption_comparison = plot!(df.x, predict(model, df), label="fitted linear model")
+    Plots.savefig(plot_var_log_consumption_comparison, pwd() * "\\figures\\plot_var_log_consumption_comparison.pdf")
 
 end

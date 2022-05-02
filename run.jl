@@ -30,8 +30,8 @@ include("simulation.jl")
 #===================#
 Indicator_local_machine = true
 if Indicator_local_machine == true
-    # cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
-    cd(homedir() * "/Dropbox/Dissertation/Chapter 3 - Consumer Bankruptcy with Financial Frictions/")
+    cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Financial Frictions\\")
+    # cd(homedir() * "/Dropbox/Dissertation/Chapter 3 - Consumer Bankruptcy with Financial Frictions/")
 else
     cd(homedir() * "/financial_frictions/")
 end
@@ -43,8 +43,9 @@ Indicator_solve_equlibria_λ_min_and_max = false
 Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
 Indicator_solve_stationary_equlibria_across_η = false
-Indicator_solve_stationary_equlibria_across_p_h = true
-Indicator_solve_transitional_dynamics = false
+Indicator_solve_stationary_equlibria_across_p_h = false
+Indicator_solve_transitional_dynamics_across_η = false
+Indicator_solve_transitional_dynamics_across_p_h = false
 Indicator_simulation = false
 Indicator_simulation_results = false
 
@@ -188,9 +189,9 @@ end
 
 if Indicator_solve_stationary_equlibria_across_p_h == true
 
-    p_h_min_search = 7.0
-    p_h_max_search = 13.0
-    p_h_step_search = 3.0
+    p_h_min_search = 8.0
+    p_h_max_search = 12.0
+    p_h_step_search = 2.0
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_p_h_function(p_h_min = p_h_min_search, p_h_max = p_h_max_search, p_h_step = p_h_step_search)
     @save "results_p_h.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
@@ -200,8 +201,9 @@ end
 # Solve transitional dynamics #
 #=============================#
 
-if Indicator_solve_transitional_dynamics == true
+if Indicator_solve_transitional_dynamics_across_η == true
 
+    # load stationary equilibria across η
     @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
     # specily the new and old policies
@@ -227,22 +229,83 @@ if Indicator_solve_transitional_dynamics == true
     variables_30 = variables_function(parameters_30; λ = λ_30)
     solve_economy_function!(variables_30, parameters_30)
 
-    # solve transitional dynamics
+    # set parameters for computation
+    load_initial_value = true
+    if load_initial_value == true
+        @load "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
+    end
+    T_size = 200
+    T_degree = 7.0
+    iter_max = 1000
     slow_updating_transitional_dynamics = 0.05
 
     # from η = 0.25 to η = 0.30
     println("Solving transitions from η = $η_25 to η = $η_30...")
-    variables_T_25_30 = variables_T_function(variables_25, variables_30, parameters_30; T_size = 200, T_degree = 7.0)
-    transitional_dynamic_λ_function!(variables_T_25_30, variables_25, variables_30, parameters_30; iter_max = 1000, slow_updating = slow_updating_transitional_dynamics)
+    if load_initial_value == true
+        variables_T_25_30 = variables_T_function(transtion_path_eta_25_30, variables_25, variables_30, parameters_30)
+    else
+        variables_T_25_30 = variables_T_function(variables_25, variables_30, parameters_30; T_size = T_size, T_degree = T_degree)
+    end
+    transitional_dynamic_λ_function!(variables_T_25_30, variables_25, variables_30, parameters_30; tol = iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_eta_25_30 = variables_T_25_30.aggregate_prices.leverage_ratio_λ
 
     # from η = 0.25 to η = 0.20
     println("Solving transitions from η = $η_25 to η = $η_20...")
-    variables_T_25_20 = variables_T_function(variables_25, variables_20, parameters_20; T_size = 200, T_degree = 7.0)
-    transitional_dynamic_λ_function!(variables_T_25_20, variables_25, variables_20, parameters_20; iter_max = 1000, slow_updating = slow_updating_transitional_dynamics)
+    if load_initial_value == true
+        variables_T_25_20 = variables_T_function(transtion_path_eta_25_20, variables_25, variables_20, parameters_30)
+    else
+        variables_T_25_20 = variables_T_function(variables_25, variables_20, parameters_20; T_size = T_size, T_degree = T_degree)
+    end
+    transitional_dynamic_λ_function!(variables_T_25_20, variables_25, variables_20, parameters_20; iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_eta_25_20 = variables_T_25_20.aggregate_prices.leverage_ratio_λ
 
+    # save transition path
     @save "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
+end
+
+if Indicator_solve_transitional_dynamics_across_p_h == true
+
+    @load "results_p_h.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    # specily the new and old policies
+    p_h_8, λ_8 = results_A_FF[1,3], results_A_FF[3,3] # p_h = 1 / 8
+    p_h_10, λ_10 = results_A_FF[1,2], results_A_FF[3,2] # p_h = 1 / 10
+    p_h_12, λ_12 = results_A_FF[1,1], results_A_FF[3,1] # p_h = 1 / 12
+
+    # stationary equilibrium when p_h = 1 / 8
+    println("Solving steady state when p_h = $p_h_8...")
+    parameters_8 = parameters_function(p_h = p_h_8)
+    variables_8 = variables_function(parameters_8; λ = λ_8)
+    solve_economy_function!(variables_8, parameters_8)
+
+    # stationary equilibrium when p_h = 1 / 10
+    println("Solving steady state when p_h = $p_h_10...")
+    parameters_10 = parameters_function(p_h = p_h_10)
+    variables_10 = variables_function(parameters_10; λ = λ_10)
+    solve_economy_function!(variables_10, parameters_10)
+
+    # stationary equilibrium when p_h = 1 / 12
+    println("Solving steady state when p_h = $p_h_12...")
+    parameters_12 = parameters_function(p_h = p_h_12)
+    variables_12 = variables_function(parameters_12; λ = λ_12)
+    solve_economy_function!(variables_12, parameters_12)
+
+    # solve transitional dynamics
+    slow_updating_transitional_dynamics = 0.05
+
+    # from p_h = 1 / 10 to p_h = 1 / 12
+    println("Solving transitions from p_h = $p_h_10 to p_h = $p_h_12...")
+    variables_T_10_12 = variables_T_function(variables_10, variables_12, parameters_12; T_size = 200, T_degree = 7.0)
+    transitional_dynamic_λ_function!(variables_T_10_12, variables_10, variables_12, parameters_12; tol = 1E-4, iter_max = 1000, slow_updating = slow_updating_transitional_dynamics)
+    transtion_path_p_h_10_12 = variables_T_10_12.aggregate_prices.leverage_ratio_λ
+
+    # from p_h = 1 / 10 to p_h = 1 / 8
+    println("Solving transitions from p_h = $p_h_10 to p_h = $p_h_8...")
+    variables_T_10_8 = variables_T_function(variables_10, variables_8, parameters_8; T_size = 200, T_degree = 7.0)
+    transitional_dynamic_λ_function!(variables_T_10_8, variables_10, variables_8, parameters_8; tol = 1E-4, iter_max = 1000, slow_updating = slow_updating_transitional_dynamics)
+    transtion_path_p_h_10_8 = variables_T_10_8.aggregate_prices.leverage_ratio_λ
+
+    @save "results_transition_p_h.jld2" transtion_path_p_h_10_12 transtion_path_p_h_10_8
 
 end
 

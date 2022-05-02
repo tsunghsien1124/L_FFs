@@ -247,6 +247,131 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     return variables_T
 end
 
+function variables_T_function(transtion_path_eta::Array{Float64,1}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple)
+    """
+    construct a mutable object containing endogenous variables of periods T given initial guess
+    """
+
+    # unpack parameters from new steady state
+    @unpack a_size, a_size_pos, a_size_neg, a_size_μ, a_size_pos_μ, a_ind_zero_μ, e_1_size, e_2_size, e_3_size, ν_size, ρ, r_f = parameters_new
+
+    # compute adjusted time periods
+    T_size = length(transtion_path_eta)
+
+    # define aggregate prices
+    leverage_ratio_λ = transtion_path_eta
+
+    λ, ξ_λ, Λ_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ = aggregate_price_update(leverage_ratio_λ, variables_old, variables_new, parameters_new)
+
+    aggregate_prices = Mutable_Aggregate_Prices_T(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ)
+
+    # define aggregate variables
+    K_p = zeros(T_size)
+    K_p[1] = variables_old.aggregate_variables.K
+    K_p[end] = variables_new.aggregate_variables.K
+
+    L_p = zeros(T_size)
+    L_p[1] = variables_old.aggregate_variables.L
+    L_p[end] = variables_new.aggregate_variables.L
+
+    D_p = zeros(T_size)
+    D_p[1] = variables_old.aggregate_variables.D
+    D_p[end] = variables_new.aggregate_variables.D
+
+    N = zeros(T_size)
+    N[1] = variables_old.aggregate_variables.N
+    N[2] = variables_old.aggregate_variables.N
+    N[end] = variables_new.aggregate_variables.N
+
+    leverage_ratio = zeros(T_size)
+    leverage_ratio[1] = variables_old.aggregate_variables.leverage_ratio
+    leverage_ratio[end] = variables_new.aggregate_variables.leverage_ratio
+
+    KL_to_D_ratio = zeros(T_size)
+    KL_to_D_ratio[1] = variables_old.aggregate_variables.KL_to_D_ratio
+    KL_to_D_ratio[end] = variables_new.aggregate_variables.KL_to_D_ratio
+
+    debt_to_earning_ratio = zeros(T_size)
+    debt_to_earning_ratio[1] = variables_old.aggregate_variables.debt_to_earning_ratio
+    debt_to_earning_ratio[end] = variables_new.aggregate_variables.debt_to_earning_ratio
+
+    share_of_filers = zeros(T_size)
+    share_of_filers[1] = variables_old.aggregate_variables.share_of_filers
+    share_of_filers[end] = variables_new.aggregate_variables.share_of_filers
+
+    share_of_involuntary_filers = zeros(T_size)
+    share_of_involuntary_filers[1] = variables_old.aggregate_variables.share_of_involuntary_filers
+    share_of_involuntary_filers[end] = variables_new.aggregate_variables.share_of_involuntary_filers
+
+    share_in_debts = zeros(T_size)
+    share_in_debts[1] = variables_old.aggregate_variables.share_in_debts
+    share_in_debts[end] = variables_new.aggregate_variables.share_in_debts
+
+    avg_loan_rate = zeros(T_size)
+    avg_loan_rate[1] = variables_old.aggregate_variables.avg_loan_rate
+    avg_loan_rate[end] = variables_new.aggregate_variables.avg_loan_rate
+
+    avg_loan_rate_pw = zeros(T_size)
+    avg_loan_rate_pw[1] = variables_old.aggregate_variables.avg_loan_rate_pw
+    avg_loan_rate_pw[end] = variables_new.aggregate_variables.avg_loan_rate_pw
+
+    aggregate_variables = Mutable_Aggregate_Variables_T(K_p, L_p, D_p, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+
+    # define repayment probability, pricing function, and risky borrowing limit
+    R = zeros(a_size_neg, e_1_size, e_2_size, T_size)
+    R[:,:,:,1] = variables_old.R
+    R[:,:,:,end] = variables_new.R
+
+    q = ones(a_size, e_1_size, e_2_size, T_size) .* ρ ./ (1.0 + r_f)
+    q[:,:,:,1] = variables_old.q
+    q[:,:,:,end] = variables_new.q
+
+    rbl = zeros(e_1_size, e_2_size, 2, T_size)
+    rbl[:,:,:,1] = variables_old.rbl
+    rbl[:,:,:,end] = variables_new.rbl
+
+    # define value and policy functions
+    V = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    V[:,:,:,:,:,1] = variables_old.V
+    V[:,:,:,:,:,end] = variables_new.V
+
+    V_d = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    V_d[:,:,:,:,:,1] = variables_old.V_d
+    V_d[:,:,:,:,:,end] = variables_new.V_d
+
+    V_nd = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    V_nd[:,:,:,:,:,1] = variables_old.V_nd
+    V_nd[:,:,:,:,:,end] = variables_new.V_nd
+
+    V_pos = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    V_pos[:,:,:,:,:,1] = variables_old.V_pos
+    V_pos[:,:,:,:,:,end] = variables_new.V_pos
+
+    policy_a = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    policy_a[:,:,:,:,:,1] = variables_old.policy_a
+    policy_a[:,:,:,:,:,end] = variables_new.policy_a
+
+    policy_d = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    policy_d[:,:,:,:,:,1] = variables_old.policy_d
+    policy_d[:,:,:,:,:,end] = variables_new.policy_d
+
+    policy_pos_a = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    policy_pos_a[:,:,:,:,:,1] = variables_old.policy_pos_a
+    policy_pos_a[:,:,:,:,:,end] = variables_new.policy_pos_a
+
+    # define cross-sectional distribution
+    μ = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2, T_size)
+    μ_size = (a_size_μ + a_size_pos_μ) * e_1_size * e_2_size * e_3_size * ν_size
+    μ[:,:,:,:,:,1,2:(end-1)] .= 1.0 ./ μ_size
+    μ[a_ind_zero_μ:end,:,:,:,:,2,2:(end-1)] .= 1.0 ./ μ_size
+    μ[:,:,:,:,:,:,1] = variables_old.μ
+    μ[:,:,:,:,:,:,end] = variables_new.μ
+
+    # return outputs
+    variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, μ)
+    return variables_T
+end
+
 function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; tol::Real = 1E-2, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = false)
     """
     solve transitional dynamics of periods T from initial to new steady states

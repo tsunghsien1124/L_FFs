@@ -277,7 +277,8 @@ if Indicator_solve_transitional_dynamics_across_η == true
     end
     transitional_dynamic_λ_function!(variables_T_25_30, variables_25, variables_30, parameters_30; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_eta_25_30 = variables_T_25_30.aggregate_prices.leverage_ratio_λ
-    plot(transtion_path_eta_25_30, legend=:none)
+    plot_transtion_path_eta_25_30 = plot(transtion_path_eta_25_30, legend=:none, seriestype=:scatter)
+    Plots.savefig(plot_transtion_path_eta_25_30, pwd() * "\\figures\\plot_transtion_path_eta_25_30.pdf")
 
     # from η = 0.25 to η = 0.20
     println("Solving transitions from η = $η_25 to η = $η_20...")
@@ -288,7 +289,8 @@ if Indicator_solve_transitional_dynamics_across_η == true
     end
     transitional_dynamic_λ_function!(variables_T_25_20, variables_25, variables_20, parameters_20; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_eta_25_20 = variables_T_25_20.aggregate_prices.leverage_ratio_λ
-    plot(transtion_path_eta_25_20, legend=:none)
+    plot_transtion_path_eta_25_20 = plot(transtion_path_eta_25_20, legend=:none, seriestype=:scatter)
+    Plots.savefig(plot_transtion_path_eta_25_20, pwd() * "\\figures\\plot_transtion_path_eta_25_20.pdf")
 
     # save transition path
     @save "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
@@ -398,7 +400,8 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     end
     transitional_dynamic_λ_function!(variables_T_10_12, variables_10, variables_12, parameters_12; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_p_h_10_12 = variables_T_10_12.aggregate_prices.leverage_ratio_λ
-    plot(transtion_path_p_h_10_12, legend=:none)
+    plot_transtion_path_p_h_10_12 = plot(transtion_path_p_h_10_12, legend=:none)
+    Plots.savefig(plot_transtion_path_p_h_10_12, pwd() * "\\figures\\plot_transtion_path_p_h_10_12.pdf")
 
     # from p_h = 1 / 10 to p_h = 1 / 8
     println("Solving transitions from p_h = $p_h_10 to p_h = $p_h_8...")

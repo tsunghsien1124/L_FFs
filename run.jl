@@ -741,9 +741,7 @@ end
 if Indicator_simulation_across_θ_results == true
 
     # load simulation results
-    # @load "simulations_benchmark_FF.jld2" panel_asset_FF panel_history_FF panel_default_FF panel_age_FF panel_consumption_FF shock_ρ_FF shock_e_1_FF shock_e_2_FF shock_e_3_FF shock_ν_FF
     @load "simulations_benchmark_NFF.jld2" panel_asset_NFF panel_history_NFF panel_default_NFF panel_age_NFF panel_consumption_NFF shock_ρ_NFF shock_e_1_NFF shock_e_2_NFF shock_e_3_NFF shock_ν_NFF
-
     @load "simulations_benchmark_theta_1.jld2" panel_asset_θ_1 panel_history_θ_1 panel_default_θ_1 panel_age_θ_1 panel_consumption_θ_1 shock_ρ_θ_1 shock_e_1_θ_1 shock_e_2_θ_1 shock_e_3_θ_1 shock_ν_θ_1
     @load "simulations_benchmark_theta_2.jld2" panel_asset_θ_2 panel_history_θ_2 panel_default_θ_2 panel_age_θ_2 panel_consumption_θ_2 shock_ρ_θ_2 shock_e_1_θ_2 shock_e_2_θ_2 shock_e_3_θ_2 shock_ν_θ_2
     @load "simulations_benchmark_theta_3.jld2" panel_asset_θ_3 panel_history_θ_3 panel_default_θ_3 panel_age_θ_3 panel_consumption_θ_3 shock_ρ_θ_3 shock_e_1_θ_3 shock_e_2_θ_3 shock_e_3_θ_3 shock_ν_θ_3
@@ -787,24 +785,19 @@ if Indicator_simulation_across_θ_results == true
     # consumption over life cycle
     age_max = convert(Int64, ceil(1.0 / (1.0 - parameters.ρ)))
 
-    mean_consumption_age_FF, mean_consumption_age_NFF = zeros(age_max), zeros(age_max)
-    variance_consumption_age_FF, variance_consumption_age_NFF = zeros(age_max), zeros(age_max)
-    panel_log_consumption_FF, panel_log_consumption_NFF = log.(panel_consumption_FF), log.(panel_consumption_NFF)
-    mean_log_consumption_age_FF, mean_log_consumption_age_NFF = zeros(age_max), zeros(age_max)
-    variance_log_consumption_age_FF, variance_log_consumption_age_NFF = zeros(age_max), zeros(age_max)
+    mean_consumption_age_NFF = zeros(age_max)
+    variance_consumption_age_NFF = zeros(age_max)
+    panel_log_consumption_NFF = log.(panel_consumption_NFF)
+    mean_log_consumption_age_NFF = zeros(age_max)
+    variance_log_consumption_age_NFF = zeros(age_max)
 
     mean_consumption_age_θ_1, mean_consumption_age_θ_2, mean_consumption_age_θ_3 = zeros(age_max), zeros(age_max), zeros(age_max)
     variance_consumption_age_θ_1, variance_consumption_age_θ_2, variance_consumption_age_θ_3 = zeros(age_max), zeros(age_max), zeros(age_max)
     panel_log_consumption_θ_1, panel_log_consumption_θ_2, panel_log_consumption_θ_3 = log.(panel_consumption_θ_1), log.(panel_consumption_θ_2), log.(panel_consumption_θ_3)
     mean_log_consumption_age_θ_1, mean_log_consumption_age_θ_2, mean_log_consumption_age_θ_3 = zeros(age_max), zeros(age_max), zeros(age_max)
     variance_log_consumption_age_θ_1, variance_log_consumption_age_θ_2, variance_log_consumption_age_θ_3 = zeros(age_max), zeros(age_max), zeros(age_max)
-    for age_i in 1:age_max
-        # age_bool_FF = (panel_age_FF .== age_i)
-        # mean_consumption_age_FF[age_i] = sum(panel_consumption_FF[age_bool_FF]) / sum(age_bool_FF)
-        # variance_consumption_age_FF[age_i] = sum((panel_consumption_FF[age_bool_FF] .- mean_consumption_age_FF[age_i]).^2) / sum(age_bool_FF)
-        # mean_log_consumption_age_FF[age_i] = sum(panel_log_consumption_FF[age_bool_FF]) / sum(age_bool_FF)
-        # variance_log_consumption_age_FF[age_i] = sum((panel_log_consumption_FF[age_bool_FF] .- mean_log_consumption_age_FF[age_i]).^2) / sum(age_bool_FF)
 
+    for age_i in 1:age_max
         age_bool_NFF = (panel_age_NFF .== age_i)
         mean_consumption_age_NFF[age_i] = sum(panel_consumption_NFF[age_bool_NFF]) / sum(age_bool_NFF)
         variance_consumption_age_NFF[age_i] = sum((panel_consumption_NFF[age_bool_NFF] .- mean_consumption_age_NFF[age_i]).^2) / sum(age_bool_NFF)
@@ -831,31 +824,20 @@ if Indicator_simulation_across_θ_results == true
     end
 
     plot_consumption_across_θ = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "consumption", xlabel = "working age")
-    plot_consumption_across_θ = plot!(1:age_max, mean_consumption_age_θ_1, label="\$ \\theta = 1/3.3 \$", linecolor = :blue, linewidth = 3)
-    plot_consumption_across_θ = plot!(1:age_max, mean_consumption_age_θ_2, label="\$ \\theta = 1/3.0\\ (\\textrm{Benchmark})\$", linecolor = :red, linestyle = :dash, linewidth = 3)
-    plot_consumption_across_θ = plot!(1:age_max, mean_consumption_age_θ_3, label="\$ \\theta = 1/2.7 \$", linecolor = :black, linestyle = :dashdot, linewidth = 3)
+    plot_consumption_across_θ = plot!(1:age_max, mean_consumption_age_θ_2, label="\$ \\theta = 1/3.0 \$", linecolor = :blue, linewidth = 3)
+    plot_consumption_across_θ = plot!(1:age_max, mean_consumption_age_θ_1, label="\$ \\theta = 1/2.7 \$", linecolor = :red, linestyle = :dash, linewidth = 3)
+    plot_consumption_across_θ = plot!(1:age_max, mean_consumption_age_θ_3, label="\$ \\theta = 1/3.3 \$", linecolor = :black, linestyle = :dashdot, linewidth = 3)
+    plot_consumption_across_θ = plot!(1:age_max, mean_consumption_age_NFF, label="\$ \\theta = 0 \$", linecolor = :grey, linestyle = :dot, linewidth = 3)
     plot_consumption_across_θ
     Plots.savefig(plot_consumption_across_θ, pwd() * "\\figures\\plot_consumption_across_theta.pdf")
 
-    # df = DataFrame(x = 1:age_max)
-    # df.y = (mean_consumption_age_NFF .- mean_consumption_age_FF) ./ mean_consumption_age_FF .* 100
-    # model = lm(@formula(y ~ 1 + x), df)
-    # plot_consumption_comparison = plot(df.x, df.y, label=:none, xlabel="working age", ylabel="relative consumption gain (%)")
-    # plot_consumption_comparison = plot!(df.x, predict(model, df), label="fitted linear model")
-    # Plots.savefig(plot_consumption_comparison, pwd() * "\\figures\\plot_consumption_comparison.pdf")
-
-    plot_var_log_consumption_across_θ = plot(1:age_max, variance_log_consumption_age_θ_1, legend=:bottomright, label="milder financial frictions", xlabel="working age", ylabel="variance of log consumption")
-    plot_var_log_consumption_across_θ = plot!(1:age_max, variance_log_consumption_age_θ_2, label="benchmark")
-    plot_var_log_consumption_across_θ = plot!(1:age_max, variance_log_consumption_age_θ_3, label="stronger financial frictions")
+    plot_var_log_consumption_across_θ = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "variance of log consumption", xlabel = "working age")
+    plot_var_log_consumption_across_θ = plot!(1:age_max, variance_log_consumption_age_θ_2, label="\$ \\theta = 1/3.0 \$", linecolor = :blue, linewidth = 3)
+    plot_var_log_consumption_across_θ = plot!(1:age_max, variance_log_consumption_age_θ_1, label="\$ \\theta = 1/2.7 \$", linecolor = :red, linestyle = :dash, linewidth = 3)
+    plot_var_log_consumption_across_θ = plot!(1:age_max, variance_log_consumption_age_θ_3, label="\$ \\theta = 1/3.3 \$", linecolor = :black, linestyle = :dashdot, linewidth = 3)
+    plot_var_log_consumption_across_θ = plot!(1:age_max, variance_log_consumption_age_NFF, label="\$ \\theta = 0 \$", linecolor = :grey, linestyle = :dot, linewidth = 3)
     plot_var_log_consumption_across_θ
     Plots.savefig(plot_var_log_consumption_across_θ, pwd() * "\\figures\\plot_var_log_consumption_across_theta.pdf")
-
-    # df = DataFrame(x = 1:age_max)
-    # df.y = (variance_log_consumption_age_NFF .- variance_log_consumption_age_FF) ./ variance_log_consumption_age_FF .* 100
-    # model = lm(@formula(y ~ 1 + x), df)
-    # plot_var_log_consumption_comparison = plot(df.x, df.y, label=:none, xlabel="working age", ylabel="relative variance of log(c) gain (%)")
-    # plot_var_log_consumption_comparison = plot!(df.x, predict(model, df), label="fitted linear model")
-    # Plots.savefig(plot_var_log_consumption_comparison, pwd() * "\\figures\\plot_var_log_consumption_comparison.pdf")
 
 end
 

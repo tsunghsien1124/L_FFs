@@ -325,27 +325,29 @@ if Indicator_solve_transitional_dynamics_across_η == true
     HHs_good_debt = 100 * sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])
     HHs_good_no_debt = 100 * sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])
     HHs_good = HHs_good_debt + HHs_good_no_debt
+    HHs_good_debt_cond = HHs_good_debt / HHs_good * 100
+    HHs_good_no_debt_cond = HHs_good_no_debt / HHs_good * 100
     HHs_bad = 100 * sum(variables_25.μ[:,:,:,:,:,2])
     HHs_total = HHs_good + HHs_bad
 
     # printout results of welfare effects
     data_spec = Any[
         "Proportion of households" "" ""
-        "With good credit history and debt" HHs_good_debt HHs_good_debt
-        "With good credit history and no debt" HHs_good_no_debt HHs_good_no_debt
         "With good credit history" HHs_good HHs_good
+        "With good credit history and debt" HHs_good_debt_cond HHs_good_debt_cond
+        "With good credit history and no debt" HHs_good_no_debt_cond HHs_good_no_debt_cond
         "With bad credit history" HHs_bad HHs_bad
         "Total" HHs_total HHs_total
         "Average percentage gain in flow consumption" "" ""
+        "With good credit history" welfare_CEV_25_20_good welfare_CEV_25_30_good
         "With good credit history and debt" welfare_CEV_25_20_good_with_debt welfare_CEV_25_30_good_with_debt
         "With good credit history and no debt" welfare_CEV_25_20_good_no_debt welfare_CEV_25_30_good_no_debt
-        "With good credit history" welfare_CEV_25_20_good welfare_CEV_25_30_good
         "With bad credit history" welfare_CEV_25_20_bad welfare_CEV_25_30_bad
         "Total" welfare_CEV_25_20 welfare_CEV_25_30
         "Percentage of households in favor of new policy" "" ""
+        "With good credit history" welfare_favor_25_20_good welfare_favor_25_30_good
         "With good credit history and debt" welfare_favor_25_20_good_with_debt welfare_favor_25_30_good_with_debt
         "With good credit history and no debt" welfare_favor_25_20_good_without_debt welfare_favor_25_30_good_without_debt
-        "With good credit history" welfare_favor_25_20_good welfare_favor_25_30_good
         "With bad credit history" welfare_favor_25_20_bad welfare_favor_25_30_bad
         "Total" welfare_favor_25_20 welfare_favor_25_30
     ]
@@ -357,7 +359,7 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
 
     @load "results_p_h.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
-    # specily the new and old policies
+    # specily the old and new policies
     p_h_8, λ_8 = results_A_FF[1,3], results_A_FF[3,3] # p_h = 1 / 8
     p_h_10, λ_10 = results_A_FF[1,2], results_A_FF[3,2] # p_h = 1 / 10
     p_h_12, λ_12 = results_A_FF[1,1], results_A_FF[3,1] # p_h = 1 / 12
@@ -367,18 +369,35 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     parameters_8 = parameters_function(p_h = p_h_8)
     variables_8 = variables_function(parameters_8; λ = λ_8)
     solve_economy_function!(variables_8, parameters_8)
+    # variables_8_NFF = variables_function(parameters_8; λ = 0.0)
+    # solve_economy_function!(variables_8_NFF, parameters_8)
 
     # stationary equilibrium when p_h = 1 / 10
     println("Solving steady state when p_h = $p_h_10...")
     parameters_10 = parameters_function(p_h = p_h_10)
     variables_10 = variables_function(parameters_10; λ = λ_10)
     solve_economy_function!(variables_10, parameters_10)
+    # variables_10_NFF = variables_function(parameters_10; λ = 0.0)
+    # solve_economy_function!(variables_10_NFF, parameters_10)
 
     # stationary equilibrium when p_h = 1 / 12
     println("Solving steady state when p_h = $p_h_12...")
     parameters_12 = parameters_function(p_h = p_h_12)
     variables_12 = variables_function(parameters_12; λ = λ_12)
     solve_economy_function!(variables_12, parameters_12)
+    # variables_12_NFF = variables_function(parameters_12; λ = 0.0)
+    # solve_economy_function!(variables_12_NFF, parameters_12)
+
+    # printout results of aggregate statistics
+    data_spec = Any[
+        "Porb. of Bad History Removal" p_h_8 p_h_10 p_h_12
+        "Banking leverage ratio" variables_8.aggregat
+        "Lending costs"
+        "Share in debt"
+        "Debt-to-earnings"
+        "Avg. interest rate" variables_8.aggregate_variables.avg_loan_rate variables_12.a
+    ]
+    pretty_table(data_spec; header = ["Variable", "p_h = 1/10 -> 1/8", "p_h = 1/10 -> 1/12"], alignment = [:l, :r, :r], formatters = ft_round(4), body_hlines = [6, 12])
 
     # set parameters for computation
     load_initial_value = true
@@ -412,7 +431,8 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     end
     transitional_dynamic_λ_function!(variables_T_10_8, variables_10, variables_8, parameters_8; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_p_h_10_8 = variables_T_10_8.aggregate_prices.leverage_ratio_λ
-    plot(transtion_path_p_h_10_8, legend=:none)
+    transtion_path_p_h_10_8 = plot(transtion_path_p_h_10_8, legend=:none)
+    Plots.savefig(transtion_path_p_h_10_8, pwd() * "\\figures\\transtion_path_p_h_10_8.pdf")
 
     # save transition path
     @save "results_transition_p_h.jld2" transtion_path_p_h_10_12 transtion_path_p_h_10_8
@@ -447,31 +467,94 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     HHs_good_debt = 100 * sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
     HHs_good_no_debt = 100 * sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
     HHs_good = HHs_good_debt + HHs_good_no_debt
+    HHs_good_debt_cond = HHs_good_debt / HHs_good * 100
+    HHs_good_no_debt_cond = HHs_good_no_debt / HHs_good * 100
     HHs_bad = 100 * sum(variables_10.μ[:,:,:,:,:,2])
     HHs_total = HHs_good + HHs_bad
 
     # printout results of welfare effects
     data_spec = Any[
         "Proportion of households" "" ""
-        "With good credit history and debt" HHs_good_debt HHs_good_debt
-        "With good credit history and no debt" HHs_good_no_debt HHs_good_no_debt
         "With good credit history" HHs_good HHs_good
+        "With good credit history and debt" HHs_good_debt_cond HHs_good_debt_cond
+        "With good credit history and no debt" HHs_good_no_debt_cond HHs_good_no_debt_cond
         "With bad credit history" HHs_bad HHs_bad
         "Total" HHs_total HHs_total
         "Average percentage gain in flow consumption" "" ""
+        "With good credit history" welfare_CEV_10_8_good welfare_CEV_10_12_good
         "With good credit history and debt" welfare_CEV_10_8_good_with_debt welfare_CEV_10_12_good_with_debt
         "With good credit history and no debt" welfare_CEV_10_8_good_no_debt welfare_CEV_10_12_good_no_debt
-        "With good credit history" welfare_CEV_10_8_good welfare_CEV_10_12_good
         "With bad credit history" welfare_CEV_10_8_bad welfare_CEV_10_12_bad
         "Total" welfare_CEV_10_8 welfare_CEV_10_12
         "Percentage of households in favor of new policy" "" ""
+        "With good credit history" welfare_favor_10_8_good welfare_favor_10_12_good
         "With good credit history and debt" welfare_favor_10_8_good_with_debt welfare_favor_10_12_good_with_debt
         "With good credit history and no debt" welfare_favor_10_8_good_without_debt welfare_favor_10_12_good_without_debt
-        "With good credit history" welfare_favor_10_8_good welfare_favor_10_12_good
         "With bad credit history" welfare_favor_10_8_bad welfare_favor_10_12_bad
         "Total" welfare_favor_10_8 welfare_favor_10_12
     ]
     pretty_table(data_spec; header = ["Variable", "p_h = 1/10 -> 1/8", "p_h = 1/10 -> 1/12"], alignment = [:l, :r, :r], formatters = ft_round(4), body_hlines = [6, 12])
+
+    # #=============================#
+    # # without financial frictions #
+    # #=============================#
+    # # compute welfare metrics from p_h = 1/10 to p_h = 1/12
+    # welfare_CEV_10_12_good_with_debt_NFF = 100 * sum(((variables_12_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] ./ variables_10_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
+    # welfare_CEV_10_12_good_no_debt_NFF = 100 * sum(((variables_12_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:] ./ variables_10_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    # welfare_CEV_10_12_good_NFF = 100 * sum(((variables_12_NFF.V[:,:,:,:,:] ./ variables_10_NFF.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[:,:,:,:,:,1] ./ sum(variables_10_NFF.μ[:,:,:,:,:,1])))
+    # welfare_CEV_10_12_bad_NFF =  100 * sum(((variables_12_NFF.V_pos[:,:,:,:,:] ./ variables_10_NFF.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    # welfare_CEV_10_12_NFF = 100 * (sum(((variables_12_NFF.V[:,:,:,:,:] ./ variables_10_NFF.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10_NFF.μ[:,:,:,:,:,1]) + sum(((variables_12_NFF.V_pos[:,:,:,:,:] ./ variables_10_NFF.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+    #
+    # welfare_favor_10_12_good_with_debt_NFF = 100 * sum((variables_12_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] .> variables_10_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
+    # welfare_favor_10_12_good_without_debt_NFF = 100 * sum((variables_12_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:] .> variables_10_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    # welfare_favor_10_12_good_NFF = 100 * sum((variables_12_NFF.V[:,:,:,:,:] .> variables_10_NFF.V) .* (variables_10_NFF.μ[:,:,:,:,:,1] ./ sum(variables_10_NFF.μ[:,:,:,:,:,1])))
+    # welfare_favor_10_12_bad_NFF = 100 * sum((variables_12_NFF.V_pos[:,:,:,:,:] .> variables_10_NFF.V_pos) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    # welfare_favor_10_12_NFF = 100 * (sum((variables_12_NFF.V[:,:,:,:,:] .> variables_10_NFF.V) .* variables_10_NFF.μ[:,:,:,:,:,1]) + sum((variables_12_NFF.V_pos[:,:,:,:,:] .> variables_10_NFF.V_pos) .* variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+    #
+    # # compute welfare metrics from η = 0.25 to η = 0.20
+    # welfare_CEV_10_8_good_with_debt_NFF = 100 * sum(((variables_8_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] ./ variables_10_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
+    # welfare_CEV_10_8_good_no_debt_NFF = 100 * sum(((variables_8_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:] ./ variables_10_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    # welfare_CEV_10_8_good_NFF = 100 * sum(((variables_8_NFF.V[:,:,:,:,:] ./ variables_10_NFF.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[:,:,:,:,:,1] ./ sum(variables_10_NFF.μ[:,:,:,:,:,1])))
+    # welfare_CEV_10_8_bad_NFF =  100 * sum(((variables_8_NFF.V_pos[:,:,:,:,:] ./ variables_10_NFF.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    # welfare_CEV_10_8_NFF = 100 * (sum(((variables_8_NFF.V[:,:,:,:,:] ./ variables_10_NFF.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10_NFF.μ[:,:,:,:,:,1]) + sum(((variables_8_NFF.V_pos[:,:,:,:,:] ./ variables_10_NFF.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+    #
+    # welfare_favor_10_8_good_with_debt_NFF = 100 * sum((variables_8_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] .> variables_10_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
+    # welfare_favor_10_8_good_without_debt_NFF = 100 * sum((variables_8_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:] .> variables_10_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    # welfare_favor_10_8_good_NFF = 100 * sum((variables_8_NFF.V[:,:,:,:,:] .> variables_10_NFF.V) .* (variables_10_NFF.μ[:,:,:,:,:,1] ./ sum(variables_10_NFF.μ[:,:,:,:,:,1])))
+    # welfare_favor_10_8_bad_NFF = 100* sum((variables_8_NFF.V_pos[:,:,:,:,:] .> variables_10_NFF.V_pos) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    # welfare_favor_10_8_NFF = 100 * (sum((variables_8_NFF.V[:,:,:,:,:] .> variables_10_NFF.V) .* variables_10_NFF.μ[:,:,:,:,:,1]) + sum((variables_8_NFF.V_pos[:,:,:,:,:] .> variables_10_NFF.V_pos) .* variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+    #
+    # # share of households
+    # HHs_good_debt_NFF = 100 * sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
+    # HHs_good_no_debt_NFF = 100 * sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
+    # HHs_good_NFF = HHs_good_debt_NFF + HHs_good_no_debt_NFF
+    # HHs_good_debt_cond_NFF = HHs_good_debt_NFF / HHs_good_NFF * 100
+    # HHs_good_no_debt_cond_NFF = HHs_good_no_debt_NFF / HHs_good_NFF * 100
+    # HHs_bad_NFF = 100 * sum(variables_10_NFF.μ[:,:,:,:,:,2])
+    # HHs_total_NFF = HHs_good_NFF + HHs_bad_NFF
+    #
+    # # printout results of welfare effects
+    # data_spec_NFF = Any[
+    #     "Proportion of households" "" ""
+    #     "With good credit history" HHs_good_NFF HHs_good_NFF
+    #     "With good credit history and debt" HHs_good_debt_cond_NFF HHs_good_debt_cond_NFF
+    #     "With good credit history and no debt" HHs_good_no_debt_cond_NFF HHs_good_no_debt_cond_NFF
+    #     "With bad credit history" HHs_bad_NFF HHs_bad_NFF
+    #     "Total" HHs_total_NFF HHs_total_NFF
+    #     "Average percentage gain in flow consumption" "" ""
+    #     "With good credit history" welfare_CEV_10_8_good_NFF welfare_CEV_10_12_good_NFF
+    #     "With good credit history and debt" welfare_CEV_10_8_good_with_debt_NFF welfare_CEV_10_12_good_with_debt_NFF
+    #     "With good credit history and no debt" welfare_CEV_10_8_good_no_debt_NFF welfare_CEV_10_12_good_no_debt_NFF
+    #     "With bad credit history" welfare_CEV_10_8_bad_NFF welfare_CEV_10_12_bad_NFF
+    #     "Total" welfare_CEV_10_8_NFF welfare_CEV_10_12_NFF
+    #     "Percentage of households in favor of new policy" "" ""
+    #     "With good credit history" welfare_favor_10_8_good_NFF welfare_favor_10_12_good_NFF
+    #     "With good credit history and debt" welfare_favor_10_8_good_with_debt_NFF welfare_favor_10_12_good_with_debt_NFF
+    #     "With good credit history and no debt" welfare_favor_10_8_good_without_debt_NFF welfare_favor_10_12_good_without_debt_NFF
+    #     "With bad credit history" welfare_favor_10_8_bad_NFF welfare_favor_10_12_bad_NFF
+    #     "Total" welfare_favor_10_8_NFF welfare_favor_10_12_NFF
+    # ]
+    # pretty_table(data_spec_NFF; header = ["Variable", "p_h = 1/10 -> 1/8", "p_h = 1/10 -> 1/12"], alignment = [:l, :r, :r], formatters = ft_round(4), body_hlines = [6, 12])
 
 end
 

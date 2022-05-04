@@ -257,6 +257,19 @@ if Indicator_solve_transitional_dynamics_across_η == true
     variables_30 = variables_function(parameters_30; λ = λ_30)
     solve_economy_function!(variables_30, parameters_30)
 
+    # printout results of aggregate statistics
+    data_spec = Any[
+        "Banking leverage ratio" variables_20.aggregate_variables.leverage_ratio variables_25.aggregate_variables.leverage_ratio variables_30.aggregate_variables.leverage_ratio
+        "Leverage premium" variables_20.aggregate_prices.ι_λ*100 variables_25.aggregate_prices.ι_λ*100 variables_30.aggregate_prices.ι_λ*100
+        "Wage" variables_20.aggregate_prices.w_λ variables_25.aggregate_prices.w_λ variables_30.aggregate_prices.w_λ
+        # "Lending costs" (parameters_8.r_f+variables_20.aggregate_prices.ι_λ)*100 (parameters_10.r_f+variables_25.aggregate_prices.ι_λ)*100 (parameters_12.r_f+variables_30.aggregate_prices.ι_λ)*100
+        "Default rate" variables_20.aggregate_variables.share_of_filers*100 variables_25.aggregate_variables.share_of_filers*100 variables_30.aggregate_variables.share_of_filers*100
+        "Share in debt" variables_20.aggregate_variables.share_in_debts*100 variables_25.aggregate_variables.share_in_debts*100 variables_30.aggregate_variables.share_in_debts*100
+        "Debt-to-earnings" variables_20.aggregate_variables.debt_to_earning_ratio*100 variables_25.aggregate_variables.debt_to_earning_ratio*100 variables_30.aggregate_variables.debt_to_earning_ratio*100
+        "Avg. interest rate" variables_20.aggregate_variables.avg_loan_rate*100 variables_25.aggregate_variables.avg_loan_rate*100 variables_30.aggregate_variables.avg_loan_rate*100
+    ]
+    pretty_table(data_spec; header = ["Variable", "eta = 0.20", "eta = 0.25", "eta = 0.30"], alignment = [:l, :r, :r, :r], formatters = ft_round(4))
+
     # set parameters for computation
     load_initial_value = true
     if load_initial_value == true
@@ -390,14 +403,16 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
 
     # printout results of aggregate statistics
     data_spec = Any[
-        "Porb. of Bad History Removal" p_h_8 p_h_10 p_h_12
-        "Banking leverage ratio" variables_8.aggregat
-        "Lending costs"
-        "Share in debt"
-        "Debt-to-earnings"
-        "Avg. interest rate" variables_8.aggregate_variables.avg_loan_rate variables_12.a
+        "Banking leverage ratio" variables_8.aggregate_variables.leverage_ratio variables_10.aggregate_variables.leverage_ratio variables_12.aggregate_variables.leverage_ratio
+        "Leverage premium" variables_8.aggregate_prices.ι_λ*100 variables_10.aggregate_prices.ι_λ*100 variables_12.aggregate_prices.ι_λ*100
+        "Wage" variables_8.aggregate_prices.w_λ variables_10.aggregate_prices.w_λ variables_12.aggregate_prices.w_λ
+        # "Lending costs" (parameters_8.r_f+variables_8.aggregate_prices.ι_λ)*100 (parameters_10.r_f+variables_10.aggregate_prices.ι_λ)*100 (parameters_12.r_f+variables_12.aggregate_prices.ι_λ)*100
+        "Default rate" variables_8.aggregate_variables.share_of_filers*100 variables_10.aggregate_variables.share_of_filers*100 variables_12.aggregate_variables.share_of_filers*100
+        "Share in debt" variables_8.aggregate_variables.share_in_debts*100 variables_10.aggregate_variables.share_in_debts*100 variables_12.aggregate_variables.share_in_debts*100
+        "Debt-to-earnings" variables_8.aggregate_variables.debt_to_earning_ratio*100 variables_10.aggregate_variables.debt_to_earning_ratio*100 variables_12.aggregate_variables.debt_to_earning_ratio*100
+        "Avg. interest rate" variables_8.aggregate_variables.avg_loan_rate*100 variables_10.aggregate_variables.avg_loan_rate*100 variables_12.aggregate_variables.avg_loan_rate*100
     ]
-    pretty_table(data_spec; header = ["Variable", "p_h = 1/10 -> 1/8", "p_h = 1/10 -> 1/12"], alignment = [:l, :r, :r], formatters = ft_round(4), body_hlines = [6, 12])
+    pretty_table(data_spec; header = ["Variable", "p_h = 1/8", "p_h = 1/10", "p_h = 1/12"], alignment = [:l, :r, :r, :r], formatters = ft_round(4))
 
     # set parameters for computation
     load_initial_value = true

@@ -665,7 +665,7 @@ if Indicator_simulation_benchmark_results == true
         variance_log_consumption_age_NFF[age_i] = sum((panel_log_consumption_NFF[age_bool_NFF] .- mean_log_consumption_age_NFF[age_i]).^2) / sum(age_bool_NFF)
     end
 
-    plot_consumption = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "consumption", xlabel = "working age")
+    plot_consumption = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "working age")
     plot_consumption = plot!(1:age_max, mean_consumption_age_FF, label="\$ \\theta = 1/3.0\\ (\\textrm{with\\ financial\\ frictions}) \$", linecolor = :blue, linewidth = 3)
     plot_consumption = plot!(1:age_max, mean_consumption_age_NFF, label="\$ \\theta = 0\\ (\\textrm{no\\ financial\\ frictions}) \$", linecolor = :red, linestyle = :dot, linewidth = 3)
     plot_consumption
@@ -674,9 +674,9 @@ if Indicator_simulation_benchmark_results == true
     df = DataFrame(x = 1:age_max)
     df.y = (mean_consumption_age_NFF .- mean_consumption_age_FF) ./ mean_consumption_age_FF .* 100
     model = lm(@formula(y ~ 1 + x), df)
-    plot_consumption_comparison = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "\$ \\textrm{relative\\ consumption\\ gain\\ (\\%)} \$", xlabel = "\$ \\textrm{working\\ age} \$")
+    plot_consumption_comparison = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{working\\ age} \$")
     plot_consumption_comparison = plot!(df.x, df.y, linecolor = :blue, linewidth = 3, label=:none)
-    plot_consumption_comparison = plot!(df.x, predict(model, df), linecolor = :red, linestyle = :dot, linewidth = 3, label="\$ \\textrm{fitted\\ line} \$")
+    plot_consumption_comparison = plot!(df.x, predict(model, df), linecolor = :blue, linestyle = :dot, linewidth = 3, label=:none)
     plot_consumption_comparison
     Plots.savefig(plot_consumption_comparison, pwd() * "\\figures\\plot_consumption_comparison.pdf")
 
@@ -689,9 +689,9 @@ if Indicator_simulation_benchmark_results == true
     df = DataFrame(x = 1:age_max)
     df.y = (variance_log_consumption_age_NFF .- variance_log_consumption_age_FF) ./ variance_log_consumption_age_FF .* 100
     model = lm(@formula(y ~ 1 + x), df)
-    plot_var_log_consumption_comparison = plot(size = (800,500), box = :on, legend = :bottomleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "\$ \\textrm{relative\\ variance\\ of\\ log(c)\\ gain\\ (\\%)} \$", xlabel = "\$ \\textrm{working\\ age} \$")
+    plot_var_log_consumption_comparison = plot(size = (800,500), box = :on, legend = :bottomleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{working\\ age} \$")
     plot_var_log_consumption_comparison = plot!(df.x, df.y, linecolor = :blue, linewidth = 3, label=:none)
-    plot_var_log_consumption_comparison = plot!(df.x, predict(model, df), linecolor = :red, linestyle = :dash, linewidth = 3, label="\$ \\textrm{fitted\\ line} \$")
+    plot_var_log_consumption_comparison = plot!(df.x, predict(model, df), linecolor = :blue, linestyle = :dot, linewidth = 3, label=:none)
     plot_var_log_consumption_comparison
     Plots.savefig(plot_var_log_consumption_comparison, pwd() * "\\figures\\plot_var_log_consumption_comparison.pdf")
 

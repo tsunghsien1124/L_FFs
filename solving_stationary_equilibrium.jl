@@ -33,7 +33,7 @@ function parameters_function(;
     ρ::Real = 0.980,                # survival rate
     r_f::Real = 0.04,               # risk-free rate # 1.04*ρ-1.0
     β_f::Real = 1.0 / (1.0 + r_f),  # discount factor (bank)
-    τ::Real = 0.04,                 # transaction cost
+    τ::Real = r_f,                  # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
     η::Real = 0.25,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate

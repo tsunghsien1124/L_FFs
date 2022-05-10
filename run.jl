@@ -87,7 +87,6 @@ if Indicator_solve_equlibria_λ_min_and_max == true
         "avg interest rate (%)" variables_min.aggregate_variables.avg_loan_rate*100 variables_max.aggregate_variables.avg_loan_rate*100
         "policy upper bound" variables_min.policy_a[end, end, end, end, 2]<parameters.a_grid[end] variables_max.policy_a[end, end, end, end, 2]<parameters.a_grid[end]
     ]
-
     pretty_table(data_spec; header = ["Name", "λ minimum", "λ maximum"], alignment = [:c, :c, :c], formatters = ft_round(8), body_hlines = [3,5,9])
 
 end
@@ -136,7 +135,7 @@ end
 if Indicator_solve_stationary_equlibrium == true
 
     β_search = 0.940 / 0.980 # collect(0.94:0.01:0.97)
-    θ_search = 1.0 / 3.0 # eps() # collect(0.04:0.001:0.07)
+    θ_search = 0.381 # eps() # collect(0.04:0.001:0.07)
     η_search = 0.25 # collect(0.20:0.05:0.40)
     ζ_d_search = 0.03000 # collect(0.03000:0.00100:0.03100)
     ν_p_search = 0.01018 # collect(0.010202:0.000001:0.010204)

@@ -890,9 +890,11 @@ function solve_aggregate_variable_function(
     N = (K + L) - D
 
     # exogenous dividend policy
-    profit = (1.0 + r_f + ι) * K + (1.0 + τ + ι) * L - (1.0 + r_f) * D
+    # profit = (1.0 + r_f + ι) * K + (1.0 + τ + ι) * L - (1.0 + r_f) * D
+    profit = ι * (K + L) + (1.0 + r_f) * N
     # ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
-    ω = N / (ψ * profit)
+    # ω = N / (ψ * profit)
+    ω = (N - ψ * profit) / (1.0 - ψ) * (K + L)
 
     # leverage ratio
     leverage_ratio = (K + L) / N

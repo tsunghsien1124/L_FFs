@@ -128,8 +128,8 @@ end
 # Checking Plots #
 #================#
 # a_neg_index = 1
-# plot(parameters.a_grid_neg[a_neg_index:end], variables_min.q[a_neg_index:parameters.a_ind_zero,2,:], legend=:none)
-# plot(parameters.a_grid_neg[a_neg_index:end], variables_min.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
+# plot(parameters.a_grid_neg[a_neg_index:end], variables.q[a_neg_index:parameters.a_ind_zero,2,:], legend=:none)
+# plot(parameters.a_grid_neg[a_neg_index:end], variables.policy_d[a_neg_index:parameters.a_ind_zero,1,:,1,2], legend=:none)
 
 #============================================#
 # Solve stationary equilibrium (calibration) #
@@ -138,7 +138,7 @@ if Indicator_solve_stationary_equlibrium == true
 
     β_search = 0.940 / 0.980 # collect(0.94:0.01:0.97)
     ζ_d_search = 0.0235 # collect(0.03000:0.00500:0.0350)
-    ν_p_search = 0.010600 # collect(0.010000:0.00100:0.011000)
+    ν_p_search = 0.010450 # collect(0.010400:0.000100:0.010500)
 
     β_search_size = length(β_search)
     ζ_d_search_size = length(ζ_d_search)
@@ -188,7 +188,7 @@ end
 if Indicator_solve_stationary_equlibria_across_η == true
 
     η_min_search = 0.20
-    η_max_search = 0.30
+    η_max_search = 0.20
     η_step_search = 0.05
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search)
     @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF

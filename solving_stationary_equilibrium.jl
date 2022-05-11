@@ -898,7 +898,8 @@ function solve_aggregate_variable_function(
     profit = ι * (K + L) + (1.0 + r_f) * N
     # ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
     # ω = N / (ψ * profit)
-    ω = (N - ψ * profit) / (1.0 - ψ) * (K + L)
+    # ω = (N - ψ * profit) / ((1.0 - ψ) * (K + L))
+    ω = (N - ψ * profit) / (K + L)
     # ω = N - ψ * profit
 
     # leverage ratio
@@ -924,7 +925,7 @@ function solve_aggregate_variable_function(
     return aggregate_variables
 end
 
-function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-6, tol_μ::Real = 1E-8, slow_updating::Real = 1.0)
+function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real = 1E-8, tol_μ::Real = 1E-10, slow_updating::Real = 0.5)
     """
     solve the economy with given liquidity multiplier ι
     """
@@ -1086,7 +1087,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real)
         parameters_η = parameters_function(η = η)
         # λ_min_adhoc_η = η_i > 1 ? results_A_FF[3,η_i-1] : -Inf
         λ_min_adhoc_η = -Inf
-        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_η; λ_min_adhoc = λ_min_adhoc_η, slow_updating = slow_updating)
+        variables_NFF, variables_FF, flag, crit_V, crit_μ = optimal_multiplier_function(parameters_η; λ_min_adhoc = λ_min_adhoc_η, slow_updating = slow_updating)
 
         # save results
         results_A_NFF[1, η_i] = parameters_η.η
@@ -1180,7 +1181,7 @@ function results_p_h_function(; p_h_min::Real, p_h_max::Real, p_h_step::Real)
         parameters_p_h = parameters_function(p_h = p_h)
         # λ_min_adhoc_p_h = p_h_i > 1 ? results_A_FF[3,p_h_i-1] : -Inf
         λ_min_adhoc_p_h = -Inf
-        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_p_h; λ_min_adhoc = λ_min_adhoc_p_h, slow_updating = slow_updating)
+        variables_NFF, variables_FF, flag, crit_V, crit_μ = optimal_multiplier_function(parameters_p_h; λ_min_adhoc = λ_min_adhoc_p_h, slow_updating = slow_updating)
 
         # save results
         results_A_NFF[1, p_h_i] = parameters_p_h.p_h
@@ -1273,7 +1274,7 @@ function results_θ_function(; θ_min::Real, θ_max::Real, θ_step::Real)
         parameters_θ = parameters_function(θ = θ)
         # λ_min_adhoc_θ = θ_i > 1 ? results_A_FF[3,θ_i-1] : -Inf
         λ_min_adhoc_θ = -Inf
-        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_θ; λ_min_adhoc = λ_min_adhoc_θ, slow_updating = slow_updating)
+        variables_NFF, variables_FF, flag, crit_V, crit_μ = optimal_multiplier_function(parameters_θ; λ_min_adhoc = λ_min_adhoc_θ, slow_updating = slow_updating)
 
         # save results
         results_A_NFF[1, θ_i] = parameters_θ.θ
@@ -1367,7 +1368,7 @@ function results_ψ_function(; ψ_min::Real, ψ_max::Real, ψ_step::Real)
         parameters_ψ = parameters_function(ψ = ψ)
         # λ_min_adhoc_ψ = ψ_i > 1 ? results_A_FF[3,ψ_i-1] : -Inf
         λ_min_adhoc_ψ = -Inf
-        variables_NFF, variables_FF, flag = optimal_multiplier_function(parameters_ψ; λ_min_adhoc = λ_min_adhoc_ψ, slow_updating = slow_updating)
+        variables_NFF, variables_FF, flag, crit_V, crit_μ = optimal_multiplier_function(parameters_ψ; λ_min_adhoc = λ_min_adhoc_ψ, slow_updating = slow_updating)
 
         # save results
         results_A_NFF[1, ψ_i] = parameters_ψ.ψ

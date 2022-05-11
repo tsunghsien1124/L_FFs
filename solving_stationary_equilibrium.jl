@@ -38,8 +38,8 @@ function parameters_function(;
     η::Real = 0.25,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
-    ψ::Real = 1.0 - 1.0 / 20.0,     # exogenous retention ratio
-    θ::Real = 1.0 / 3.0,            # diverting fraction
+    ψ::Real = 0.972^4,              # exogenous retention ratio # 1.0 - 1.0 / 20.0
+    θ::Real = 1.0/(4.57*0.75),      # diverting fraction # 1.0 / 3.0
     p_h::Real = 1.0 / 10.0,         # prob. of history erased
     κ::Real = 0.00,                 # filing cost
     ζ_d::Real = 0.03000,            # EV scale parameter (default)
@@ -663,6 +663,8 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         # println("Solving household and banking problems (one-loop): search_iter = $search_iter and crit = $crit > tol = $tol")
         ProgressMeter.update!(prog, crit)
     end
+
+    return crit
 end
 
 function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Array{Float64,5}, policy_d::Array{Float64,5}, policy_pos_a::Array{Float64,5}, parameters::NamedTuple)
@@ -778,6 +780,8 @@ function solve_stationary_distribution_function!(variables::Mutable_Variables, p
         # println("Solving stationary distribution: search_iter = $search_iter and crit = $crit > tol = $tol")
         ProgressMeter.update!(prog, crit)
     end
+
+    return crit
 end
 
 function solve_aggregate_variable_function(
@@ -880,7 +884,7 @@ function solve_aggregate_variable_function(
 
                 # debt-to-earning ratio
                 # @inbounds debt_to_earning_ratio += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ / (w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i])))
-                # @inbounds debt_to_earning_ratio_num += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * -a_μ
+                @inbounds debt_to_earning_ratio_num += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * -a_μ
                 # @inbounds debt_to_earning_ratio_den += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]))
             end
         end
@@ -895,6 +899,7 @@ function solve_aggregate_variable_function(
     # ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
     # ω = N / (ψ * profit)
     ω = (N - ψ * profit) / (1.0 - ψ) * (K + L)
+    # ω = N - ψ * profit
 
     # leverage ratio
     leverage_ratio = (K + L) / N
@@ -904,7 +909,8 @@ function solve_aggregate_variable_function(
 
     # debt-to-earning ratio
     # debt_to_earning_ratio = debt_to_earning_ratio_num / debt_to_earning_ratio_den
-    debt_to_earning_ratio = L / w
+    # debt_to_earning_ratio = L / w
+    debt_to_earning_ratio = debt_to_earning_ratio_num / w
 
     # average loan rate
     avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
@@ -924,10 +930,10 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     """
 
     # solve household and banking problems
-    solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, slow_updating = slow_updating)
+    crit_V = solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, slow_updating = slow_updating)
 
     # solve the cross-sectional distribution
-    solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
+    crit_μ = solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
 
     # compute aggregate variables
     variables.aggregate_variables =
@@ -951,7 +957,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [2, 4, 5, 7])
 
     # return excess demand
-    return ED_KL_to_D_ratio, ED_leverage_ratio
+    return ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ
 end
 
 function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real = -Inf, λ_max_adhoc::Real = Inf, tol::Real = 1E-5, iter_max::Real = 200, slow_updating::Real = 1.0)
@@ -962,29 +968,31 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     # check the case of λ_min = 0.0
     λ_min = 0.0
     variables_λ_min = variables_function(parameters; λ = λ_min)
-    ED_KL_to_D_ratio_λ_min, ED_leverage_ratio_λ_min = solve_economy_function!(variables_λ_min, parameters; slow_updating = slow_updating)
+    ED_KL_to_D_ratio_λ_min, ED_leverage_ratio_λ_min, crit_V_min, crit_μ_min = solve_economy_function!(variables_λ_min, parameters; slow_updating = slow_updating)
     # if ED_KL_to_D_ratio_λ_min > 0.0
     #     return variables_λ_min, variables_λ_min, 1
     # end
     if ED_leverage_ratio_λ_min < 0.0
-        return variables_λ_min, variables_λ_min, 1
+        return variables_λ_min, variables_λ_min, 1, crit_V_min, crit_μ_min
     end
 
     # check the case of λ_max = 1-ψ^(1/2)
     λ_max = 1.0 - sqrt(parameters.ψ)
     variables_λ_max = variables_function(parameters; λ = λ_max)
-    ED_KL_to_D_ratio_λ_max, ED_leverage_ratio_λ_max = solve_economy_function!(variables_λ_max, parameters; slow_updating = slow_updating)
+    ED_KL_to_D_ratio_λ_max, ED_leverage_ratio_λ_max, crit_V_max, crit_μ_max = solve_economy_function!(variables_λ_max, parameters; slow_updating = slow_updating)
     # if ED_KL_to_D_ratio_λ_max < 0.0
     #     return variables_λ_min, variables_λ_max, 2 # meaning solution doesn't exist!
     # end
     if ED_leverage_ratio_λ_max > 0.0
-        return variables_λ_min, variables_λ_max, 2 # meaning solution doesn't exist!
+        return variables_λ_min, variables_λ_max, 2, crit_V_max, crit_μ_max # meaning solution doesn't exist!
     end
 
     # initialization
     search_iter = 0
     crit = Inf
     λ_optimal = 0.0
+    crit_V_optimal = 0.0
+    crit_μ_optimal = 0.0
     variables_λ_optimal = []
     λ_lower = max(λ_min_adhoc, λ_min)
     λ_upper = min(λ_max_adhoc, λ_max)
@@ -1002,7 +1010,7 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
         #     variables_function_update!(variables_λ_optimal, parameters; λ = λ_optimal)
         # end
         variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
-        ED_KL_to_D_ratio_λ_optimal, ED_leverage_ratio_λ_optimal = solve_economy_function!(variables_λ_optimal, parameters; slow_updating = slow_updating)
+        ED_KL_to_D_ratio_λ_optimal, ED_leverage_ratio_λ_optimal, crit_V_optimal, crit_μ_optimal = solve_economy_function!(variables_λ_optimal, parameters; slow_updating = slow_updating)
 
         # update search region
         # if ED_KL_to_D_ratio_λ_optimal > 0.0
@@ -1026,7 +1034,7 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real 
     end
 
     # return results
-    return variables_λ_min, variables_λ_optimal, 3
+    return variables_λ_min, variables_λ_optimal, 3, crit_V_optimal, crit_μ_optimal
 end
 
 function results_η_function(; η_min::Real, η_max::Real, η_step::Real)

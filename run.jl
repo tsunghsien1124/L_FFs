@@ -70,10 +70,10 @@ if Indicator_solve_equlibria_λ_min_and_max == true
     parameters = parameters_function()
 
     variables_min = variables_function(parameters; λ = 0.0)
-    ED_KL_to_D_ratio_min, ED_leverage_ratio_min = solve_economy_function!(variables_min, parameters; slow_updating = slow_updating)
+    ED_KL_to_D_ratio_min, ED_leverage_ratio_min, crit_V_min, crit_μ_min = solve_economy_function!(variables_min, parameters; slow_updating = slow_updating)
 
     variables_max = variables_function(parameters; λ = 1.0 - sqrt(parameters.ψ))
-    ED_KL_to_D_ratio_max, ED_leverage_ratio_max = solve_economy_function!(variables_max, parameters; slow_updating = slow_updating)
+    ED_KL_to_D_ratio_max, ED_leverage_ratio_max, crit_V_max, crit_μ_max = solve_economy_function!(variables_max, parameters; slow_updating = slow_updating)
 
     data_spec = Any[
         "λ" variables_min.aggregate_prices.λ variables_max.aggregate_prices.λ
@@ -86,8 +86,10 @@ if Indicator_solve_equlibria_λ_min_and_max == true
         "debt-to-earnings ratio (%)" variables_min.aggregate_variables.debt_to_earning_ratio*100 variables_max.aggregate_variables.debt_to_earning_ratio*100
         "avg interest rate (%)" variables_min.aggregate_variables.avg_loan_rate*100 variables_max.aggregate_variables.avg_loan_rate*100
         "policy upper bound" variables_min.policy_a[end, end, end, end, 2]<parameters.a_grid[end] variables_max.policy_a[end, end, end, end, 2]<parameters.a_grid[end]
+        "convergence of V" crit_V_min crit_V_max
+        "convergence of μ" crit_μ_min crit_μ_max
     ]
-    pretty_table(data_spec; header = ["Name", "λ minimum", "λ maximum"], alignment = [:c, :c, :c], formatters = ft_round(8), body_hlines = [3,5,9])
+    pretty_table(data_spec; header = ["Name", "λ minimum", "λ maximum"], alignment = [:c, :c, :c], formatters = ft_round(8), body_hlines = [3,5,9,10])
 
 end
 
@@ -96,7 +98,7 @@ if Indicator_solve_equlibrium_given_λ == true
     parameters = parameters_function()
     variables = variables_function(parameters; λ = 0.0)
     # variables = variables_function(parameters; λ = 0.0169101590194511)
-    ED_KL_to_D_ratio, ED_leverage_ratio = solve_economy_function!(variables, parameters; slow_updating = slow_updating)
+    ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ = solve_economy_function!(variables, parameters; slow_updating = slow_updating)
     flag = 3
 
     calibration_results = [
@@ -115,7 +117,9 @@ if Indicator_solve_equlibrium_given_λ == true
         variables.aggregate_variables.share_in_debts * 100,
         variables.aggregate_variables.debt_to_earning_ratio * 100,
         variables.aggregate_variables.avg_loan_rate * 100,
-        flag
+        flag,
+        crit_V,
+        crit_μ
         ]
         display(calibration_results)
 
@@ -135,25 +139,21 @@ end
 if Indicator_solve_stationary_equlibrium == true
 
     β_search = 0.940 / 0.980 # collect(0.94:0.01:0.97)
-    θ_search = 0.381 # eps() # collect(0.04:0.001:0.07)
-    η_search = 0.25 # collect(0.20:0.05:0.40)
-    ζ_d_search = 0.03000 # collect(0.03000:0.00100:0.03100)
-    ν_p_search = 0.01018 # collect(0.010202:0.000001:0.010204)
+    ζ_d_search = collect(0.03000:0.00500:0.0350)
+    ν_p_search = collect(0.010000:0.00100:0.011000)
 
     β_search_size = length(β_search)
-    θ_search_size = length(θ_search)
-    η_search_size = length(η_search)
     ζ_d_search_size = length(ζ_d_search)
     ν_p_search_size = length(ν_p_search)
-    search_size = β_search_size * θ_search_size * η_search_size * ζ_d_search_size * ν_p_search_size
-    calibration_results = zeros(search_size, 19)
+    search_size = β_search_size * ζ_d_search_size * ν_p_search_size
+    calibration_results = zeros(search_size, 21)
 
-    for β_i in 1:β_search_size, θ_i in 1:θ_search_size, η_i in 1:η_search_size, ζ_d_i in 1:ζ_d_search_size, ν_p_i in 1:ν_p_search_size
+    for β_i in 1:β_search_size, ζ_d_i in 1:ζ_d_search_size, ν_p_i in 1:ν_p_search_size
 
-        parameters = parameters_function(β = β_search[β_i], θ = θ_search[θ_i], η = η_search[η_i], ζ_d = ζ_d_search[ζ_d_i], ν_p = ν_p_search[ν_p_i])
-        variables_λ_lower, variables, flag = optimal_multiplier_function(parameters; slow_updating = slow_updating)
+        parameters = parameters_function(β = β_search[β_i], ζ_d = ζ_d_search[ζ_d_i], ν_p = ν_p_search[ν_p_i])
+        variables_λ_lower, variables, flag, crit_V, crit_μ = optimal_multiplier_function(parameters; slow_updating = slow_updating)
 
-        search_iter = (β_i - 1)*(θ_search_size*η_search_size*ζ_d_search_size*ν_p_search_size) + (θ_i-1)*(η_search_size*ζ_d_search_size*ν_p_search_size) + (η_i-1)*ζ_d_search_size*ν_p_search_size + (ζ_d_i-1)*ν_p_search_size + ν_p_i
+        search_iter = (β_i - 1)*(ζ_d_search_size*ν_p_search_size)+ (ζ_d_i-1)*ν_p_search_size + ν_p_i
 
         calibration_results[search_iter, 1] = parameters.β
         calibration_results[search_iter, 2] = parameters.δ
@@ -174,6 +174,9 @@ if Indicator_solve_stationary_equlibrium == true
         calibration_results[search_iter, 17] = variables.aggregate_variables.debt_to_earning_ratio * 100
         calibration_results[search_iter, 18] = variables.aggregate_variables.avg_loan_rate * 100
         calibration_results[search_iter, 19] = flag
+        calibration_results[search_iter, 20] = crit_V
+        calibration_results[search_iter, 21] = crit_μ
+
     end
 
     CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)

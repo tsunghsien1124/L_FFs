@@ -96,8 +96,7 @@ end
 if Indicator_solve_equlibrium_given_λ == true
 
     parameters = parameters_function()
-    variables = variables_function(parameters; λ = 0.0)
-    # variables = variables_function(parameters; λ = 0.0169101590194511)
+    variables = variables_function(parameters; λ = 0.0268926926269531)
     ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ = solve_economy_function!(variables, parameters; slow_updating = slow_updating)
     flag = 3
 
@@ -121,7 +120,7 @@ if Indicator_solve_equlibrium_given_λ == true
         crit_V,
         crit_μ
         ]
-        display(calibration_results)
+    display(calibration_results)
 
 end
 
@@ -129,8 +128,7 @@ end
 # Checking Plots #
 #================#
 # a_neg_index = 1
-# plot(parameters_new.a_grid_neg[a_neg_index:end], variables_new.q[a_neg_index:parameters_new.a_ind_zero,2,:], legend=:none)
-
+# plot(parameters.a_grid_neg[a_neg_index:end], variables_min.q[a_neg_index:parameters.a_ind_zero,2,:], legend=:none)
 # plot(parameters.a_grid_neg[a_neg_index:end], variables_min.policy_d[a_neg_index:parameters.a_ind_zero,2,:,1,2], legend=:none)
 
 #============================================#
@@ -139,8 +137,8 @@ end
 if Indicator_solve_stationary_equlibrium == true
 
     β_search = 0.940 / 0.980 # collect(0.94:0.01:0.97)
-    ζ_d_search = collect(0.03000:0.00500:0.0350)
-    ν_p_search = collect(0.010000:0.00100:0.011000)
+    ζ_d_search = 0.0235 # collect(0.03000:0.00500:0.0350)
+    ν_p_search = 0.010600 # collect(0.010000:0.00100:0.011000)
 
     β_search_size = length(β_search)
     ζ_d_search_size = length(ζ_d_search)

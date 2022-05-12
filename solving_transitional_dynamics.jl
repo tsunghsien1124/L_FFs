@@ -422,7 +422,7 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
             variables_T.aggregate_variables.K_p[T_i] = aggregate_variables.K
             variables_T.aggregate_variables.L_p[T_i] = aggregate_variables.L
             variables_T.aggregate_variables.D_p[T_i] = aggregate_variables.D
-            variables_T.aggregate_variables.N[T_i+1] = variables_new.aggregate_variables.ω * ψ * aggregate_variables.profit
+            variables_T.aggregate_variables.N[T_i+1] = ψ * (variables_T.aggregate_prices.ι_λ[T_i] * (aggregate_variables.K + aggregate_variables.L) + (1.0 + r_f) * variables_T.aggregate_variables.N[T_i]) + variables_new.aggregate_variables.ω * (aggregate_variables.K + aggregate_variables.L)
 
             variables_T.aggregate_variables.leverage_ratio[T_i] = (variables_T.aggregate_variables.K_p[T_i] + variables_T.aggregate_variables.L_p[T_i]) / variables_T.aggregate_variables.N[T_i]
 

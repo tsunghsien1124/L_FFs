@@ -95,8 +95,8 @@ end
 
 if Indicator_solve_equlibrium_given_λ == true
 
-    parameters = parameters_function()
-    variables = variables_function(parameters; λ = 0.0268926926269531)
+    parameters = parameters_function(η = 0.25)
+    variables = variables_function(parameters; λ = 0.0267604155273437)
     ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ = solve_economy_function!(variables, parameters; slow_updating = slow_updating)
     flag = 3
 
@@ -137,8 +137,8 @@ end
 if Indicator_solve_stationary_equlibrium == true
 
     β_search = 0.940 / 0.980 # collect(0.94:0.01:0.97)
-    ζ_d_search = 0.0235 # collect(0.03000:0.00500:0.0350)
-    ν_p_search = 0.010450 # collect(0.010400:0.000100:0.010500)
+    ζ_d_search = 0.0215 # collect(0.03000:0.00500:0.0350)
+    ν_p_search = 0.01057 # collect(0.010400:0.000100:0.010500)
 
     β_search_size = length(β_search)
     ζ_d_search_size = length(ζ_d_search)
@@ -151,7 +151,7 @@ if Indicator_solve_stationary_equlibrium == true
         parameters = parameters_function(β = β_search[β_i], ζ_d = ζ_d_search[ζ_d_i], ν_p = ν_p_search[ν_p_i])
         variables_λ_lower, variables, flag, crit_V, crit_μ = optimal_multiplier_function(parameters; slow_updating = slow_updating)
 
-        search_iter = (β_i - 1)*(ζ_d_search_size*ν_p_search_size)+ (ζ_d_i-1)*ν_p_search_size + ν_p_i
+        search_iter = (β_i - 1)*(ζ_d_search_size*ν_p_search_size) + (ζ_d_i-1)*ν_p_search_size + ν_p_i
 
         calibration_results[search_iter, 1] = parameters.β
         calibration_results[search_iter, 2] = parameters.δ
@@ -188,7 +188,7 @@ end
 if Indicator_solve_stationary_equlibria_across_η == true
 
     η_min_search = 0.20
-    η_max_search = 0.20
+    η_max_search = 0.30
     η_step_search = 0.05
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search)
     @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
@@ -197,9 +197,9 @@ end
 
 if Indicator_solve_stationary_equlibria_across_p_h == true
 
-    p_h_min_search = 8.0
-    p_h_max_search = 12.0
-    p_h_step_search = 2.0
+    p_h_min_search = 5.0
+    p_h_max_search = 15.0
+    p_h_step_search = 5.0
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_p_h_function(p_h_min = p_h_min_search, p_h_max = p_h_max_search, p_h_step = p_h_step_search)
     @save "results_p_h.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
@@ -271,7 +271,7 @@ if Indicator_solve_transitional_dynamics_across_η == true
     pretty_table(data_spec; header = ["Variable", "eta = 0.20", "eta = 0.25", "eta = 0.30"], alignment = [:l, :r, :r, :r], formatters = ft_round(4))
 
     # set parameters for computation
-    load_initial_value = true
+    load_initial_value = false
     if load_initial_value == true
         @load "results_transition_eta_1E-3.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
     end

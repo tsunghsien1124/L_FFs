@@ -207,18 +207,20 @@ if Indicator_decomposition == true
     variables_τ = variables_function(parameters_τ; λ = 0.0)
     solve_economy_function!(variables_τ, parameters_τ; slow_updating = slow_updating)
 
-    # results
-    results = zeros(7, 3)
-    results[1,1], results[1,2], results[1,3] = variables_NFF.aggregate_prices.ι_λ, variables_τ.aggregate_prices.ι_λ, variables_benchmark.aggregate_prices.ι_λ
-    results[2,1], results[2,2], results[2,3] = parameters.r_f + variables_NFF.aggregate_prices.ι_λ, parameters_τ.τ, parameters.r_f + variables_benchmark.aggregate_prices.ι_λ
-    results[3,1], results[3,2], results[3,3] = variables_NFF.aggregate_prices.w_λ, variables_τ.aggregate_prices.w_λ, variables_benchmark.aggregate_prices.w_λ
-    results[4,1], results[4,2], results[4,3] = variables_NFF.aggregate_variables.share_in_debts, variables_τ.aggregate_variables.share_in_debts, variables_benchmark.aggregate_variables.share_in_debts
-    results[5,1], results[5,2], results[5,3] = variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts, variables_τ.aggregate_variables.share_of_filers/variables_τ.aggregate_variables.share_in_debts, variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts
-    results[6,1], results[6,2], results[6,3] = variables_NFF.aggregate_variables.debt_to_earning_ratio, variables_τ.aggregate_variables.debt_to_earning_ratio, variables_benchmark.aggregate_variables.debt_to_earning_ratio
-    results[7,1], results[7,2], results[7,3] = variables_NFF.aggregate_variables.avg_loan_rate, variables_τ.aggregate_variables.avg_loan_rate, variables_benchmark.aggregate_variables.avg_loan_rate
+    # collect results
+    results = Any[
+        "" "Without Financial Frictions" "Without Financial Frictions / Higher Lending Costs" "With Financial Frictions"
+        "Incentive Premium" variables_NFF.aggregate_prices.ι_λ variables_τ.aggregate_prices.ι_λ variables_benchmark.aggregate_prices.ι_λ
+        "Lending Costs" parameters.r_f + variables_NFF.aggregate_prices.ι_λ parameters_τ.τ parameters.r_f + variables_benchmark.aggregate_prices.ι_λ
+        "Wage" variables_NFF.aggregate_prices.w_λ variables_τ.aggregate_prices.w_λ variables_benchmark.aggregate_prices.w_λ
+        "Share in Debts" variables_NFF.aggregate_variables.share_in_debts variables_τ.aggregate_variables.share_in_debts variables_benchmark.aggregate_variables.share_in_debts
+        "Conditional Default Rate"  variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts variables_τ.aggregate_variables.share_of_filers/variables_τ.aggregate_variables.share_in_debts variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts
+        "Debt-to-Earnings Ratio" variables_NFF.aggregate_variables.debt_to_earning_ratio variables_τ.aggregate_variables.debt_to_earning_ratio variables_benchmark.aggregate_variables.debt_to_earning_ratio
+        "Average Interest Rate" variables_NFF.aggregate_variables.avg_loan_rate variables_τ.aggregate_variables.avg_loan_rate variables_benchmark.aggregate_variables.avg_loan_rate
+    ]
 
     # save results
-    CSV.write("decomposition.csv", Tables.table(results), header=false)
+    CSV.write("decomposition.csv", Tables.table(results), header = false)
 
 end
 

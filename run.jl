@@ -44,12 +44,16 @@ end
 Indicator_solve_equlibria_λ_min_and_max = false
 Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
+
+Indicator_decomposition = false
+
 Indicator_solve_stationary_equlibria_across_η = false
 Indicator_solve_stationary_equlibria_across_p_h = false
 Indicator_solve_stationary_equlibria_across_θ = false
 Indicator_solve_stationary_equlibria_across_ψ = false
 Indicator_solve_transitional_dynamics_across_η = false
 Indicator_solve_transitional_dynamics_across_p_h = false
+
 Indicator_simulation_benchmark = false
 Indicator_simulation_benchmark_results = false
 Indicator_simulation_across_θ = false
@@ -95,7 +99,7 @@ end
 
 if Indicator_solve_equlibrium_given_λ == true
 
-    parameters = parameters_function(η = 0.25)
+    parameters = parameters_function()
     variables = variables_function(parameters; λ = 0.0267604155273437)
     ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ = solve_economy_function!(variables, parameters; slow_updating = slow_updating)
     flag = 3
@@ -177,7 +181,44 @@ if Indicator_solve_stationary_equlibrium == true
 
     end
 
-    CSV.write("calibration_julia.csv", Tables.table(calibration_results), writeheader=false)
+    CSV.write("calibration_julia.csv", Tables.table(calibration_results), header=false)
+
+end
+
+#===============#
+# Decomposition #
+#===============#
+
+if Indicator_decomposition == true
+
+    # set up parameters
+    parameters = parameters_function()
+
+    # benchmark (with financial frictions) --- incentive and divestment channels
+    variables_benchmark = variables_function(parameters; λ = 0.0267604155273437)
+    solve_economy_function!(variables_benchmark, parameters; slow_updating = slow_updating)
+
+    # without financial frictions --- no incentive and divestment channels
+    variables_NFF = variables_function(parameters; λ = 0.0)
+    solve_economy_function!(variables_NFF, parameters; slow_updating = slow_updating)
+
+    # with extra fixed costs --- only incentive channel
+    parameters_τ = parameters_function(τ = parameters.r_f + variables_benchmark.aggregate_prices.ι_λ)
+    variables_τ = variables_function(parameters_τ; λ = 0.0)
+    solve_economy_function!(variables_τ, parameters_τ; slow_updating = slow_updating)
+
+    # results
+    results = zeros(7, 3)
+    results[1,1], results[1,2], results[1,3] = variables_NFF.aggregate_prices.ι_λ, variables_τ.aggregate_prices.ι_λ, variables_benchmark.aggregate_prices.ι_λ
+    results[2,1], results[2,2], results[2,3] = parameters.r_f + variables_NFF.aggregate_prices.ι_λ, parameters_τ.τ, parameters.r_f + variables_benchmark.aggregate_prices.ι_λ
+    results[3,1], results[3,2], results[3,3] = variables_NFF.aggregate_prices.w_λ, variables_τ.aggregate_prices.w_λ, variables_benchmark.aggregate_prices.w_λ
+    results[4,1], results[4,2], results[4,3] = variables_NFF.aggregate_variables.share_in_debts, variables_τ.aggregate_variables.share_in_debts, variables_benchmark.aggregate_variables.share_in_debts
+    results[5,1], results[5,2], results[5,3] = variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts, variables_τ.aggregate_variables.share_of_filers/variables_τ.aggregate_variables.share_in_debts, variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts
+    results[6,1], results[6,2], results[6,3] = variables_NFF.aggregate_variables.debt_to_earning_ratio, variables_τ.aggregate_variables.debt_to_earning_ratio, variables_benchmark.aggregate_variables.debt_to_earning_ratio
+    results[7,1], results[7,2], results[7,3] = variables_NFF.aggregate_variables.avg_loan_rate, variables_τ.aggregate_variables.avg_loan_rate, variables_benchmark.aggregate_variables.avg_loan_rate
+
+    # save results
+    CSV.write("decomposition.csv", Tables.table(results), header=false)
 
 end
 
@@ -271,15 +312,15 @@ if Indicator_solve_transitional_dynamics_across_η == true
     pretty_table(data_spec; header = ["Variable", "eta = 0.20", "eta = 0.25", "eta = 0.30"], alignment = [:l, :r, :r, :r], formatters = ft_round(4))
 
     # set parameters for computation
-    load_initial_value = false
+    load_initial_value = true
     if load_initial_value == true
         @load "results_transition_eta_1E-3.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
     end
-    T_size = 200
-    T_degree = 7.0
+    T_size = 120
+    T_degree = 20.0
     iter_max = 1000
-    tol = 1E-3
-    slow_updating_transitional_dynamics = 0.05
+    tol = 1E-9
+    slow_updating_transitional_dynamics = 0.1
 
     # from η = 0.25 to η = 0.30
     println("Solving transitions from η = $η_25 to η = $η_30...")
@@ -415,15 +456,15 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     pretty_table(data_spec; header = ["Variable", "p_h = 1/8", "p_h = 1/10", "p_h = 1/12"], alignment = [:l, :r, :r, :r], formatters = ft_round(4))
 
     # set parameters for computation
-    load_initial_value = true
+    load_initial_value = false
     if load_initial_value == true
         @load "results_transition_p_h.jld2" transtion_path_p_h_10_12 transtion_path_p_h_10_8
     end
     T_size = 200
-    T_degree = 7.0
+    T_degree = 20.0
     iter_max = 1000
-    tol = 1E-3
-    slow_updating_transitional_dynamics = 0.05
+    tol = 1E-9
+    slow_updating_transitional_dynamics = 0.1
 
     # from p_h = 1 / 10 to p_h = 1 / 12
     println("Solving transitions from p_h = $p_h_10 to p_h = $p_h_12...")

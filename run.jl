@@ -19,6 +19,7 @@ using Plots
 using Random
 using GLM
 using DataFrames
+using Measures
 
 #==================#
 # Import functions #
@@ -210,13 +211,17 @@ if Indicator_decomposition == true
     # collect results
     results = Any[
         "" "Without Financial Frictions" "Without Financial Frictions / Higher Lending Costs" "With Financial Frictions"
-        "Incentive Premium" variables_NFF.aggregate_prices.ι_λ variables_τ.aggregate_prices.ι_λ variables_benchmark.aggregate_prices.ι_λ
-        "Lending Costs" parameters.r_f + variables_NFF.aggregate_prices.ι_λ parameters_τ.τ parameters.r_f + variables_benchmark.aggregate_prices.ι_λ
+        "" "" "" ""
+        "Incentive premium (%)" variables_NFF.aggregate_prices.ι_λ*100 variables_τ.aggregate_prices.ι_λ*100 variables_benchmark.aggregate_prices.ι_λ*100
+        "Lending costs (%)" (parameters.r_f + variables_NFF.aggregate_prices.ι_λ)*100 parameters_τ.τ*100 (parameters.r_f + variables_benchmark.aggregate_prices.ι_λ)*100
+        "" "" "" ""
         "Wage" variables_NFF.aggregate_prices.w_λ variables_τ.aggregate_prices.w_λ variables_benchmark.aggregate_prices.w_λ
-        "Share in Debts" variables_NFF.aggregate_variables.share_in_debts variables_τ.aggregate_variables.share_in_debts variables_benchmark.aggregate_variables.share_in_debts
-        "Conditional Default Rate"  variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts variables_τ.aggregate_variables.share_of_filers/variables_τ.aggregate_variables.share_in_debts variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts
-        "Debt-to-Earnings Ratio" variables_NFF.aggregate_variables.debt_to_earning_ratio variables_τ.aggregate_variables.debt_to_earning_ratio variables_benchmark.aggregate_variables.debt_to_earning_ratio
-        "Average Interest Rate" variables_NFF.aggregate_variables.avg_loan_rate variables_τ.aggregate_variables.avg_loan_rate variables_benchmark.aggregate_variables.avg_loan_rate
+        "" "" "" ""
+        "Share in debts (%)" variables_NFF.aggregate_variables.share_in_debts*100 variables_τ.aggregate_variables.share_in_debts*100 variables_benchmark.aggregate_variables.share_in_debts*100
+        "Conditional default rate (%)"  (variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts)*100 (variables_τ.aggregate_variables.share_of_filers/variables_τ.aggregate_variables.share_in_debts)*100 (variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts)*100
+        "Debt-to-earnings ratio (%)" variables_NFF.aggregate_variables.debt_to_earning_ratio*100 variables_τ.aggregate_variables.debt_to_earning_ratio*100 variables_benchmark.aggregate_variables.debt_to_earning_ratio*100
+        "" "" "" ""
+        "Average interest rate (%)" variables_NFF.aggregate_variables.avg_loan_rate*100 variables_τ.aggregate_variables.avg_loan_rate*100 variables_benchmark.aggregate_variables.avg_loan_rate*100
     ]
 
     # save results
@@ -235,6 +240,12 @@ if Indicator_solve_stationary_equlibria_across_η == true
     η_step_search = 0.05
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search)
     @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    η_min_search = 0.30
+    η_max_search = 0.80
+    η_step_search = 0.10
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search)
+    @save "results_eta_0.3_0.8.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
 end
 
@@ -301,22 +312,27 @@ if Indicator_solve_transitional_dynamics_across_η == true
     solve_economy_function!(variables_30, parameters_30)
 
     # printout results of aggregate statistics
-    data_spec = Any[
+    results_equilibria_across_η = Any[
+        "" "eta = 0.20" "eta = 0.25" "eta = 0.30"
+        "" "" "" ""
         "Banking leverage ratio" variables_20.aggregate_variables.leverage_ratio variables_25.aggregate_variables.leverage_ratio variables_30.aggregate_variables.leverage_ratio
-        "Leverage premium" variables_20.aggregate_prices.ι_λ*100 variables_25.aggregate_prices.ι_λ*100 variables_30.aggregate_prices.ι_λ*100
+        "Leverage premium (%)" variables_20.aggregate_prices.ι_λ*100 variables_25.aggregate_prices.ι_λ*100 variables_30.aggregate_prices.ι_λ*100
         "Wage" variables_20.aggregate_prices.w_λ variables_25.aggregate_prices.w_λ variables_30.aggregate_prices.w_λ
-        # "Lending costs" (parameters_8.r_f+variables_20.aggregate_prices.ι_λ)*100 (parameters_10.r_f+variables_25.aggregate_prices.ι_λ)*100 (parameters_12.r_f+variables_30.aggregate_prices.ι_λ)*100
-        "Default rate" variables_20.aggregate_variables.share_of_filers*100 variables_25.aggregate_variables.share_of_filers*100 variables_30.aggregate_variables.share_of_filers*100
-        "Share in debt" variables_20.aggregate_variables.share_in_debts*100 variables_25.aggregate_variables.share_in_debts*100 variables_30.aggregate_variables.share_in_debts*100
-        "Debt-to-earnings" variables_20.aggregate_variables.debt_to_earning_ratio*100 variables_25.aggregate_variables.debt_to_earning_ratio*100 variables_30.aggregate_variables.debt_to_earning_ratio*100
-        "Avg. interest rate" variables_20.aggregate_variables.avg_loan_rate*100 variables_25.aggregate_variables.avg_loan_rate*100 variables_30.aggregate_variables.avg_loan_rate*100
+        "" "" "" ""
+        "Default rate (%)" variables_20.aggregate_variables.share_of_filers*100 variables_25.aggregate_variables.share_of_filers*100 variables_30.aggregate_variables.share_of_filers*100
+        "Share in debt (%)" variables_20.aggregate_variables.share_in_debts*100 variables_25.aggregate_variables.share_in_debts*100 variables_30.aggregate_variables.share_in_debts*100
+        "Debt-to-earnings ratio (%)" variables_20.aggregate_variables.debt_to_earning_ratio*100 variables_25.aggregate_variables.debt_to_earning_ratio*100 variables_30.aggregate_variables.debt_to_earning_ratio*100
+        "Average interest rate (%)" variables_20.aggregate_variables.avg_loan_rate*100 variables_25.aggregate_variables.avg_loan_rate*100 variables_30.aggregate_variables.avg_loan_rate*100
     ]
-    pretty_table(data_spec; header = ["Variable", "eta = 0.20", "eta = 0.25", "eta = 0.30"], alignment = [:l, :r, :r, :r], formatters = ft_round(4))
+    display(results_equilibria_across_η)
+
+    # save results
+    CSV.write("results_equilibria_across_eta.csv", Tables.table(results_equilibria_across_η), header = false)
 
     # set parameters for computation
     load_initial_value = true
     if load_initial_value == true
-        @load "results_transition_eta_1E-3.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
+        @load "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
     end
     T_size = 120
     T_degree = 20.0
@@ -333,7 +349,9 @@ if Indicator_solve_transitional_dynamics_across_η == true
     end
     transitional_dynamic_λ_function!(variables_T_25_30, variables_25, variables_30, parameters_30; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_eta_25_30 = variables_T_25_30.aggregate_prices.leverage_ratio_λ
-    plot_transtion_path_eta_25_30 = plot(transtion_path_eta_25_30, legend=:none, seriestype=:scatter)
+    plot_transtion_path_eta_25_30 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transtion_path_eta_25_30 = plot!(transtion_path_eta_25_30, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transtion_path_eta_25_30
     Plots.savefig(plot_transtion_path_eta_25_30, pwd() * "\\figures\\plot_transtion_path_eta_25_30.pdf")
 
     # from η = 0.25 to η = 0.20
@@ -345,7 +363,8 @@ if Indicator_solve_transitional_dynamics_across_η == true
     end
     transitional_dynamic_λ_function!(variables_T_25_20, variables_25, variables_20, parameters_20; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_eta_25_20 = variables_T_25_20.aggregate_prices.leverage_ratio_λ
-    plot_transtion_path_eta_25_20 = plot(transtion_path_eta_25_20, legend=:none, seriestype=:scatter)
+    plot_transtion_path_eta_25_20 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transtion_path_eta_25_20 = plot!(transtion_path_eta_25_20, linecolor = :blue, linewidth = 3, legend=:none)
     Plots.savefig(plot_transtion_path_eta_25_20, pwd() * "\\figures\\plot_transtion_path_eta_25_20.pdf")
 
     # save transition path
@@ -387,27 +406,22 @@ if Indicator_solve_transitional_dynamics_across_η == true
     HHs_total = HHs_good + HHs_bad
 
     # printout results of welfare effects
-    data_spec = Any[
-        "Proportion of households" "" ""
-        "With good credit history" HHs_good HHs_good
-        "With good credit history and debt" HHs_good_debt_cond HHs_good_debt_cond
-        "With good credit history and no debt" HHs_good_no_debt_cond HHs_good_no_debt_cond
-        "With bad credit history" HHs_bad HHs_bad
-        "Total" HHs_total HHs_total
-        "Average percentage gain in flow consumption" "" ""
-        "With good credit history" welfare_CEV_25_20_good welfare_CEV_25_30_good
-        "With good credit history and debt" welfare_CEV_25_20_good_with_debt welfare_CEV_25_30_good_with_debt
-        "With good credit history and no debt" welfare_CEV_25_20_good_no_debt welfare_CEV_25_30_good_no_debt
-        "With bad credit history" welfare_CEV_25_20_bad welfare_CEV_25_30_bad
-        "Total" welfare_CEV_25_20 welfare_CEV_25_30
-        "Percentage of households in favor of new policy" "" ""
-        "With good credit history" welfare_favor_25_20_good welfare_favor_25_30_good
-        "With good credit history and debt" welfare_favor_25_20_good_with_debt welfare_favor_25_30_good_with_debt
-        "With good credit history and no debt" welfare_favor_25_20_good_without_debt welfare_favor_25_30_good_without_debt
-        "With bad credit history" welfare_favor_25_20_bad welfare_favor_25_30_bad
-        "Total" welfare_favor_25_20 welfare_favor_25_30
+    results_welfare_across_η = Any[
+        "" "" "from eta = 0.25 to 0.20" "" "from eta = 0.25 to 0.30" ""
+        "(%)" "Proportion" "C.E.V." "Favor Reform" "C.E.V." "Favor Reform"
+        "" "" "" "" "" ""
+        "Have good credit history" HHs_good welfare_CEV_25_20_good welfare_favor_25_20_good welfare_CEV_25_30_good welfare_favor_25_30_good
+        "Indebted" HHs_good_debt_cond welfare_CEV_25_20_good_with_debt welfare_favor_25_20_good_with_debt welfare_CEV_25_30_good_with_debt welfare_favor_25_30_good_with_debt
+        "Not indebted" HHs_good_no_debt_cond welfare_CEV_25_20_good_no_debt welfare_favor_25_20_good_without_debt welfare_CEV_25_30_good_no_debt welfare_favor_25_30_good_without_debt
+        "" "" "" "" "" ""
+        "Have bad credit history" HHs_bad welfare_CEV_25_20_bad welfare_favor_25_20_bad welfare_CEV_25_30_bad welfare_favor_25_30_bad
+        "" "" "" "" "" ""
+        "Total" HHs_total welfare_CEV_25_20 welfare_favor_25_20 welfare_CEV_25_30 welfare_favor_25_30
     ]
-    pretty_table(data_spec; header = ["Variable", "η = 0.25 -> 0.20", "η = 0.25 -> 0.30"], alignment = [:l, :r, :r], formatters = ft_round(4), body_hlines = [6, 12])
+    display(results_welfare_across_η)
+
+    # save results
+    CSV.write("results_welfare_across_eta.csv", Tables.table(results_welfare_across_η), header = false)
 
 end
 
@@ -445,20 +459,25 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     # solve_economy_function!(variables_12_NFF, parameters_12)
 
     # printout results of aggregate statistics
-    data_spec = Any[
+    results_equilibria_across_p_h = Any[
+        "" "p_h = 1/8" "p_h = 1/10" "p_h = 1/12"
+        "" "" "" ""
         "Banking leverage ratio" variables_8.aggregate_variables.leverage_ratio variables_10.aggregate_variables.leverage_ratio variables_12.aggregate_variables.leverage_ratio
-        "Leverage premium" variables_8.aggregate_prices.ι_λ*100 variables_10.aggregate_prices.ι_λ*100 variables_12.aggregate_prices.ι_λ*100
+        "Leverage premium (%)" variables_8.aggregate_prices.ι_λ*100 variables_10.aggregate_prices.ι_λ*100 variables_12.aggregate_prices.ι_λ*100
         "Wage" variables_8.aggregate_prices.w_λ variables_10.aggregate_prices.w_λ variables_12.aggregate_prices.w_λ
-        # "Lending costs" (parameters_8.r_f+variables_8.aggregate_prices.ι_λ)*100 (parameters_10.r_f+variables_10.aggregate_prices.ι_λ)*100 (parameters_12.r_f+variables_12.aggregate_prices.ι_λ)*100
-        "Default rate" variables_8.aggregate_variables.share_of_filers*100 variables_10.aggregate_variables.share_of_filers*100 variables_12.aggregate_variables.share_of_filers*100
-        "Share in debt" variables_8.aggregate_variables.share_in_debts*100 variables_10.aggregate_variables.share_in_debts*100 variables_12.aggregate_variables.share_in_debts*100
-        "Debt-to-earnings" variables_8.aggregate_variables.debt_to_earning_ratio*100 variables_10.aggregate_variables.debt_to_earning_ratio*100 variables_12.aggregate_variables.debt_to_earning_ratio*100
-        "Avg. interest rate" variables_8.aggregate_variables.avg_loan_rate*100 variables_10.aggregate_variables.avg_loan_rate*100 variables_12.aggregate_variables.avg_loan_rate*100
+        "" "" "" ""
+        "Default rate (%)" variables_8.aggregate_variables.share_of_filers*100 variables_10.aggregate_variables.share_of_filers*100 variables_12.aggregate_variables.share_of_filers*100
+        "Share in debt (%)" variables_8.aggregate_variables.share_in_debts*100 variables_10.aggregate_variables.share_in_debts*100 variables_12.aggregate_variables.share_in_debts*100
+        "Debt-to-earnings ratio (%)" variables_8.aggregate_variables.debt_to_earning_ratio*100 variables_10.aggregate_variables.debt_to_earning_ratio*100 variables_12.aggregate_variables.debt_to_earning_ratio*100
+        "Average interest rate (%)" variables_8.aggregate_variables.avg_loan_rate*100 variables_10.aggregate_variables.avg_loan_rate*100 variables_12.aggregate_variables.avg_loan_rate*100
     ]
-    pretty_table(data_spec; header = ["Variable", "p_h = 1/8", "p_h = 1/10", "p_h = 1/12"], alignment = [:l, :r, :r, :r], formatters = ft_round(4))
+    display(results_equilibria_across_p_h)
+
+    # save results
+    CSV.write("results_equilibria_across_p_h.csv", Tables.table(results_equilibria_across_p_h), header = false)
 
     # set parameters for computation
-    load_initial_value = false
+    load_initial_value = true
     if load_initial_value == true
         @load "results_transition_p_h.jld2" transtion_path_p_h_10_12 transtion_path_p_h_10_8
     end
@@ -477,7 +496,9 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     end
     transitional_dynamic_λ_function!(variables_T_10_12, variables_10, variables_12, parameters_12; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_p_h_10_12 = variables_T_10_12.aggregate_prices.leverage_ratio_λ
-    plot_transtion_path_p_h_10_12 = plot(transtion_path_p_h_10_12, legend=:none)
+    plot_transtion_path_p_h_10_12 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transtion_path_p_h_10_12 = plot!(transtion_path_p_h_10_12, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transtion_path_p_h_10_12
     Plots.savefig(plot_transtion_path_p_h_10_12, pwd() * "\\figures\\plot_transtion_path_p_h_10_12.pdf")
 
     # from p_h = 1 / 10 to p_h = 1 / 8
@@ -489,8 +510,10 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     end
     transitional_dynamic_λ_function!(variables_T_10_8, variables_10, variables_8, parameters_8; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transtion_path_p_h_10_8 = variables_T_10_8.aggregate_prices.leverage_ratio_λ
-    transtion_path_p_h_10_8 = plot(transtion_path_p_h_10_8, legend=:none)
-    Plots.savefig(transtion_path_p_h_10_8, pwd() * "\\figures\\transtion_path_p_h_10_8.pdf")
+    plot_transtion_path_p_h_10_8 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transtion_path_p_h_10_8 = plot!(transtion_path_p_h_10_8, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transtion_path_p_h_10_8
+    Plots.savefig(plot_transtion_path_p_h_10_8, pwd() * "\\figures\\plot_transtion_path_p_h_10_8.pdf")
 
     # save transition path
     @save "results_transition_p_h.jld2" transtion_path_p_h_10_12 transtion_path_p_h_10_8
@@ -531,27 +554,22 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     HHs_total = HHs_good + HHs_bad
 
     # printout results of welfare effects
-    data_spec = Any[
-        "Proportion of households" "" ""
-        "With good credit history" HHs_good HHs_good
-        "With good credit history and debt" HHs_good_debt_cond HHs_good_debt_cond
-        "With good credit history and no debt" HHs_good_no_debt_cond HHs_good_no_debt_cond
-        "With bad credit history" HHs_bad HHs_bad
-        "Total" HHs_total HHs_total
-        "Average percentage gain in flow consumption" "" ""
-        "With good credit history" welfare_CEV_10_8_good welfare_CEV_10_12_good
-        "With good credit history and debt" welfare_CEV_10_8_good_with_debt welfare_CEV_10_12_good_with_debt
-        "With good credit history and no debt" welfare_CEV_10_8_good_no_debt welfare_CEV_10_12_good_no_debt
-        "With bad credit history" welfare_CEV_10_8_bad welfare_CEV_10_12_bad
-        "Total" welfare_CEV_10_8 welfare_CEV_10_12
-        "Percentage of households in favor of new policy" "" ""
-        "With good credit history" welfare_favor_10_8_good welfare_favor_10_12_good
-        "With good credit history and debt" welfare_favor_10_8_good_with_debt welfare_favor_10_12_good_with_debt
-        "With good credit history and no debt" welfare_favor_10_8_good_without_debt welfare_favor_10_12_good_without_debt
-        "With bad credit history" welfare_favor_10_8_bad welfare_favor_10_12_bad
-        "Total" welfare_favor_10_8 welfare_favor_10_12
+    results_welfare_across_p_h = Any[
+        "" "" "from p_h = 1/10 to 1/8" "" "from p_h = 1/10 to 1/12" ""
+        "(%)" "Proportion" "C.E.V." "Favor Reform" "C.E.V." "Favor Reform"
+        "" "" "" "" "" ""
+        "Have good credit history" HHs_good welfare_CEV_10_8_good welfare_favor_10_8_good welfare_CEV_10_12_good welfare_favor_10_12_good
+        "Indebted" HHs_good_debt_cond welfare_CEV_10_8_good_with_debt welfare_favor_10_8_good_with_debt welfare_CEV_10_12_good_with_debt welfare_favor_10_12_good_with_debt
+        "Not indebted" HHs_good_no_debt_cond welfare_CEV_10_8_good_no_debt welfare_favor_10_8_good_without_debt welfare_CEV_10_12_good_no_debt welfare_favor_10_12_good_without_debt
+        "" "" "" "" "" ""
+        "Have bad credit history" HHs_bad welfare_CEV_10_8_bad welfare_favor_10_8_bad welfare_CEV_10_12_bad welfare_favor_10_12_bad
+        "" "" "" "" "" ""
+        "Total" HHs_total welfare_CEV_10_8 welfare_favor_10_8 welfare_CEV_10_12 welfare_favor_10_12
     ]
-    pretty_table(data_spec; header = ["Variable", "p_h = 1/10 -> 1/8", "p_h = 1/10 -> 1/12"], alignment = [:l, :r, :r], formatters = ft_round(4), body_hlines = [6, 12])
+    display(results_welfare_across_p_h)
+
+    # save results
+    CSV.write("results_welfare_across_p_h.csv", Tables.table(results_welfare_across_p_h), header = false)
 
     # #=============================#
     # # without financial frictions #
@@ -722,6 +740,14 @@ if Indicator_simulation_benchmark_results == true
     plot_consumption_comparison = plot!(df.x, predict(model, df), linecolor = :blue, linestyle = :dot, linewidth = 3, label=:none)
     plot_consumption_comparison
     Plots.savefig(plot_consumption_comparison, pwd() * "\\figures\\plot_consumption_comparison.pdf")
+
+    growth_consumption_age_FF = (mean_consumption_age_FF[2:end] .- mean_consumption_age_FF[1:(end-1)]) ./ mean_consumption_age_FF[1:(end-1)] * 100
+    growth_consumption_age_NFF = (mean_consumption_age_NFF[2:end] .- mean_consumption_age_NFF[1:(end-1)]) ./ mean_consumption_age_NFF[1:(end-1)] * 100
+    plot_consumption_growth = plot(size = (800,500), box = :on, legend = :topright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{working\\ age} \$")
+    plot_consumption_growth = plot!(2:age_max, growth_consumption_age_FF, label="\$ \\theta = 1/3.0\\ (\\textrm{with\\ financial\\ frictions}) \$", linecolor = :blue, linewidth = 3)
+    plot_consumption_growth = plot!(2:age_max, growth_consumption_age_NFF, label="\$ \\theta = 0\\ (\\textrm{no\\ financial\\ frictions}) \$", linecolor = :red, linestyle = :dot, linewidth = 3)
+    plot_consumption_growth
+    Plots.savefig(plot_consumption_growth, pwd() * "\\figures\\plot_consumption_growth.pdf")
 
     plot_var_log_consumption = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "\$ \\textrm{variance\\ of\\ log\\ consumption} \$", xlabel = "\$ \\textrm{working\\ age} \$")
     plot_var_log_consumption = plot!(1:age_max, variance_log_consumption_age_FF, legend=:bottomright, label="\$ \\theta = 1/3\\ (\\textrm{with\\ financial\\ frictions}) \$", linecolor = :blue, linewidth = 3)

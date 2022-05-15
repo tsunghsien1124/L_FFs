@@ -52,7 +52,9 @@ Indicator_solve_stationary_equlibria_across_η = false
 Indicator_solve_stationary_equlibria_across_p_h = false
 Indicator_solve_stationary_equlibria_across_θ = false
 Indicator_solve_stationary_equlibria_across_ψ = false
+
 Indicator_solve_transitional_dynamics_across_η = false
+Indicator_solve_transitional_dynamics_across_η_general = false
 Indicator_solve_transitional_dynamics_across_p_h = false
 
 Indicator_simulation_benchmark = false
@@ -247,6 +249,12 @@ if Indicator_solve_stationary_equlibria_across_η == true
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search)
     @save "results_eta_0.3_0.8.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
+    η_min_search = 0.30
+    η_max_search = 0.40
+    η_step_search = 0.02
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search)
+    @save "results_eta_0.3_0.4_step_0.02.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
 end
 
 if Indicator_solve_stationary_equlibria_across_p_h == true
@@ -330,15 +338,15 @@ if Indicator_solve_transitional_dynamics_across_η == true
     CSV.write("results_equilibria_across_eta.csv", Tables.table(results_equilibria_across_η), header = false)
 
     # set parameters for computation
+    T_size = 80
+    T_degree = 15.0
+    iter_max = 1000
+    tol = 1E-8
+    slow_updating_transitional_dynamics = 0.1
     load_initial_value = true
     if load_initial_value == true
         @load "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
     end
-    T_size = 120
-    T_degree = 20.0
-    iter_max = 1000
-    tol = 1E-9
-    slow_updating_transitional_dynamics = 0.1
 
     # from η = 0.25 to η = 0.30
     println("Solving transitions from η = $η_25 to η = $η_30...")
@@ -425,6 +433,115 @@ if Indicator_solve_transitional_dynamics_across_η == true
 
 end
 
+if Indicator_solve_transitional_dynamics_across_η_general == true
+
+
+    #=========================================#
+    # combine all jld2 files with different η #
+    #=========================================#
+    Indicator_merge_differet_jld2 = false
+
+    if Indicator_merge_differet_jld2 == true
+
+        @load "results_eta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+        results_A_NFF_all = similar(results_A_NFF)
+        copyto!(results_A_NFF_all, results_A_NFF)
+        results_A_FF_all = similar(results_A_FF)
+        copyto!(results_A_FF_all, results_A_FF)
+
+        @load "results_eta_0.3_0.8.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+        η_already = results_A_NFF_all[1,:]
+        η_new = results_A_NFF[1,:]
+        η_new_index = []
+        for η_new_i in 1:length(η_new)
+            if all(η_already .!= η_new[η_new_i])
+                append!(η_new_index, [η_new_i])
+            end
+        end
+        results_A_NFF_all = hcat(results_A_NFF_all, results_A_NFF[:,η_new_index])
+        results_A_NFF_all = results_A_NFF_all[:, sortperm(results_A_NFF_all[1,:], rev = true)]
+        results_A_FF_all = hcat(results_A_FF_all, results_A_FF[:,η_new_index])
+        results_A_FF_all = results_A_FF_all[:, sortperm(results_A_FF_all[1,:], rev = true)]
+
+        @load "results_eta_0.3_0.4_step_0.02.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+        η_already = results_A_NFF_all[1,:]
+        η_new = results_A_NFF[1,:]
+        η_new_index = []
+        for η_new_i in 1:length(η_new)
+            if all(η_already .!= η_new[η_new_i])
+                append!(η_new_index, [η_new_i])
+            end
+        end
+        results_A_NFF_all = hcat(results_A_NFF_all, results_A_NFF[:,η_new_index])
+        results_A_NFF_all = results_A_NFF_all[:, sortperm(results_A_NFF_all[1,:], rev = true)]
+        results_A_FF_all = hcat(results_A_FF_all, results_A_FF[:,η_new_index])
+        results_A_FF_all = results_A_FF_all[:, sortperm(results_A_FF_all[1,:], rev = true)]
+
+        @save "results_eta_all.jld2" var_names results_A_NFF_all results_A_FF_all
+
+    end
+
+    #=======================#
+    # solve transition path #
+    #=======================#
+    @load "results_eta_all.jld2" var_names results_A_NFF_all results_A_FF_all
+
+    # extract all wage garnishment rates and the associated incentive multiplier
+    η_all, λ_all = results_A_FF_all[1,:], results_A_FF_all[3,:]
+    η_benchmark = 0.25
+    η_benchmark_index = findall(η_all .== η_benchmark)[]
+    parameters_benchmark = parameters_function(η = η_benchmark)
+    variables_benchmark = variables_function(parameters_benchmark; λ = λ_all[η_benchmark_index])
+    solve_economy_function!(variables_benchmark, parameters_benchmark)
+
+    # set parameters for the computation of transtion path
+    T_size = 80
+    T_degree = 15.0
+    iter_max = 1000
+    tol = 1E-8
+    slow_updating_transitional_dynamics = 0.1
+    load_initial_value = false
+    if load_initial_value == true
+        @load "results_transition_eta_all.jld2" transtion_path_eta_all
+    else
+        transtion_path_eta_all = zeros(T_size+2)
+    end
+
+    # solve transtion path from benchmark to all cases
+    for η_i in findall(η_all .!= η_benchmark)
+
+        # solve the equilibrium with the new policy
+        println("Solving steady state with η = $(η_all[η_i])...")
+        parameters_new = parameters_function(η = η_all[η_i])
+        variables_new = variables_function(parameters_new; λ = λ_all[η_i])
+        solve_economy_function!(variables_new, parameters_new)
+
+        # solve the transtion path
+        println("Solving transitions from η = $η_benchmark to η = $(η_all[η_i])...")
+        if load_initial_value == true
+            variables_T = variables_T_function(transtion_path_eta_all[:,η_i], variables_benchmark, variables_new, parameters_new)
+        else
+            variables_T = variables_T_function(variables_benchmark, variables_new, parameters_new; T_size = T_size, T_degree = T_degree)
+        end
+        transitional_dynamic_λ_function!(variables_T, variables_benchmark, variables_new, parameters_new; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
+        transtion_path_eta = variables_T.aggregate_prices.leverage_ratio_λ
+        plot_transtion_path_eta = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+        plot_transtion_path_eta = plot!(transtion_path_eta, linecolor = :blue, linewidth = 3, legend=:none)
+        plot_transtion_path_eta
+        Plots.savefig(plot_transtion_path_eta, pwd() * "\\figures\\transition path\\eta\\plot_transtion_path_eta_$(η_benchmark)_$(η_all[η_i]).pdf")
+
+        # update the converged transition path of banking leverage ratio
+        transtion_path_eta_all = hcat(transtion_path_eta_all, transtion_path_eta)
+
+    end
+
+    # save results of transition path for all cases
+    η_all = η_all[η_all .!= η_benchmark]
+    transtion_path_eta_all = transtion_path_eta_all[:,2:end]
+    @save "results_transition_eta_all.jld2" η_all transtion_path_eta_all
+
+end
+
 if Indicator_solve_transitional_dynamics_across_p_h == true
 
     @load "results_p_h.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
@@ -481,10 +598,10 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     if load_initial_value == true
         @load "results_transition_p_h.jld2" transtion_path_p_h_10_12 transtion_path_p_h_10_8
     end
-    T_size = 200
-    T_degree = 20.0
+    T_size = 80
+    T_degree = 15.0
     iter_max = 1000
-    tol = 1E-9
+    tol = 1E-8
     slow_updating_transitional_dynamics = 0.1
 
     # from p_h = 1 / 10 to p_h = 1 / 12

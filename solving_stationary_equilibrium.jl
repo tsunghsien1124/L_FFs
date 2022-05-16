@@ -181,7 +181,6 @@ mutable struct Mutable_Aggregate_Prices
     r_k_λ::Real
     K_λ::Real
     w_λ::Real
-    z::Real
 end
 
 mutable struct Mutable_Aggregate_Variables
@@ -303,7 +302,7 @@ function log_function(threshold_e::Real)
     end
 end
 
-function repayment_function(e_1_p_i::Integer, e_2_i::Integer, e_3_p_i::Integer, a_p::Real, threshold::Real, w::Real, z::Real, parameters::NamedTuple; wage_garnishment::Bool = true)
+function repayment_function(e_1_p_i::Integer, e_2_i::Integer, e_3_p_i::Integer, a_p::Real, threshold::Real, w::Real, parameters::NamedTuple; wage_garnishment::Bool = true)
     """
     evaluate repayment analytically with and without wage garnishment
     """
@@ -326,7 +325,7 @@ function repayment_function(e_1_p_i::Integer, e_2_i::Integer, e_3_p_i::Integer, 
     amount_default = 0.0
     if wage_garnishment == true
         default_adjusted_prob = cdf(Normal(e_2_μ + e_2_σ^2.0, e_2_σ), threshold)
-        amount_default = η * z * w * exp(e_1 + e_3) * exp(e_2_μ + e_2_σ^2.0 / 2.0) * default_adjusted_prob
+        amount_default = η * w * exp(e_1 + e_3) * exp(e_2_μ + e_2_σ^2.0 / 2.0) * default_adjusted_prob
     end
 
     return total_amount = amount_repay + amount_default
@@ -346,9 +345,8 @@ function aggregate_prices_λ_funtion(parameters::NamedTuple; λ::Real)
     r_k_λ = r_f + ι_λ
     K_λ = E * ((r_k_λ + δ) / α)^(1.0 / (α - 1.0))
     w_λ = (1.0 - α) * (K_λ / E)^α
-    z = 1.0
 
-    return ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ, z
+    return ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ
 end
 
 function variables_function(parameters::NamedTuple; λ::Real)
@@ -360,8 +358,8 @@ function variables_function(parameters::NamedTuple; λ::Real)
     @unpack a_ind_zero, a_size, a_grid, a_size_pos, a_size_neg, a_grid_neg, a_ind_zero_μ, a_size_μ, a_size_pos_μ, e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_2_ρ, e_2_σ, e_3_size, e_3_grid, e_3_Γ, ν_size, ν_Γ, ρ, r_f, τ = parameters
 
     # define aggregate prices
-    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ, z = aggregate_prices_λ_funtion(parameters; λ = λ)
-    aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ, z)
+    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ = λ)
+    aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 
     # define aggregate variables
     K = 0.0
@@ -390,7 +388,7 @@ function variables_function(parameters::NamedTuple; λ::Real)
             @inbounds a_p = a_grid_neg[a_p_i]
             for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_1_p_i = 1:e_1_size
                 @inbounds threshold = log_function(-a_p / w_λ) - e_1_grid[e_1_p_i] - e_3_grid[e_3_p_i]
-                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_i, e_3_p_i, a_p, threshold, w_λ, z, parameters)
+                @inbounds R[a_p_i, e_1_i, e_2_i] += e_1_Γ[e_1_i, e_1_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_p_i, e_2_i, e_3_p_i, a_p, threshold, w_λ, parameters)
             end
             @inbounds q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + τ + ι_λ))
         end
@@ -430,8 +428,8 @@ function variables_function_update!(variables::Mutable_Variables, parameters::Na
     """
 
     # define aggregate prices
-    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ, z = aggregate_prices_λ_funtion(parameters; λ = λ)
-    variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ, z)
+    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ = λ)
+    variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
 function EV_function(e_1_i::Integer, e_2_i::Integer, V_p::Array{Float64,5}, parameters::NamedTuple)
@@ -466,7 +464,6 @@ function value_and_policy_function(
     q::Array{Float64,3},
     rbl::Array{Float64,3},
     w::Real,
-    z::Real,
     parameters::NamedTuple;
     slow_updating::Real = 1.0,
 )
@@ -490,7 +487,7 @@ function value_and_policy_function(
     for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
 
         # construct earning
-        @inbounds y = z * w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i])
+        @inbounds y = w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i])
 
         # extract risky borrowing limit and maximum discounted borrowing amount
         @inbounds @views rbl_a, rbl_qa = rbl[e_1_i, e_2_i, :]
@@ -578,7 +575,7 @@ function value_and_policy_function(
     return V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a
 end
 
-function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, z::Real, ι::Real, parameters::NamedTuple)
+function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, ι::Real, parameters::NamedTuple)
     """
     update pricing function and borrowing risky limit
     """
@@ -601,7 +598,7 @@ function pricing_and_rbl_function(policy_d::Array{Float64,5}, w::Real, z::Real, 
                     e_2_Γ[e_2_i, e_2_p_i] *
                     e_3_Γ[e_3_p_i] *
                     ν_Γ[ν_p_i] *
-                    (policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i] * η * z * w * exp(e_1_grid[e_1_p_i] + e_2_grid[e_2_p_i] + e_3_grid[e_3_p_i]) + (1.0 - policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i]) * (-a_p))
+                    (policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i] * η * w * exp(e_1_grid[e_1_p_i] + e_2_grid[e_2_p_i] + e_3_grid[e_3_p_i]) + (1.0 - policy_d[a_p_i, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i]) * (-a_p))
             end
             @inbounds q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + τ + ι))
         end
@@ -649,10 +646,10 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
 
         # value and policy functions
         variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_d, variables.policy_pos_a =
-            value_and_policy_function(V_p, V_d_p, V_nd_p, V_pos_p, variables.q, variables.rbl, variables.aggregate_prices.w_λ, variables.aggregate_prices.z, parameters; slow_updating = slow_updating)
+            value_and_policy_function(V_p, V_d_p, V_nd_p, V_pos_p, variables.q, variables.rbl, variables.aggregate_prices.w_λ, parameters; slow_updating = slow_updating)
 
         # pricing function and borrowing risky limit
-        variables.R, variables.q, variables.rbl = pricing_and_rbl_function(variables.policy_d, variables.aggregate_prices.w_λ, variables.aggregate_prices.z, variables.aggregate_prices.ι_λ, parameters)
+        variables.R, variables.q, variables.rbl = pricing_and_rbl_function(variables.policy_d, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
         # check convergence
         V_crit = norm(variables.V .- V_p, Inf)
@@ -798,7 +795,6 @@ function solve_aggregate_variable_function(
     μ::Array{Float64,6},
     K::Real,
     w::Real,
-    z::Real, 
     ι::Real,
     parameters::NamedTuple,
 )
@@ -885,7 +881,7 @@ function solve_aggregate_variable_function(
                 @inbounds share_of_filers += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * policy_d_itp(a_μ))
 
                 # share of involuntary filers
-                if z * w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]) + a_μ - rbl[e_1_i, e_2_i, 2] < 0.0
+                if w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]) + a_μ - rbl[e_1_i, e_2_i, 2] < 0.0
                     @inbounds share_of_involuntary_filers += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * policy_d_itp(a_μ))
                 end
 
@@ -895,7 +891,7 @@ function solve_aggregate_variable_function(
                 # @inbounds debt_to_earning_ratio_den += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]))
 
                 # loans returned
-                L_adj += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * ((-a_μ) * (1.0 - policy_d_itp(a_μ)) + policy_d_itp(a_μ) * η * z * w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]))
+                L_adj += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * ((-a_μ) * (1.0 - policy_d_itp(a_μ)) + policy_d_itp(a_μ) * η * w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]))
             end
         end
     end
@@ -921,7 +917,7 @@ function solve_aggregate_variable_function(
     # debt-to-earning ratio
     # debt_to_earning_ratio = debt_to_earning_ratio_num / debt_to_earning_ratio_den
     # debt_to_earning_ratio = L / w
-    debt_to_earning_ratio = debt_to_earning_ratio_num / (z * w)
+    debt_to_earning_ratio = debt_to_earning_ratio_num / w
 
     # average loan rate
     avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
@@ -948,7 +944,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
 
     # compute aggregate variables
     variables.aggregate_variables =
-        solve_aggregate_variable_function(variables.policy_a, variables.policy_d, variables.policy_pos_a, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, variables.aggregate_prices.z, variables.aggregate_prices.ι_λ, parameters)
+        solve_aggregate_variable_function(variables.policy_a, variables.policy_d, variables.policy_pos_a, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
     # compute the difference between demand and supply sides
     ED_KL_to_D_ratio = variables.aggregate_variables.KL_to_D_ratio - variables.aggregate_prices.KL_to_D_ratio_λ

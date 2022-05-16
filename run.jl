@@ -340,18 +340,19 @@ if Indicator_solve_transitional_dynamics_across_η == true
     # set parameters for computation
     T_size = 80
     T_degree = 15.0
-    iter_max = 1000
+    iter_max = 500
     tol = 1E-8
     slow_updating_transitional_dynamics = 0.1
     load_initial_value = true
     if load_initial_value == true
         @load "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
     end
+    initial_z = ones(T_size+2)
 
     # from η = 0.25 to η = 0.30
     println("Solving transitions from η = $η_25 to η = $η_30...")
     if load_initial_value == true
-        variables_T_25_30 = variables_T_function(transtion_path_eta_25_30, variables_25, variables_30, parameters_30)
+        variables_T_25_30 = variables_T_function(transtion_path_eta_25_30, initial_z, variables_25, variables_30, parameters_30)
     else
         variables_T_25_30 = variables_T_function(variables_25, variables_30, parameters_30; T_size = T_size, T_degree = T_degree)
     end
@@ -365,7 +366,7 @@ if Indicator_solve_transitional_dynamics_across_η == true
     # from η = 0.25 to η = 0.20
     println("Solving transitions from η = $η_25 to η = $η_20...")
     if load_initial_value == true
-        variables_T_25_20 = variables_T_function(transtion_path_eta_25_20, variables_25, variables_20, parameters_30)
+        variables_T_25_20 = variables_T_function(transtion_path_eta_25_20, initial_z, variables_25, variables_20, parameters_30)
     else
         variables_T_25_20 = variables_T_function(variables_25, variables_20, parameters_20; T_size = T_size, T_degree = T_degree)
     end
@@ -385,11 +386,11 @@ if Indicator_solve_transitional_dynamics_across_η == true
     welfare_CEV_25_30_bad =  100 * sum(((variables_T_25_30.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
     welfare_CEV_25_30 = 100 * (sum(((variables_T_25_30.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[:,:,:,:,:,1]) + sum(((variables_T_25_30.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
 
-    welfare_favor_25_30_good_with_debt = 100 * sum((variables_T_25_30.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .> variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
-    welfare_favor_25_30_good_without_debt = 100 * sum((variables_T_25_30.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .> variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
-    welfare_favor_25_30_good = 100 * sum((variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
-    welfare_favor_25_30_bad = 100 * sum((variables_T_25_30.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
-    welfare_favor_25_30 = 100 * (sum((variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V) .* variables_25.μ[:,:,:,:,:,1]) + sum((variables_T_25_30.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
+    welfare_favor_25_30_good_with_debt = 100 * sum((variables_T_25_30.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .>= variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
+    welfare_favor_25_30_good_without_debt = 100 * sum((variables_T_25_30.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .>= variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
+    welfare_favor_25_30_good = 100 * sum((variables_T_25_30.V[:,:,:,:,:,2] .>= variables_25.V) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
+    welfare_favor_25_30_bad = 100 * sum((variables_T_25_30.V_pos[:,:,:,:,:,2] .>= variables_25.V_pos) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
+    welfare_favor_25_30 = 100 * (sum((variables_T_25_30.V[:,:,:,:,:,2] .>= variables_25.V) .* variables_25.μ[:,:,:,:,:,1]) + sum((variables_T_25_30.V_pos[:,:,:,:,:,2] .>= variables_25.V_pos) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
 
     # compute welfare metrics from η = 0.25 to η = 0.20
     welfare_CEV_25_20_good_with_debt = 100 * sum(((variables_T_25_20.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] ./ variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
@@ -398,11 +399,11 @@ if Indicator_solve_transitional_dynamics_across_η == true
     welfare_CEV_25_20_bad =  100 * sum(((variables_T_25_20.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
     welfare_CEV_25_20 = 100 * (sum(((variables_T_25_20.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[:,:,:,:,:,1]) + sum(((variables_T_25_20.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
 
-    welfare_favor_25_20_good_with_debt = 100 * sum((variables_T_25_20.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .> variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
-    welfare_favor_25_20_good_without_debt = 100 * sum((variables_T_25_20.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .> variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
-    welfare_favor_25_20_good = 100 * sum((variables_T_25_20.V[:,:,:,:,:,2] .> variables_25.V) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
-    welfare_favor_25_20_bad = 100* sum((variables_T_25_20.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
-    welfare_favor_25_20 = 100 * (sum((variables_T_25_20.V[:,:,:,:,:,2] .> variables_25.V) .* variables_25.μ[:,:,:,:,:,1]) + sum((variables_T_25_20.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
+    welfare_favor_25_20_good_with_debt = 100 * sum((variables_T_25_20.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .>= variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
+    welfare_favor_25_20_good_without_debt = 100 * sum((variables_T_25_20.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .>= variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
+    welfare_favor_25_20_good = 100 * sum((variables_T_25_20.V[:,:,:,:,:,2] .>= variables_25.V) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
+    welfare_favor_25_20_bad = 100* sum((variables_T_25_20.V_pos[:,:,:,:,:,2] .>= variables_25.V_pos) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
+    welfare_favor_25_20 = 100 * (sum((variables_T_25_20.V[:,:,:,:,:,2] .>= variables_25.V) .* variables_25.μ[:,:,:,:,:,1]) + sum((variables_T_25_20.V_pos[:,:,:,:,:,2] .>= variables_25.V_pos) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
 
     # share of households
     HHs_good_debt = 100 * sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])
@@ -434,7 +435,6 @@ if Indicator_solve_transitional_dynamics_across_η == true
 end
 
 if Indicator_solve_transitional_dynamics_across_η_general == true
-
 
     #=========================================#
     # combine all jld2 files with different η #
@@ -488,6 +488,8 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
 
     # extract all wage garnishment rates and the associated incentive multiplier
     η_all, λ_all = results_A_FF_all[1,:], results_A_FF_all[3,:]
+    λ_all = λ_all[findall(η_all .!= 0.34)]
+    η_all = η_all[findall(η_all .!= 0.34)] # η = 0.34 fails to converge. Why?
     η_benchmark = 0.25
     η_benchmark_index = findall(η_all .== η_benchmark)[]
     parameters_benchmark = parameters_function(η = η_benchmark)
@@ -497,18 +499,31 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     # set parameters for the computation of transtion path
     T_size = 80
     T_degree = 15.0
-    iter_max = 1000
+    iter_max = 500
     tol = 1E-8
     slow_updating_transitional_dynamics = 0.1
-    load_initial_value = false
+    load_initial_value = true
     if load_initial_value == true
-        @load "results_transition_eta_all.jld2" transtion_path_eta_all
+        @load "results_transition_eta_all.jld2" η_all λ_all transition_path_eta_all welfare_CEV_all_good_with_debt welfare_CEV_all_good_without_debt welfare_CEV_all_good welfare_CEV_all_bad welfare_CEV_all welfare_favor_all_good_with_debt welfare_favor_all_good_without_debt welfare_favor_all_good welfare_favor_all_bad welfare_favor_all
     else
-        transtion_path_eta_all = zeros(T_size+2)
+        λ_all = λ_all[findall(η_all .!= η_benchmark)]
+        η_all = η_all[findall(η_all .!= η_benchmark)]
+        transition_path_eta_all = zeros(T_size+2)
+        welfare_CEV_all_good_with_debt = zeros(1)
+        welfare_CEV_all_good_without_debt = zeros(1)
+        welfare_CEV_all_good = zeros(1)
+        welfare_CEV_all_bad = zeros(1)
+        welfare_CEV_all = zeros(1)
+        welfare_favor_all_good_with_debt = zeros(1)
+        welfare_favor_all_good_without_debt = zeros(1)
+        welfare_favor_all_good = zeros(1)
+        welfare_favor_all_bad = zeros(1)
+        welfare_favor_all = zeros(1)
     end
+    initial_z = ones(T_size+2)
 
     # solve transtion path from benchmark to all cases
-    for η_i in findall(η_all .!= η_benchmark)
+    for η_i in 1:length(η_all)
 
         # solve the equilibrium with the new policy
         println("Solving steady state with η = $(η_all[η_i])...")
@@ -519,26 +534,163 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
         # solve the transtion path
         println("Solving transitions from η = $η_benchmark to η = $(η_all[η_i])...")
         if load_initial_value == true
-            variables_T = variables_T_function(transtion_path_eta_all[:,η_i], variables_benchmark, variables_new, parameters_new)
+            variables_T = variables_T_function(transition_path_eta_all[:,η_i], initial_z, variables_benchmark, variables_new, parameters_new)
         else
             variables_T = variables_T_function(variables_benchmark, variables_new, parameters_new; T_size = T_size, T_degree = T_degree)
         end
         transitional_dynamic_λ_function!(variables_T, variables_benchmark, variables_new, parameters_new; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
-        transtion_path_eta = variables_T.aggregate_prices.leverage_ratio_λ
+        transition_path_eta = variables_T.aggregate_prices.leverage_ratio_λ
         plot_transtion_path_eta = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-        plot_transtion_path_eta = plot!(transtion_path_eta, linecolor = :blue, linewidth = 3, legend=:none)
+        plot_transtion_path_eta = plot!(transition_path_eta, linecolor = :blue, linewidth = 3, legend=:none)
         plot_transtion_path_eta
         Plots.savefig(plot_transtion_path_eta, pwd() * "\\figures\\transition path\\eta\\plot_transtion_path_eta_$(η_benchmark)_$(η_all[η_i]).pdf")
 
-        # update the converged transition path of banking leverage ratio
-        transtion_path_eta_all = hcat(transtion_path_eta_all, transtion_path_eta)
+        # update the converged transition path of banking leverage ratio and compute welfare
+        if load_initial_value == true
+            
+            transition_path_eta_all[:,η_i] = transition_path_eta
+            
+            welfare_CEV_all_good_with_debt[η_i] = 100 * sum(((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] ./ variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
+            
+            welfare_CEV_all_good_without_debt[η_i] = 100 * sum(((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
+            
+            welfare_CEV_all_good[η_i] = 100 * sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
+            
+            welfare_CEV_all_bad[η_i] =  100 * sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
 
+            welfare_CEV_all[η_i] = 100 * (sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
+            
+            welfare_favor_all_good_with_debt[η_i] = 100 * sum((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] .>= variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
+            
+            welfare_favor_all_good_without_debt[η_i] = 100 * sum((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] .>= variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
+            
+            welfare_favor_all_good[η_i] = 100 * sum((variables_T.V[:,:,:,:,:,2] .>= variables_benchmark.V) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
+            
+            welfare_favor_all_bad[η_i] = 100 * sum((variables_T.V_pos[:,:,:,:,:,2] .>= variables_benchmark.V_pos) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
+
+            welfare_favor_all[η_i] = 100 * (sum((variables_T.V[:,:,:,:,:,2] .>= variables_benchmark.V) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum((variables_T.V_pos[:,:,:,:,:,2] .> variables_benchmark.V_pos) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
+
+        else
+
+            transition_path_eta_all = hcat(transition_path_eta_all, transition_path_eta)
+            
+            welfare_CEV_all_good_with_debt = vcat(welfare_CEV_all_good_with_debt, 100 * sum(((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] ./ variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1]))))
+            
+            welfare_CEV_all_good_without_debt = vcat(welfare_CEV_all_good_without_debt, 100 * sum(((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1]))))
+            
+            welfare_CEV_all_good = vcat(welfare_CEV_all_good, 100 * sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1]))))
+            
+            welfare_CEV_all_bad = vcat(welfare_CEV_all_bad, 100 * sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))))
+
+            welfare_CEV_all = vcat(welfare_CEV_all, 100 * (sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
+            
+            welfare_favor_all_good_with_debt = vcat(welfare_favor_all_good_with_debt, 100 * sum((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] .>= variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1]))))
+            
+            welfare_favor_all_good_without_debt = vcat(welfare_favor_all_good_without_debt, 100 * sum((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] .>= variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1]))))
+            
+            welfare_favor_all_good = vcat(welfare_favor_all_good, 100 * sum((variables_T.V[:,:,:,:,:,2] .>= variables_benchmark.V) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1]))))
+            
+            welfare_favor_all_bad = vcat(welfare_favor_all_bad, 100 * sum((variables_T.V_pos[:,:,:,:,:,2] .>= variables_benchmark.V_pos) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))))
+
+            welfare_favor_all = vcat(welfare_favor_all,  100 * (sum((variables_T.V[:,:,:,:,:,2] .>= variables_benchmark.V) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum((variables_T.V_pos[:,:,:,:,:,2] .> variables_benchmark.V_pos) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
+
+        end
     end
 
     # save results of transition path for all cases
-    η_all = η_all[η_all .!= η_benchmark]
-    transtion_path_eta_all = transtion_path_eta_all[:,2:end]
-    @save "results_transition_eta_all.jld2" η_all transtion_path_eta_all
+    if load_initial_value == false
+        transition_path_eta_all = transition_path_eta_all[:,2:end]
+        welfare_CEV_all_good_with_debt = welfare_CEV_all_good_with_debt[2:end]
+        welfare_CEV_all_good_without_debt = welfare_CEV_all_good_without_debt[2:end]
+        welfare_CEV_all_good = welfare_CEV_all_good[2:end]
+        welfare_CEV_all_bad = welfare_CEV_all_bad[2:end]
+        welfare_CEV_all = welfare_CEV_all[2:end]
+        welfare_favor_all_good_with_debt = welfare_favor_all_good_with_debt[2:end]
+        welfare_favor_all_good_without_debt = welfare_favor_all_good_without_debt[2:end]
+        welfare_favor_all_good = welfare_favor_all_good[2:end]
+        welfare_favor_all_bad = welfare_favor_all_bad[2:end]
+        welfare_favor_all = welfare_favor_all[2:end]
+    end
+    @save "results_transition_eta_all.jld2" η_all λ_all transition_path_eta_all welfare_CEV_all_good_with_debt welfare_CEV_all_good_without_debt welfare_CEV_all_good welfare_CEV_all_bad welfare_CEV_all welfare_favor_all_good_with_debt welfare_favor_all_good_without_debt welfare_favor_all_good welfare_favor_all_bad welfare_favor_all
+
+    #=============================#
+    # without financial frictions #
+    #=============================#
+    # create containers
+    λ_all_NFF = zeros(length(η_all))
+    welfare_CEV_all_good_with_debt_NFF = zeros(length(λ_all))
+    welfare_CEV_all_good_without_debt_NFF = zeros(length(λ_all))
+    welfare_CEV_all_good_NFF = zeros(length(λ_all))
+    welfare_CEV_all_bad_NFF = zeros(length(λ_all))
+    welfare_CEV_all_NFF = zeros(length(λ_all))
+    welfare_favor_all_good_with_debt_NFF = zeros(length(λ_all))
+    welfare_favor_all_good_without_debt_NFF = zeros(length(λ_all))
+    welfare_favor_all_good_NFF = zeros(length(λ_all))
+    welfare_favor_all_bad_NFF = zeros(length(λ_all))
+    welfare_favor_all_NFF = zeros(length(λ_all))
+
+    # run the benchmark results
+    parameters_benchmark = parameters_function(η = η_benchmark)
+    variables_benchmark = variables_function(parameters_benchmark; λ = 0.0)
+    solve_economy_function!(variables_benchmark, parameters_benchmark)
+
+    for η_i in 1:length(η_all)
+
+        # solve the equilibrium with the new policy
+        println("Solving steady state with η = $(η_all[η_i])...")
+        parameters_new = parameters_function(η = η_all[η_i])
+        variables_new = variables_function(parameters_new; λ = λ_all_NFF[η_i])
+        solve_economy_function!(variables_new, parameters_new)
+
+        # compute welfare
+        welfare_CEV_all_good_with_debt_NFF[η_i] = 100 * sum(((variables_new.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:] ./ variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
+        
+        welfare_CEV_all_good_without_debt_NFF[η_i] = 100 * sum(((variables_new.V[parameters_benchmark.a_ind_zero:end,:,:,:,:] ./ variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
+        
+        welfare_CEV_all_good_NFF[η_i] = 100 * sum(((variables_new.V[:,:,:,:,:] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
+        
+        welfare_CEV_all_bad_NFF[η_i] =  100 * sum(((variables_new.V_pos[:,:,:,:,:] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
+
+        welfare_CEV_all_NFF[η_i] = 100 * (sum(((variables_new.V[:,:,:,:,:] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(((variables_new.V_pos[:,:,:,:,:] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
+        
+        welfare_favor_all_good_with_debt_NFF[η_i] = 100 * sum((variables_new.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:] .>= variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
+        
+        welfare_favor_all_good_without_debt_NFF[η_i] = 100 * sum((variables_new.V[parameters_benchmark.a_ind_zero:end,:,:,:,:] .>= variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
+        
+        welfare_favor_all_good_NFF[η_i] = 100 * sum((variables_new.V[:,:,:,:,:] .>= variables_benchmark.V) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
+        
+        welfare_favor_all_bad_NFF[η_i] = 100 * sum((variables_new.V_pos[:,:,:,:,:] .>= variables_benchmark.V_pos) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
+
+        welfare_favor_all_NFF[η_i] = 100 * (sum((variables_new.V[:,:,:,:,:] .>= variables_benchmark.V) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum((variables_new.V_pos[:,:,:,:,:] .> variables_benchmark.V_pos) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
+    end    
+
+    # save results
+    @save "results_welfare_eta_all_NFF.jld2" η_all λ_all_NFF welfare_CEV_all_good_with_debt_NFF welfare_CEV_all_good_without_debt_NFF welfare_CEV_all_good_NFF welfare_CEV_all_bad_NFF welfare_CEV_all_NFF welfare_favor_all_good_with_debt_NFF welfare_favor_all_good_without_debt_NFF welfare_favor_all_good_NFF welfare_favor_all_bad_NFF welfare_favor_all_NFF
+
+    # plot welfare results across η
+    η_all = vcat(η_all, η_benchmark)
+    welfare_CEV_all = vcat(welfare_CEV_all, 0.0)
+    welfare_favor_all = vcat(welfare_favor_all, 100.0)
+    welfare_CEV_all_NFF = vcat(welfare_CEV_all_NFF, 0.0)
+    welfare_favor_all_NFF = vcat(welfare_favor_all_NFF, 100.0)
+
+    welfare_CEV_all = welfare_CEV_all[sortperm(η_all)]
+    welfare_favor_all = welfare_favor_all[sortperm(η_all)]
+    welfare_CEV_all_NFF = welfare_CEV_all_NFF[sortperm(η_all)]
+    welfare_favor_all_NFF = welfare_favor_all_NFF[sortperm(η_all)]
+    η_all = η_all[sortperm(η_all)]
+
+    plot_welfare_CEV_all = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
+    plot_welfare_CEV_all = plot!(η_all, welfare_CEV_all, linecolor = :blue, linewidth = 3, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all = plot!(η_all, welfare_CEV_all_NFF, linecolor = :red, linewidth = 3, linestyle = :dash, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all
+    Plots.savefig(plot_welfare_CEV_all, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all.pdf")
+
+    plot_welfare_favor_all = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
+    plot_welfare_favor_all = plot!(η_all, welfare_favor_all, linecolor = :blue, linewidth = 3, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
+    plot_welfare_favor_all = plot!(η_all, welfare_favor_all_NFF, linecolor = :red, linewidth = 3, linestyle = :dash, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
+    plot_welfare_favor_all
+    Plots.savefig(plot_welfare_favor_all, pwd() * "\\figures\\transition path\\eta\\plot_welfare_favor_all.pdf")
 
 end
 
@@ -603,11 +755,12 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     iter_max = 1000
     tol = 1E-8
     slow_updating_transitional_dynamics = 0.1
+    initial_z = ones(T_size+2)
 
     # from p_h = 1 / 10 to p_h = 1 / 12
     println("Solving transitions from p_h = $p_h_10 to p_h = $p_h_12...")
     if load_initial_value == true
-        variables_T_10_12 = variables_T_function(transtion_path_p_h_10_12, variables_10, variables_12, parameters_12)
+        variables_T_10_12 = variables_T_function(transtion_path_p_h_10_12, initial_z, variables_10, variables_12, parameters_12)
     else
         variables_T_10_12 = variables_T_function(variables_10, variables_12, parameters_12; T_size = T_size, T_degree = T_degree)
     end
@@ -621,7 +774,7 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     # from p_h = 1 / 10 to p_h = 1 / 8
     println("Solving transitions from p_h = $p_h_10 to p_h = $p_h_8...")
     if load_initial_value == true
-        variables_T_10_8 = variables_T_function(transtion_path_p_h_10_8, variables_10, variables_8, parameters_8)
+        variables_T_10_8 = variables_T_function(transtion_path_p_h_10_8, initial_z, variables_10, variables_8, parameters_8)
     else
         variables_T_10_8 = variables_T_function(variables_10, variables_8, parameters_8; T_size = T_size, T_degree = T_degree)
     end
@@ -642,11 +795,11 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     welfare_CEV_10_12_bad =  100 * sum(((variables_T_10_12.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
     welfare_CEV_10_12 = 100 * (sum(((variables_T_10_12.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[:,:,:,:,:,1]) + sum(((variables_T_10_12.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
 
-    welfare_favor_10_12_good_with_debt = 100 * sum((variables_T_10_12.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .> variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
-    welfare_favor_10_12_good_without_debt = 100 * sum((variables_T_10_12.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .> variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
-    welfare_favor_10_12_good = 100 * sum((variables_T_10_12.V[:,:,:,:,:,2] .> variables_10.V) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
-    welfare_favor_10_12_bad = 100 * sum((variables_T_10_12.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
-    welfare_favor_10_12 = 100 * (sum((variables_T_10_12.V[:,:,:,:,:,2] .> variables_10.V) .* variables_10.μ[:,:,:,:,:,1]) + sum((variables_T_10_12.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+    welfare_favor_10_12_good_with_debt = 100 * sum((variables_T_10_12.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .>= variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
+    welfare_favor_10_12_good_without_debt = 100 * sum((variables_T_10_12.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .>= variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    welfare_favor_10_12_good = 100 * sum((variables_T_10_12.V[:,:,:,:,:,2] .>= variables_10.V) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
+    welfare_favor_10_12_bad = 100 * sum((variables_T_10_12.V_pos[:,:,:,:,:,2] .>= variables_10.V_pos) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    welfare_favor_10_12 = 100 * (sum((variables_T_10_12.V[:,:,:,:,:,2] .>= variables_10.V) .* variables_10.μ[:,:,:,:,:,1]) + sum((variables_T_10_12.V_pos[:,:,:,:,:,2] .>= variables_10.V_pos) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
 
     # compute welfare metrics from η = 0.25 to η = 0.20
     welfare_CEV_10_8_good_with_debt = 100 * sum(((variables_T_10_8.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] ./ variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
@@ -655,11 +808,11 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     welfare_CEV_10_8_bad =  100 * sum(((variables_T_10_8.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
     welfare_CEV_10_8 = 100 * (sum(((variables_T_10_8.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[:,:,:,:,:,1]) + sum(((variables_T_10_8.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
 
-    welfare_favor_10_8_good_with_debt = 100 * sum((variables_T_10_8.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .> variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
-    welfare_favor_10_8_good_without_debt = 100 * sum((variables_T_10_8.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .> variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
-    welfare_favor_10_8_good = 100 * sum((variables_T_10_8.V[:,:,:,:,:,2] .> variables_10.V) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
-    welfare_favor_10_8_bad = 100* sum((variables_T_10_8.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
-    welfare_favor_10_8 = 100 * (sum((variables_T_10_8.V[:,:,:,:,:,2] .> variables_10.V) .* variables_10.μ[:,:,:,:,:,1]) + sum((variables_T_10_8.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+    welfare_favor_10_8_good_with_debt = 100 * sum((variables_T_10_8.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .>= variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
+    welfare_favor_10_8_good_without_debt = 100 * sum((variables_T_10_8.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .>= variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    welfare_favor_10_8_good = 100 * sum((variables_T_10_8.V[:,:,:,:,:,2] .>= variables_10.V) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
+    welfare_favor_10_8_bad = 100* sum((variables_T_10_8.V_pos[:,:,:,:,:,2] .>= variables_10.V_pos) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    welfare_favor_10_8 = 100 * (sum((variables_T_10_8.V[:,:,:,:,:,2] .>= variables_10.V) .* variables_10.μ[:,:,:,:,:,1]) + sum((variables_T_10_8.V_pos[:,:,:,:,:,2] .>= variables_10.V_pos) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
 
     # share of households
     HHs_good_debt = 100 * sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
@@ -687,67 +840,6 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
 
     # save results
     CSV.write("results_welfare_across_p_h.csv", Tables.table(results_welfare_across_p_h), header = false)
-
-    # #=============================#
-    # # without financial frictions #
-    # #=============================#
-    # # compute welfare metrics from p_h = 1/10 to p_h = 1/12
-    # welfare_CEV_10_12_good_with_debt_NFF = 100 * sum(((variables_12_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] ./ variables_10_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
-    # welfare_CEV_10_12_good_no_debt_NFF = 100 * sum(((variables_12_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:] ./ variables_10_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
-    # welfare_CEV_10_12_good_NFF = 100 * sum(((variables_12_NFF.V[:,:,:,:,:] ./ variables_10_NFF.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[:,:,:,:,:,1] ./ sum(variables_10_NFF.μ[:,:,:,:,:,1])))
-    # welfare_CEV_10_12_bad_NFF =  100 * sum(((variables_12_NFF.V_pos[:,:,:,:,:] ./ variables_10_NFF.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
-    # welfare_CEV_10_12_NFF = 100 * (sum(((variables_12_NFF.V[:,:,:,:,:] ./ variables_10_NFF.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10_NFF.μ[:,:,:,:,:,1]) + sum(((variables_12_NFF.V_pos[:,:,:,:,:] ./ variables_10_NFF.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
-    #
-    # welfare_favor_10_12_good_with_debt_NFF = 100 * sum((variables_12_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] .> variables_10_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
-    # welfare_favor_10_12_good_without_debt_NFF = 100 * sum((variables_12_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:] .> variables_10_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
-    # welfare_favor_10_12_good_NFF = 100 * sum((variables_12_NFF.V[:,:,:,:,:] .> variables_10_NFF.V) .* (variables_10_NFF.μ[:,:,:,:,:,1] ./ sum(variables_10_NFF.μ[:,:,:,:,:,1])))
-    # welfare_favor_10_12_bad_NFF = 100 * sum((variables_12_NFF.V_pos[:,:,:,:,:] .> variables_10_NFF.V_pos) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
-    # welfare_favor_10_12_NFF = 100 * (sum((variables_12_NFF.V[:,:,:,:,:] .> variables_10_NFF.V) .* variables_10_NFF.μ[:,:,:,:,:,1]) + sum((variables_12_NFF.V_pos[:,:,:,:,:] .> variables_10_NFF.V_pos) .* variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
-    #
-    # # compute welfare metrics from η = 0.25 to η = 0.20
-    # welfare_CEV_10_8_good_with_debt_NFF = 100 * sum(((variables_8_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] ./ variables_10_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
-    # welfare_CEV_10_8_good_no_debt_NFF = 100 * sum(((variables_8_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:] ./ variables_10_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
-    # welfare_CEV_10_8_good_NFF = 100 * sum(((variables_8_NFF.V[:,:,:,:,:] ./ variables_10_NFF.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[:,:,:,:,:,1] ./ sum(variables_10_NFF.μ[:,:,:,:,:,1])))
-    # welfare_CEV_10_8_bad_NFF =  100 * sum(((variables_8_NFF.V_pos[:,:,:,:,:] ./ variables_10_NFF.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
-    # welfare_CEV_10_8_NFF = 100 * (sum(((variables_8_NFF.V[:,:,:,:,:] ./ variables_10_NFF.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10_NFF.μ[:,:,:,:,:,1]) + sum(((variables_8_NFF.V_pos[:,:,:,:,:] ./ variables_10_NFF.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
-    #
-    # welfare_favor_10_8_good_with_debt_NFF = 100 * sum((variables_8_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] .> variables_10_NFF.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
-    # welfare_favor_10_8_good_without_debt_NFF = 100 * sum((variables_8_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:] .> variables_10_NFF.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
-    # welfare_favor_10_8_good_NFF = 100 * sum((variables_8_NFF.V[:,:,:,:,:] .> variables_10_NFF.V) .* (variables_10_NFF.μ[:,:,:,:,:,1] ./ sum(variables_10_NFF.μ[:,:,:,:,:,1])))
-    # welfare_favor_10_8_bad_NFF = 100* sum((variables_8_NFF.V_pos[:,:,:,:,:] .> variables_10_NFF.V_pos) .* (variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
-    # welfare_favor_10_8_NFF = 100 * (sum((variables_8_NFF.V[:,:,:,:,:] .> variables_10_NFF.V) .* variables_10_NFF.μ[:,:,:,:,:,1]) + sum((variables_8_NFF.V_pos[:,:,:,:,:] .> variables_10_NFF.V_pos) .* variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
-    #
-    # # share of households
-    # HHs_good_debt_NFF = 100 * sum(variables_10_NFF.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
-    # HHs_good_no_debt_NFF = 100 * sum(variables_10_NFF.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
-    # HHs_good_NFF = HHs_good_debt_NFF + HHs_good_no_debt_NFF
-    # HHs_good_debt_cond_NFF = HHs_good_debt_NFF / HHs_good_NFF * 100
-    # HHs_good_no_debt_cond_NFF = HHs_good_no_debt_NFF / HHs_good_NFF * 100
-    # HHs_bad_NFF = 100 * sum(variables_10_NFF.μ[:,:,:,:,:,2])
-    # HHs_total_NFF = HHs_good_NFF + HHs_bad_NFF
-    #
-    # # printout results of welfare effects
-    # data_spec_NFF = Any[
-    #     "Proportion of households" "" ""
-    #     "With good credit history" HHs_good_NFF HHs_good_NFF
-    #     "With good credit history and debt" HHs_good_debt_cond_NFF HHs_good_debt_cond_NFF
-    #     "With good credit history and no debt" HHs_good_no_debt_cond_NFF HHs_good_no_debt_cond_NFF
-    #     "With bad credit history" HHs_bad_NFF HHs_bad_NFF
-    #     "Total" HHs_total_NFF HHs_total_NFF
-    #     "Average percentage gain in flow consumption" "" ""
-    #     "With good credit history" welfare_CEV_10_8_good_NFF welfare_CEV_10_12_good_NFF
-    #     "With good credit history and debt" welfare_CEV_10_8_good_with_debt_NFF welfare_CEV_10_12_good_with_debt_NFF
-    #     "With good credit history and no debt" welfare_CEV_10_8_good_no_debt_NFF welfare_CEV_10_12_good_no_debt_NFF
-    #     "With bad credit history" welfare_CEV_10_8_bad_NFF welfare_CEV_10_12_bad_NFF
-    #     "Total" welfare_CEV_10_8_NFF welfare_CEV_10_12_NFF
-    #     "Percentage of households in favor of new policy" "" ""
-    #     "With good credit history" welfare_favor_10_8_good_NFF welfare_favor_10_12_good_NFF
-    #     "With good credit history and debt" welfare_favor_10_8_good_with_debt_NFF welfare_favor_10_12_good_with_debt_NFF
-    #     "With good credit history and no debt" welfare_favor_10_8_good_without_debt_NFF welfare_favor_10_12_good_without_debt_NFF
-    #     "With bad credit history" welfare_favor_10_8_bad_NFF welfare_favor_10_12_bad_NFF
-    #     "Total" welfare_favor_10_8_NFF welfare_favor_10_12_NFF
-    # ]
-    # pretty_table(data_spec_NFF; header = ["Variable", "p_h = 1/10 -> 1/8", "p_h = 1/10 -> 1/12"], alignment = [:l, :r, :r], formatters = ft_round(4), body_hlines = [6, 12])
 
 end
 

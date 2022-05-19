@@ -57,6 +57,8 @@ Indicator_solve_transitional_dynamics_across_η = false
 Indicator_solve_transitional_dynamics_across_η_general = false
 Indicator_solve_transitional_dynamics_across_p_h = false
 
+Indicator_solve_transitional_dynamics_MIT_z = false
+
 Indicator_simulation_benchmark = false
 Indicator_simulation_benchmark_results = false
 Indicator_simulation_across_θ = false
@@ -840,6 +842,61 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
 
     # save results
     CSV.write("results_welfare_across_p_h.csv", Tables.table(results_welfare_across_p_h), header = false)
+
+end
+
+#================#
+# MIT shock to z #
+#================#
+
+if Indicator_solve_transitional_dynamics_MIT_z == true
+
+    #=================#
+    # solve benchmark #
+    #=================#
+    @load "results_eta_all.jld2" var_names results_A_NFF_all results_A_FF_all
+    η_all, λ_all = results_A_FF_all[1,:], results_A_FF_all[3,:]
+    η_benchmark = 0.25
+    η_benchmark_index = findall(η_all .== η_benchmark)[]
+    parameters_benchmark = parameters_function(η = η_benchmark)
+    variables_benchmark = variables_function(parameters_benchmark; λ = λ_all[η_benchmark_index])
+    solve_economy_function!(variables_benchmark, parameters_benchmark)
+
+    #===========================#
+    # solve the transition path #
+    #===========================#
+    # set parameters for computation
+    T_size = 80
+    T_degree = 15.0
+    iter_max = 1000
+    tol = 1E-8
+    slow_updating_transitional_dynamics = 0.1
+
+    # set up transition path of MIT shock to z
+    ρ_z = 0.85
+    σ_z = 0.01
+    path_z_negative = zeros(T_size+2)
+    path_z_positive = zeros(T_size+2)
+    for t in 2:(T_size+1)
+        path_z_negative[t] = t == 2 ? -σ_z : ρ_z * path_z_negative[t-1]
+        path_z_positive[t] = t == 2 ? σ_z : ρ_z * path_z_positive[t-1]
+    end
+    path_z_negative = exp.(path_z_negative)
+    path_z_positive = exp.(path_z_positive)
+
+    # set up transition path of banking leverage ratio
+    load_initial_value = false
+    if load_initial_value == true
+        @load "results_transition_MIT_z.jld2" transtion_path_MIT_z_negative transtion_path_MIT_z_positive
+    else
+        transtion_path_MIT_z_negative = path_z_positive .* variables_benchmark.aggregate_variables.leverage_ratio
+        transtion_path_MIT_z_positive = path_z_negative .* variables_benchmark.aggregate_variables.leverage_ratio
+    end
+
+    # solve the transition path of banking leverage ratio if negative shock
+    println("Solving transitions path for negative MIT shock to z")
+    variables_T_MIT_z_negative = variables_T_function(transtion_path_MIT_z_negative, path_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark)
+    transitional_dynamic_λ_function!(variables_T_MIT_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
 
 end
 

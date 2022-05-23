@@ -105,8 +105,12 @@ function aggregate_price_update(leverage_ratio_λ::Array{Float64,1}, z_path::Arr
         KL_to_D_ratio_λ[T_i] = leverage_ratio_λ[T_i] / (leverage_ratio_λ[T_i] - 1.0)
         ι_λ[T_i] = θ * λ[T_i] / Λ_λ[T_i+1]
         r_k_λ[T_i] = r_f + ι_λ[T_i]
-        K_p_λ[T_i] = E * ((r_k_λ[T_i] + δ) / (z_path[T_i] * α))^(1.0 / (α - 1.0))
-        w_λ[T_i+1] = z_path[T_i] * (1.0 - α) * (K_p_λ[T_i] / E)^α
+        K_p_λ[T_i] = E * ((r_k_λ[T_i] + δ) / (z_path[T_i+1] * α))^(1.0 / (α - 1.0))
+        # w_λ[T_i+1] = z_path[T_i] * (1.0 - α) * (K_p_λ[T_i] / E)^α
+    end
+
+    for T_i in 2:(T_size-1)
+        w_λ[T_i] = z_path[T_i] * (1.0 - α) * (K_p_λ[T_i-1] / E)^α
     end
 
     # for T_i in (T_size-1):(-1):2
@@ -418,7 +422,7 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
             variables_T.μ[:,:,:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], parameters_new)
 
             # compute aggregate variables
-            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i], variables_T.aggregate_prices.K_p_λ[T_i], variables_T.aggregate_prices.w_λ[T_i], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
+            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.aggregate_prices.K_p_λ[T_i], variables_T.aggregate_prices.w_λ[T_i], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
 
             variables_T.aggregate_variables.K_p[T_i] = aggregate_variables.K
             variables_T.aggregate_variables.L_p[T_i] = aggregate_variables.L

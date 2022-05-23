@@ -347,39 +347,39 @@ if Indicator_solve_transitional_dynamics_across_η == true
     slow_updating_transitional_dynamics = 0.1
     load_initial_value = true
     if load_initial_value == true
-        @load "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
+        @load "results_transition_eta.jld2" transition_path_eta_25_30 transition_path_eta_25_20
     end
     initial_z = ones(T_size+2)
 
     # from η = 0.25 to η = 0.30
     println("Solving transitions from η = $η_25 to η = $η_30...")
     if load_initial_value == true
-        variables_T_25_30 = variables_T_function(transtion_path_eta_25_30, initial_z, variables_25, variables_30, parameters_30)
+        variables_T_25_30 = variables_T_function(transition_path_eta_25_30, initial_z, variables_25, variables_30, parameters_30)
     else
         variables_T_25_30 = variables_T_function(variables_25, variables_30, parameters_30; T_size = T_size, T_degree = T_degree)
     end
     transitional_dynamic_λ_function!(variables_T_25_30, variables_25, variables_30, parameters_30; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
-    transtion_path_eta_25_30 = variables_T_25_30.aggregate_prices.leverage_ratio_λ
-    plot_transtion_path_eta_25_30 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transtion_path_eta_25_30 = plot!(transtion_path_eta_25_30, linecolor = :blue, linewidth = 3, legend=:none)
-    plot_transtion_path_eta_25_30
-    Plots.savefig(plot_transtion_path_eta_25_30, pwd() * "\\figures\\plot_transtion_path_eta_25_30.pdf")
+    transition_path_eta_25_30 = variables_T_25_30.aggregate_prices.leverage_ratio_λ
+    plot_transition_path_eta_25_30 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transition_path_eta_25_30 = plot!(transition_path_eta_25_30, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_eta_25_30
+    Plots.savefig(plot_transition_path_eta_25_30, pwd() * "\\figures\\plot_transition_path_eta_25_30.pdf")
 
     # from η = 0.25 to η = 0.20
     println("Solving transitions from η = $η_25 to η = $η_20...")
     if load_initial_value == true
-        variables_T_25_20 = variables_T_function(transtion_path_eta_25_20, initial_z, variables_25, variables_20, parameters_30)
+        variables_T_25_20 = variables_T_function(transition_path_eta_25_20, initial_z, variables_25, variables_20, parameters_30)
     else
         variables_T_25_20 = variables_T_function(variables_25, variables_20, parameters_20; T_size = T_size, T_degree = T_degree)
     end
     transitional_dynamic_λ_function!(variables_T_25_20, variables_25, variables_20, parameters_20; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
-    transtion_path_eta_25_20 = variables_T_25_20.aggregate_prices.leverage_ratio_λ
-    plot_transtion_path_eta_25_20 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transtion_path_eta_25_20 = plot!(transtion_path_eta_25_20, linecolor = :blue, linewidth = 3, legend=:none)
-    Plots.savefig(plot_transtion_path_eta_25_20, pwd() * "\\figures\\plot_transtion_path_eta_25_20.pdf")
+    transition_path_eta_25_20 = variables_T_25_20.aggregate_prices.leverage_ratio_λ
+    plot_transition_path_eta_25_20 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transition_path_eta_25_20 = plot!(transition_path_eta_25_20, linecolor = :blue, linewidth = 3, legend=:none)
+    Plots.savefig(plot_transition_path_eta_25_20, pwd() * "\\figures\\plot_transition_path_eta_25_20.pdf")
 
     # save transition path
-    @save "results_transition_eta.jld2" transtion_path_eta_25_30 transtion_path_eta_25_20
+    @save "results_transition_eta.jld2" transition_path_eta_25_30 transition_path_eta_25_20
 
     # compute welfare metrics from η = 0.25 to η = 0.30
     welfare_CEV_25_30_good_with_debt = 100 * sum(((variables_T_25_30.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] ./ variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
@@ -498,7 +498,7 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     variables_benchmark = variables_function(parameters_benchmark; λ = λ_all[η_benchmark_index])
     solve_economy_function!(variables_benchmark, parameters_benchmark)
 
-    # set parameters for the computation of transtion path
+    # set parameters for the computation of transition path
     T_size = 80
     T_degree = 15.0
     iter_max = 500
@@ -524,7 +524,7 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     end
     initial_z = ones(T_size+2)
 
-    # solve transtion path from benchmark to all cases
+    # solve transition path from benchmark to all cases
     for η_i in 1:length(η_all)
 
         # solve the equilibrium with the new policy
@@ -533,7 +533,7 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
         variables_new = variables_function(parameters_new; λ = λ_all[η_i])
         solve_economy_function!(variables_new, parameters_new)
 
-        # solve the transtion path
+        # solve the transition path
         println("Solving transitions from η = $η_benchmark to η = $(η_all[η_i])...")
         if load_initial_value == true
             variables_T = variables_T_function(transition_path_eta_all[:,η_i], initial_z, variables_benchmark, variables_new, parameters_new)
@@ -542,32 +542,54 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
         end
         transitional_dynamic_λ_function!(variables_T, variables_benchmark, variables_new, parameters_new; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
         transition_path_eta = variables_T.aggregate_prices.leverage_ratio_λ
-        plot_transtion_path_eta = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-        plot_transtion_path_eta = plot!(transition_path_eta, linecolor = :blue, linewidth = 3, legend=:none)
-        plot_transtion_path_eta
-        Plots.savefig(plot_transtion_path_eta, pwd() * "\\figures\\transition path\\eta\\plot_transtion_path_eta_$(η_benchmark)_$(η_all[η_i]).pdf")
+        plot_transition_path_eta = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+        plot_transition_path_eta = plot!(transition_path_eta, linecolor = :blue, linewidth = 3, legend=:none)
+        plot_transition_path_eta
+        Plots.savefig(plot_transition_path_eta, pwd() * "\\figures\\transition path\\eta\\plot_transition_path_eta_$(η_benchmark)_$(η_all[η_i]).pdf")
 
         # update the converged transition path of banking leverage ratio and compute welfare
         if load_initial_value == true
-            
-            transition_path_eta_all[:,η_i] = transition_path_eta
-            
-            welfare_CEV_all_good_with_debt[η_i] = 100 * sum(((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] ./ variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
-            
-            welfare_CEV_all_good_without_debt[η_i] = 100 * sum(((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
-            
-            welfare_CEV_all_good[η_i] = 100 * sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
-            
-            welfare_CEV_all_bad[η_i] =  100 * sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
 
-            welfare_CEV_all[η_i] = 100 * (sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
-            
+            transition_path_eta_all[:,η_i] = transition_path_eta
+
+            # welfare_CEV_all_good_with_debt[η_i] = 100 * sum(((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] ./ variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
+
+            W_old_good_with_debt = sum(variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:] .* variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])
+            W_new_good_with_debt = sum(variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] .* variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])
+            welfare_CEV_all_good_with_debt[η_i] = 100 * ((W_new_good_with_debt / W_old_good_with_debt) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
+            # welfare_CEV_all_good_without_debt[η_i] = 100 * sum(((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
+
+            W_old_good_without_debt = sum(variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])
+            W_new_good_without_debt = sum(variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])
+            welfare_CEV_all_good_without_debt[η_i] = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
+            # welfare_CEV_all_good[η_i] = 100 * sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
+
+            W_old_good = W_old_good_with_debt + W_old_good_without_debt
+            W_new_good = W_new_good_with_debt + W_new_good_without_debt
+            welfare_CEV_all_good[η_i] = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
+            # welfare_CEV_all_bad[η_i] =  100 * sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
+
+            W_old_bad = sum(variables_benchmark.V_pos[:,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])
+            W_new_bad = sum(variables_T.V_pos[:,:,:,:,:,2] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])
+            welfare_CEV_all_bad[η_i] = 100 * ((W_new_bad / W_old_bad) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
+            # welfare_CEV_all[η_i] = 100 * (sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
+
+            # W_old = sum(variables_benchmark.V[:,:,:,:,:] .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(variables_benchmark.V_pos[:,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])
+            # W_new = sum(variables_T.V[:,:,:,:,:,2] .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(variables_T.V_pos[:,:,:,:,:,2] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])
+            W_old = W_old_good + W_old_bad
+            W_new = W_new_good + W_new_bad
+            welfare_CEV_all[η_i] = 100 * ((W_new / W_old) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
             welfare_favor_all_good_with_debt[η_i] = 100 * sum((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] .>= variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
-            
+
             welfare_favor_all_good_without_debt[η_i] = 100 * sum((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] .>= variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
-            
+
             welfare_favor_all_good[η_i] = 100 * sum((variables_T.V[:,:,:,:,:,2] .>= variables_benchmark.V) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
-            
+
             welfare_favor_all_bad[η_i] = 100 * sum((variables_T.V_pos[:,:,:,:,:,2] .>= variables_benchmark.V_pos) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
 
             welfare_favor_all[η_i] = 100 * (sum((variables_T.V[:,:,:,:,:,2] .>= variables_benchmark.V) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum((variables_T.V_pos[:,:,:,:,:,2] .> variables_benchmark.V_pos) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
@@ -575,23 +597,23 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
         else
 
             transition_path_eta_all = hcat(transition_path_eta_all, transition_path_eta)
-            
+
             welfare_CEV_all_good_with_debt = vcat(welfare_CEV_all_good_with_debt, 100 * sum(((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] ./ variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1]))))
-            
+
             welfare_CEV_all_good_without_debt = vcat(welfare_CEV_all_good_without_debt, 100 * sum(((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1]))))
-            
+
             welfare_CEV_all_good = vcat(welfare_CEV_all_good, 100 * sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1]))))
-            
+
             welfare_CEV_all_bad = vcat(welfare_CEV_all_bad, 100 * sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))))
 
             welfare_CEV_all = vcat(welfare_CEV_all, 100 * (sum(((variables_T.V[:,:,:,:,:,2] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(((variables_T.V_pos[:,:,:,:,:,2] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
-            
+
             welfare_favor_all_good_with_debt = vcat(welfare_favor_all_good_with_debt, 100 * sum((variables_T.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,2] .>= variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1]))))
-            
+
             welfare_favor_all_good_without_debt = vcat(welfare_favor_all_good_without_debt, 100 * sum((variables_T.V[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] .>= variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1]))))
-            
+
             welfare_favor_all_good = vcat(welfare_favor_all_good, 100 * sum((variables_T.V[:,:,:,:,:,2] .>= variables_benchmark.V) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1]))))
-            
+
             welfare_favor_all_bad = vcat(welfare_favor_all_bad, 100 * sum((variables_T.V_pos[:,:,:,:,:,2] .>= variables_benchmark.V_pos) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))))
 
             welfare_favor_all = vcat(welfare_favor_all,  100 * (sum((variables_T.V[:,:,:,:,:,2] .>= variables_benchmark.V) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum((variables_T.V_pos[:,:,:,:,:,2] .> variables_benchmark.V_pos) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
@@ -645,52 +667,81 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
         solve_economy_function!(variables_new, parameters_new)
 
         # compute welfare
-        welfare_CEV_all_good_with_debt_NFF[η_i] = 100 * sum(((variables_new.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:] ./ variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
-        
-        welfare_CEV_all_good_without_debt_NFF[η_i] = 100 * sum(((variables_new.V[parameters_benchmark.a_ind_zero:end,:,:,:,:] ./ variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
-        
-        welfare_CEV_all_good_NFF[η_i] = 100 * sum(((variables_new.V[:,:,:,:,:] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
-        
-        welfare_CEV_all_bad_NFF[η_i] =  100 * sum(((variables_new.V_pos[:,:,:,:,:] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
+        # welfare_CEV_all_good_with_debt_NFF[η_i] = 100 * sum(((variables_new.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:] ./ variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
 
-        welfare_CEV_all_NFF[η_i] = 100 * (sum(((variables_new.V[:,:,:,:,:] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(((variables_new.V_pos[:,:,:,:,:] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
-        
+        W_old_good_with_debt_NFF = sum(variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:] .* variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])
+        W_new_good_with_debt_NFF = sum(variables_new.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:] .* variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])
+        welfare_CEV_all_good_with_debt_NFF[η_i] = 100 * ((W_new_good_with_debt_NFF / W_old_good_with_debt_NFF) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
+        # welfare_CEV_all_good_without_debt_NFF[η_i] = 100 * sum(((variables_new.V[parameters_benchmark.a_ind_zero:end,:,:,:,:] ./ variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
+
+        W_old_good_without_debt_NFF = sum(variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])
+        W_new_good_without_debt_NFF = sum(variables_new.V[parameters_benchmark.a_ind_zero:end,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])
+        welfare_CEV_all_good_without_debt_NFF[η_i] = 100 * ((W_new_good_without_debt_NFF / W_old_good_without_debt_NFF) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
+        # welfare_CEV_all_good_NFF[η_i] = 100 * sum(((variables_new.V[:,:,:,:,:] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
+
+        W_old_good_NFF = W_old_good_with_debt_NFF + W_old_good_without_debt_NFF
+        W_new_good_NFF = W_new_good_with_debt_NFF + W_new_good_without_debt_NFF
+        welfare_CEV_all_good_NFF[η_i] = 100 * ((W_new_good_NFF / W_old_good_NFF) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
+        # welfare_CEV_all_bad_NFF[η_i] =  100 * sum(((variables_new.V_pos[:,:,:,:,:] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
+
+        W_old_bad_NFF = sum(variables_benchmark.V_pos[:,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])
+        W_new_bad_NFF = sum(variables_new.V_pos[:,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])
+        welfare_CEV_all_bad_NFF[η_i] = 100 * ((W_new_bad_NFF / W_old_bad_NFF) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
+        # welfare_CEV_all_NFF[η_i] = 100 * (sum(((variables_new.V[:,:,:,:,:] ./ variables_benchmark.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(((variables_new.V_pos[:,:,:,:,:] ./ variables_benchmark.V_pos) .^ (1.0/(1.0-parameters_benchmark.σ)) .- 1.0) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
+
+        # W_old_NFF = sum(variables_benchmark.V[:,:,:,:,:] .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(variables_benchmark.V_pos[:,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])
+        # W_new_NFF = sum(variables_new.V[:,:,:,:,:] .* variables_benchmark.μ[:,:,:,:,:,1]) + sum(variables_new.V_pos[:,:,:,:,:] .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])
+        W_old_NFF = W_old_good_NFF + W_old_bad_NFF
+        W_new_NFF = W_new_good_NFF + W_new_bad_NFF
+        welfare_CEV_all_NFF[η_i] = 100 * ((W_new_NFF / W_old_NFF) ^ (1.0/(1.0-parameters_benchmark.σ)) - 1.0)
+
         welfare_favor_all_good_with_debt_NFF[η_i] = 100 * sum((variables_new.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:] .>= variables_benchmark.V[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:]) .* (variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_benchmark.μ[1:(parameters_benchmark.a_ind_zero-1),:,:,:,:,1])))
-        
+
         welfare_favor_all_good_without_debt_NFF[η_i] = 100 * sum((variables_new.V[parameters_benchmark.a_ind_zero:end,:,:,:,:] .>= variables_benchmark.V[parameters_benchmark.a_ind_zero:end,:,:,:,:]) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,1])))
-        
+
         welfare_favor_all_good_NFF[η_i] = 100 * sum((variables_new.V[:,:,:,:,:] .>= variables_benchmark.V) .* (variables_benchmark.μ[:,:,:,:,:,1] ./ sum(variables_benchmark.μ[:,:,:,:,:,1])))
-        
+
         welfare_favor_all_bad_NFF[η_i] = 100 * sum((variables_new.V_pos[:,:,:,:,:] .>= variables_benchmark.V_pos) .* (variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2])))
 
         welfare_favor_all_NFF[η_i] = 100 * (sum((variables_new.V[:,:,:,:,:] .>= variables_benchmark.V) .* variables_benchmark.μ[:,:,:,:,:,1]) + sum((variables_new.V_pos[:,:,:,:,:] .> variables_benchmark.V_pos) .* variables_benchmark.μ[parameters_benchmark.a_ind_zero:end,:,:,:,:,2]))
-    end    
+    end
 
     # save results
     @save "results_welfare_eta_all_NFF.jld2" η_all λ_all_NFF welfare_CEV_all_good_with_debt_NFF welfare_CEV_all_good_without_debt_NFF welfare_CEV_all_good_NFF welfare_CEV_all_bad_NFF welfare_CEV_all_NFF welfare_favor_all_good_with_debt_NFF welfare_favor_all_good_without_debt_NFF welfare_favor_all_good_NFF welfare_favor_all_bad_NFF welfare_favor_all_NFF
 
     # plot welfare results across η
     η_all = vcat(η_all, η_benchmark)
+    
+    welfare_CEV_all_good = vcat(welfare_CEV_all_good, 0.0)
+    welfare_CEV_all_bad = vcat(welfare_CEV_all_bad, 0.0)
     welfare_CEV_all = vcat(welfare_CEV_all, 0.0)
+
     welfare_favor_all = vcat(welfare_favor_all, 100.0)
     welfare_CEV_all_NFF = vcat(welfare_CEV_all_NFF, 0.0)
     welfare_favor_all_NFF = vcat(welfare_favor_all_NFF, 100.0)
 
+    welfare_CEV_all_good = welfare_CEV_all_good[sortperm(η_all)]
+    welfare_CEV_all_bad = welfare_CEV_all_bad[sortperm(η_all)]
     welfare_CEV_all = welfare_CEV_all[sortperm(η_all)]
     welfare_favor_all = welfare_favor_all[sortperm(η_all)]
+
     welfare_CEV_all_NFF = welfare_CEV_all_NFF[sortperm(η_all)]
     welfare_favor_all_NFF = welfare_favor_all_NFF[sortperm(η_all)]
     η_all = η_all[sortperm(η_all)]
 
     plot_welfare_CEV_all = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
-    plot_welfare_CEV_all = plot!(η_all, welfare_CEV_all, linecolor = :blue, linewidth = 3, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all = plot!(η_all, welfare_CEV_all_NFF, linecolor = :red, linewidth = 3, linestyle = :dash, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all = plot!(η_all, welfare_CEV_all, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all = plot!(η_all, welfare_CEV_all_NFF, linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all
     Plots.savefig(plot_welfare_CEV_all, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all.pdf")
 
     plot_welfare_favor_all = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
-    plot_welfare_favor_all = plot!(η_all, welfare_favor_all, linecolor = :blue, linewidth = 3, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
-    plot_welfare_favor_all = plot!(η_all, welfare_favor_all_NFF, linecolor = :red, linewidth = 3, linestyle = :dash, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
+    plot_welfare_favor_all = plot!(η_all, welfare_favor_all, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
+    plot_welfare_favor_all = plot!(η_all, welfare_favor_all_NFF, linecolor = :red, linewidth = 3, linestyle = :dash, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_favor_all
     Plots.savefig(plot_welfare_favor_all, pwd() * "\\figures\\transition path\\eta\\plot_welfare_favor_all.pdf")
 
@@ -750,7 +801,7 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     # set parameters for computation
     load_initial_value = true
     if load_initial_value == true
-        @load "results_transition_p_h.jld2" transtion_path_p_h_10_12 transtion_path_p_h_10_8
+        @load "results_transition_p_h.jld2" transition_path_p_h_10_12 transition_path_p_h_10_8
     end
     T_size = 80
     T_degree = 15.0
@@ -762,33 +813,33 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     # from p_h = 1 / 10 to p_h = 1 / 12
     println("Solving transitions from p_h = $p_h_10 to p_h = $p_h_12...")
     if load_initial_value == true
-        variables_T_10_12 = variables_T_function(transtion_path_p_h_10_12, initial_z, variables_10, variables_12, parameters_12)
+        variables_T_10_12 = variables_T_function(transition_path_p_h_10_12, initial_z, variables_10, variables_12, parameters_12)
     else
         variables_T_10_12 = variables_T_function(variables_10, variables_12, parameters_12; T_size = T_size, T_degree = T_degree)
     end
     transitional_dynamic_λ_function!(variables_T_10_12, variables_10, variables_12, parameters_12; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
-    transtion_path_p_h_10_12 = variables_T_10_12.aggregate_prices.leverage_ratio_λ
-    plot_transtion_path_p_h_10_12 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transtion_path_p_h_10_12 = plot!(transtion_path_p_h_10_12, linecolor = :blue, linewidth = 3, legend=:none)
-    plot_transtion_path_p_h_10_12
-    Plots.savefig(plot_transtion_path_p_h_10_12, pwd() * "\\figures\\plot_transtion_path_p_h_10_12.pdf")
+    transition_path_p_h_10_12 = variables_T_10_12.aggregate_prices.leverage_ratio_λ
+    plot_transition_path_p_h_10_12 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transition_path_p_h_10_12 = plot!(transition_path_p_h_10_12, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_p_h_10_12
+    Plots.savefig(plot_transition_path_p_h_10_12, pwd() * "\\figures\\plot_transition_path_p_h_10_12.pdf")
 
     # from p_h = 1 / 10 to p_h = 1 / 8
     println("Solving transitions from p_h = $p_h_10 to p_h = $p_h_8...")
     if load_initial_value == true
-        variables_T_10_8 = variables_T_function(transtion_path_p_h_10_8, initial_z, variables_10, variables_8, parameters_8)
+        variables_T_10_8 = variables_T_function(transition_path_p_h_10_8, initial_z, variables_10, variables_8, parameters_8)
     else
         variables_T_10_8 = variables_T_function(variables_10, variables_8, parameters_8; T_size = T_size, T_degree = T_degree)
     end
     transitional_dynamic_λ_function!(variables_T_10_8, variables_10, variables_8, parameters_8; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
-    transtion_path_p_h_10_8 = variables_T_10_8.aggregate_prices.leverage_ratio_λ
-    plot_transtion_path_p_h_10_8 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transtion_path_p_h_10_8 = plot!(transtion_path_p_h_10_8, linecolor = :blue, linewidth = 3, legend=:none)
-    plot_transtion_path_p_h_10_8
-    Plots.savefig(plot_transtion_path_p_h_10_8, pwd() * "\\figures\\plot_transtion_path_p_h_10_8.pdf")
+    transition_path_p_h_10_8 = variables_T_10_8.aggregate_prices.leverage_ratio_λ
+    plot_transition_path_p_h_10_8 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transition_path_p_h_10_8 = plot!(transition_path_p_h_10_8, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_p_h_10_8
+    Plots.savefig(plot_transition_path_p_h_10_8, pwd() * "\\figures\\plot_transition_path_p_h_10_8.pdf")
 
     # save transition path
-    @save "results_transition_p_h.jld2" transtion_path_p_h_10_12 transtion_path_p_h_10_8
+    @save "results_transition_p_h.jld2" transition_path_p_h_10_12 transition_path_p_h_10_8
 
     # compute welfare metrics from p_h = 1/10 to p_h = 1/12
     welfare_CEV_10_12_good_with_debt = 100 * sum(((variables_T_10_12.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] ./ variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
@@ -873,7 +924,7 @@ if Indicator_solve_transitional_dynamics_MIT_z == true
     slow_updating_transitional_dynamics = 0.1
 
     # set up transition path of MIT shock to z
-    ρ_z = 0.85
+    ρ_z = 0.80
     σ_z = 0.01
     path_z_negative = zeros(T_size+2)
     path_z_positive = zeros(T_size+2)
@@ -885,18 +936,94 @@ if Indicator_solve_transitional_dynamics_MIT_z == true
     path_z_positive = exp.(path_z_positive)
 
     # set up transition path of banking leverage ratio
-    load_initial_value = false
+    load_initial_value = true
     if load_initial_value == true
-        @load "results_transition_MIT_z.jld2" transtion_path_MIT_z_negative transtion_path_MIT_z_positive
+        @load "results_transition_MIT_z.jld2" transition_path_MIT_z_negative_banking_leverage transition_path_MIT_z_positive_banking_leverage
     else
-        transtion_path_MIT_z_negative = path_z_positive .* variables_benchmark.aggregate_variables.leverage_ratio
-        transtion_path_MIT_z_positive = path_z_negative .* variables_benchmark.aggregate_variables.leverage_ratio
+        transition_path_MIT_z_negative_banking_leverage = path_z_positive .* variables_benchmark.aggregate_variables.leverage_ratio
+        transition_path_MIT_z_positive_banking_leverage = path_z_negative .* variables_benchmark.aggregate_variables.leverage_ratio
     end
 
     # solve the transition path of banking leverage ratio if negative shock
     println("Solving transitions path for negative MIT shock to z")
-    variables_T_MIT_z_negative = variables_T_function(transtion_path_MIT_z_negative, path_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark)
+    variables_T_MIT_z_negative = variables_T_function(transition_path_MIT_z_negative_banking_leverage, path_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark)
     transitional_dynamic_λ_function!(variables_T_MIT_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
+    transition_path_MIT_z_negative_banking_leverage = variables_T_MIT_z_negative.aggregate_prices.leverage_ratio_λ
+    plot_transition_path_MIT_z_negative_banking_leverage = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transition_path_MIT_z_negative_banking_leverage = plot!(transition_path_MIT_z_negative_banking_leverage, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_MIT_z_negative_banking_leverage
+    Plots.savefig(plot_transition_path_MIT_z_negative_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_negative_banking_leverage.pdf")
+
+    # solve the transition path of banking leverage ratio if positive shock
+    println("Solving transitions path for negative MIT shock to z")
+    variables_T_MIT_z_positive = variables_T_function(transition_path_MIT_z_positive_banking_leverage, path_z_positive, variables_benchmark, variables_benchmark, parameters_benchmark)
+    transitional_dynamic_λ_function!(variables_T_MIT_z_positive, variables_benchmark, variables_benchmark, parameters_benchmark; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
+    transition_path_MIT_z_positive_banking_leverage = variables_T_MIT_z_positive.aggregate_prices.leverage_ratio_λ
+    plot_transition_path_MIT_z_positive_banking_leverage = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transition_path_MIT_z_positive_banking_leverage = plot!(transition_path_MIT_z_positive_banking_leverage, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_MIT_z_positive_banking_leverage
+    Plots.savefig(plot_transition_path_MIT_z_positive_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_positive_banking_leverage.pdf")
+
+    # save transition path
+    @save "results_transition_MIT_z.jld2" transition_path_MIT_z_negative_banking_leverage transition_path_MIT_z_positive_banking_leverage
+
+    #========================#
+    # plot impulse responses #
+    #========================#
+    plot((path_z_negative .- 1.0) * 100, title = "Negative MIT Shock to z", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_variables.leverage_ratio .- variables_benchmark.aggregate_variables.leverage_ratio) ./ variables_benchmark.aggregate_variables.leverage_ratio * 100, title = "Banking Leverage Ratio", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_variables.N .- variables_benchmark.aggregate_variables.N) ./ variables_benchmark.aggregate_variables.N * 100, title = "Banking Net Worth", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_variables.K_p .- variables_benchmark.aggregate_variables.K) ./ variables_benchmark.aggregate_variables.K * 100, title = "Aggregate Physical Capital", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    # plot((variables_T_MIT_z_negative.aggregate_prices.K_p_λ .- variables_benchmark.aggregate_prices.K_λ) ./ variables_benchmark.aggregate_prices.K_λ * 100, title = "Aggregate Physical Capital (supply side)", legend = :none)
+
+    plot((variables_T_MIT_z_negative.aggregate_variables.L_p .- variables_benchmark.aggregate_variables.L) ./ variables_benchmark.aggregate_variables.L * 100, title = "Aggregate Unsecured Loans", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_variables.share_of_filers .- variables_benchmark.aggregate_variables.share_of_filers) ./ variables_benchmark.aggregate_variables.share_of_filers * 100, title = "Share of Filers", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_variables.avg_loan_rate .- variables_benchmark.aggregate_variables.avg_loan_rate) ./ variables_benchmark.aggregate_variables.avg_loan_rate * 100, title = "Average Interest Rate", legend = :none,markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_variables.share_in_debts .- variables_benchmark.aggregate_variables.share_in_debts) ./ variables_benchmark.aggregate_variables.share_in_debts * 100, title = "Share in Debts", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot(((variables_T_MIT_z_negative.aggregate_variables.share_of_filers ./ variables_T_MIT_z_negative.aggregate_variables.share_in_debts) .- (variables_benchmark.aggregate_variables.share_of_filers / variables_benchmark.aggregate_variables.share_in_debts)) ./ (variables_benchmark.aggregate_variables.share_of_filers / variables_benchmark.aggregate_variables.share_in_debts) * 100, title = "Share of Filers (cond.)", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_variables.debt_to_earning_ratio .- variables_benchmark.aggregate_variables.debt_to_earning_ratio) ./ variables_benchmark.aggregate_variables.debt_to_earning_ratio * 100, title = "Debt-to-Earnings Ratio", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_prices.λ .- variables_benchmark.aggregate_prices.λ) ./ variables_benchmark.aggregate_prices.λ * 100, title = "Incentive Multiplier", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_prices.ι_λ .- variables_benchmark.aggregate_prices.ι_λ) ./ variables_benchmark.aggregate_prices.ι_λ * 100, title = "Incentive Premium", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_negative.aggregate_prices.w_λ .- variables_benchmark.aggregate_prices.w_λ) ./ variables_benchmark.aggregate_prices.w_λ * 100, title = "Wage", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    #===#
+    plot((path_z_positive .- 1.0) * 100, title = "Negative MIT Shock to z", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_variables.N .- variables_benchmark.aggregate_variables.N) ./ variables_benchmark.aggregate_variables.N * 100, title = "Banking Net Worth", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_variables.K_p .- variables_benchmark.aggregate_variables.K) ./ variables_benchmark.aggregate_variables.K * 100, title = "Aggregate Physical Capital", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_variables.L_p .- variables_benchmark.aggregate_variables.L) ./ variables_benchmark.aggregate_variables.L * 100, title = "Aggregate Unsecured Loans", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_variables.share_of_filers .- variables_benchmark.aggregate_variables.share_of_filers) ./ variables_benchmark.aggregate_variables.share_of_filers * 100, title = "Share of Filers", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_variables.avg_loan_rate .- variables_benchmark.aggregate_variables.avg_loan_rate) ./ variables_benchmark.aggregate_variables.avg_loan_rate * 100, title = "Average Interest Rate", legend = :none,markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_variables.share_in_debts .- variables_benchmark.aggregate_variables.share_in_debts) ./ variables_benchmark.aggregate_variables.share_in_debts * 100, title = "Share in Debts", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_variables.leverage_ratio .- variables_benchmark.aggregate_variables.leverage_ratio) ./ variables_benchmark.aggregate_variables.leverage_ratio * 100, title = "Banking Leverage Ratio", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot(((variables_T_MIT_z_positive.aggregate_variables.share_of_filers ./ variables_T_MIT_z_positive.aggregate_variables.share_in_debts) .- (variables_benchmark.aggregate_variables.share_of_filers / variables_benchmark.aggregate_variables.share_in_debts)) ./ (variables_benchmark.aggregate_variables.share_of_filers / variables_benchmark.aggregate_variables.share_in_debts) * 100, title = "Share of Filers (cond.)", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_variables.debt_to_earning_ratio .- variables_benchmark.aggregate_variables.debt_to_earning_ratio) ./ variables_benchmark.aggregate_variables.debt_to_earning_ratio * 100, title = "Debt-to-Earnings Ratio", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_prices.λ .- variables_benchmark.aggregate_prices.λ) ./ variables_benchmark.aggregate_prices.λ * 100, title = "Incentive Multiplier", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_prices.ι_λ .- variables_benchmark.aggregate_prices.ι_λ) ./ variables_benchmark.aggregate_prices.ι_λ * 100, title = "Incentive Premium", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+
+    plot((variables_T_MIT_z_positive.aggregate_prices.w_λ .- variables_benchmark.aggregate_prices.w_λ) ./ variables_benchmark.aggregate_prices.w_λ * 100, title = "Wage", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
 end
 

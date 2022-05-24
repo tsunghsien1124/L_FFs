@@ -953,15 +953,16 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     # printout results
     data_spec = Any[
         "Wage Garnishment Rate" parameters.η #=1=#
-        "Liquidity Multiplier" variables.aggregate_prices.λ #=2=#
-        "Asset-to-Debt Ratio (Demand)" variables.aggregate_variables.KL_to_D_ratio #=3=#
-        "Asset-to-Debt Ratio (Supply)" variables.aggregate_prices.KL_to_D_ratio_λ #=4=#
-        "Difference" ED_KL_to_D_ratio #=5=#
-        "Leverage Ratio (Demand)" variables.aggregate_variables.leverage_ratio #=6=#
-        "Leverage Ratio (Supply)" variables.aggregate_prices.leverage_ratio_λ #=7=#
-        "Difference" ED_leverage_ratio #=8=#
+        "Probability of Bad History Removal" parameters.p_h #=2=#
+        "Liquidity Multiplier" variables.aggregate_prices.λ #=3=#
+        "Asset-to-Debt Ratio (Demand)" variables.aggregate_variables.KL_to_D_ratio #=4=#
+        "Asset-to-Debt Ratio (Supply)" variables.aggregate_prices.KL_to_D_ratio_λ #=5=#
+        "Difference" ED_KL_to_D_ratio #=6=#
+        "Leverage Ratio (Demand)" variables.aggregate_variables.leverage_ratio #=7=#
+        "Leverage Ratio (Supply)" variables.aggregate_prices.leverage_ratio_λ #=8=#
+        "Difference" ED_leverage_ratio #=9=#
     ]
-    pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [2, 4, 5, 7])
+    pretty_table(data_spec; header = ["Name", "Value"], alignment = [:l, :r], formatters = ft_round(8), body_hlines = [3, 5, 6, 8])
 
     # return excess demand
     return ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ

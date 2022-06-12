@@ -375,7 +375,7 @@ if Indicator_solve_transitional_dynamics_across_η == true
     transitional_dynamic_λ_function!(variables_T_25_30, variables_25, variables_30, parameters_30; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transition_path_eta_25_30 = variables_T_25_30.aggregate_prices.leverage_ratio_λ
     plot_transition_path_eta_25_30 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transition_path_eta_25_30 = plot!(transition_path_eta_25_30, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_eta_25_30 = plot!(transition_path_eta_25_30, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = :none)
     plot_transition_path_eta_25_30
     Plots.savefig(plot_transition_path_eta_25_30, pwd() * "\\figures\\plot_transition_path_eta_25_30.pdf")
 
@@ -389,27 +389,47 @@ if Indicator_solve_transitional_dynamics_across_η == true
     transitional_dynamic_λ_function!(variables_T_25_20, variables_25, variables_20, parameters_20; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transition_path_eta_25_20 = variables_T_25_20.aggregate_prices.leverage_ratio_λ
     plot_transition_path_eta_25_20 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transition_path_eta_25_20 = plot!(transition_path_eta_25_20, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_eta_25_20 = plot!(transition_path_eta_25_20, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = :none)
     Plots.savefig(plot_transition_path_eta_25_20, pwd() * "\\figures\\plot_transition_path_eta_25_20.pdf")
 
     # save transition path
     @save "results_transition_eta.jld2" transition_path_eta_25_30 transition_path_eta_25_20
 
     # compute welfare metrics from η = 0.25 to η = 0.30
-    ind_large_debt = zeros(size(variables_25.V))
-    for ν_i = 1:parameters_25.ν_size, e_3_i = 1:parameters_25.e_3_size, e_2_i = 1:parameters_25.e_2_size, e_1_i = 1:parameters_25.e_1_size, a_i = 1:parameters_25.a_size_neg
-        if abs(parameters_25.a_grid_neg[a_i]) / (variables_25.aggregate_prices.w_λ * exp(parameters_25.e_1_grid[e_1_i] + parameters_25.e_2_grid[e_2_i] + parameters_25.e_3_grid[e_3_i])) > 5 * variables_25.aggregate_variables.debt_to_earning_ratio
-        ind_large_debt[a_i,e_1_i,e_2_i,e_3_i,ν_i] = 1.0
-        end
-    end
-    welfare_CEV_25_30_good_with_large_debt = 100 * sum((ind_large_debt .* ((variables_T_25_30.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0)) .* ((ind_large_debt .* variables_25.μ[:,:,:,:,:,1]) ./ sum(ind_large_debt .* variables_25.μ[:,:,:,:,:,1])))
-    welfare_CEV_25_30_good_with_debt = 100 * sum(((variables_T_25_30.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] ./ variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
-    welfare_CEV_25_30_good_without_debt = 100 * sum(((variables_T_25_30.V[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
-    welfare_CEV_25_30_good = 100 * sum(((variables_T_25_30.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
-    welfare_CEV_25_30_bad =  100 * sum(((variables_T_25_30.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
-    welfare_CEV_25_30 = 100 * (sum(((variables_T_25_30.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[:,:,:,:,:,1]) + sum(((variables_T_25_30.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
+    # ind_large_debt = zeros(size(variables_25.V))
+    # for ν_i = 1:parameters_25.ν_size, e_3_i = 1:parameters_25.e_3_size, e_2_i = 1:parameters_25.e_2_size, e_1_i = 1:parameters_25.e_1_size, a_i = 1:parameters_25.a_size_neg
+    #     if abs(parameters_25.a_grid_neg[a_i]) / (variables_25.aggregate_prices.w_λ * exp(parameters_25.e_1_grid[e_1_i] + parameters_25.e_2_grid[e_2_i] + parameters_25.e_3_grid[e_3_i])) > 5 * variables_25.aggregate_variables.debt_to_earning_ratio
+    #     ind_large_debt[a_i,e_1_i,e_2_i,e_3_i,ν_i] = 1.0
+    #     end
+    # end
+    # welfare_CEV_25_30_good_with_large_debt = 100 * sum((ind_large_debt .* ((variables_T_25_30.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0)) .* ((ind_large_debt .* variables_25.μ[:,:,:,:,:,1]) ./ sum(ind_large_debt .* variables_25.μ[:,:,:,:,:,1])))
+    # welfare_CEV_25_30_good_with_debt = 100 * sum(((variables_T_25_30.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] ./ variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
+    # welfare_CEV_25_30_good_without_debt = 100 * sum(((variables_T_25_30.V[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
+    # welfare_CEV_25_30_good = 100 * sum(((variables_T_25_30.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
+    # welfare_CEV_25_30_bad =  100 * sum(((variables_T_25_30.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
+    # welfare_CEV_25_30 = 100 * (sum(((variables_T_25_30.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[:,:,:,:,:,1]) + sum(((variables_T_25_30.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
 
-    welfare_favor_25_30_good_with_large_debt = 100 * sum((ind_large_debt .* (variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V[:,:,:,:,:])) .* ((ind_large_debt .* variables_25.μ[:,:,:,:,:,1]) ./ sum(ind_large_debt .* variables_25.μ[:,:,:,:,:,1])))
+    W_old_good_with_debt = sum(variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:] .* variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])
+    W_new_good_with_debt = sum(variables_T_25_30.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .* variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])
+    welfare_CEV_25_30_good_with_debt = 100 * ((W_new_good_with_debt / W_old_good_with_debt) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old_good_without_debt = sum(variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])
+    W_new_good_without_debt = sum(variables_T_25_30.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])
+    welfare_CEV_25_30_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old_good = W_old_good_with_debt + W_old_good_without_debt
+    W_new_good = W_new_good_with_debt + W_new_good_without_debt
+    welfare_CEV_25_30_good = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old_bad = sum(variables_25.V_pos[:,:,:,:,:] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])
+    W_new_bad = sum(variables_T_25_30.V_pos[:,:,:,:,:,2] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])
+    welfare_CEV_25_30_bad = 100 * ((W_new_bad / W_old_bad) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old = W_old_good + W_old_bad
+    W_new = W_new_good + W_new_bad
+    welfare_CEV_25_30 = 100 * ((W_new / W_old) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    # welfare_favor_25_30_good_with_large_debt = 100 * sum((ind_large_debt .* (variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V[:,:,:,:,:])) .* ((ind_large_debt .* variables_25.μ[:,:,:,:,:,1]) ./ sum(ind_large_debt .* variables_25.μ[:,:,:,:,:,1])))
     welfare_favor_25_30_good_with_debt = 100 * sum((variables_T_25_30.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .> variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
     welfare_favor_25_30_good_without_debt = 100 * sum((variables_T_25_30.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .> variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
     welfare_favor_25_30_good = 100 * sum((variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
@@ -417,11 +437,31 @@ if Indicator_solve_transitional_dynamics_across_η == true
     welfare_favor_25_30 = 100 * (sum((variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V) .* variables_25.μ[:,:,:,:,:,1]) + sum((variables_T_25_30.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
 
     # compute welfare metrics from η = 0.25 to η = 0.20
-    welfare_CEV_25_20_good_with_debt = 100 * sum(((variables_T_25_20.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] ./ variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
-    welfare_CEV_25_20_good_without_debt = 100 * sum(((variables_T_25_20.V[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
-    welfare_CEV_25_20_good = 100 * sum(((variables_T_25_20.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
-    welfare_CEV_25_20_bad =  100 * sum(((variables_T_25_20.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
-    welfare_CEV_25_20 = 100 * (sum(((variables_T_25_20.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[:,:,:,:,:,1]) + sum(((variables_T_25_20.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
+    # welfare_CEV_25_20_good_with_debt = 100 * sum(((variables_T_25_20.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] ./ variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
+    # welfare_CEV_25_20_good_without_debt = 100 * sum(((variables_T_25_20.V[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
+    # welfare_CEV_25_20_good = 100 * sum(((variables_T_25_20.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
+    # welfare_CEV_25_20_bad =  100 * sum(((variables_T_25_20.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
+    # welfare_CEV_25_20 = 100 * (sum(((variables_T_25_20.V[:,:,:,:,:,2] ./ variables_25.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[:,:,:,:,:,1]) + sum(((variables_T_25_20.V_pos[:,:,:,:,:,2] ./ variables_25.V_pos) .^ (1.0/(1.0-parameters_25.σ)) .- 1.0) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
+
+    W_old_good_with_debt = sum(variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:] .* variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])
+    W_new_good_with_debt = sum(variables_T_25_20.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .* variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])
+    welfare_CEV_25_20_good_with_debt = 100 * ((W_new_good_with_debt / W_old_good_with_debt) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old_good_without_debt = sum(variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])
+    W_new_good_without_debt = sum(variables_T_25_20.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])
+    welfare_CEV_25_20_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old_good = W_old_good_with_debt + W_old_good_without_debt
+    W_new_good = W_new_good_with_debt + W_new_good_without_debt
+    welfare_CEV_25_20_good = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old_bad = sum(variables_25.V_pos[:,:,:,:,:] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])
+    W_new_bad = sum(variables_T_25_20.V_pos[:,:,:,:,:,2] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])
+    welfare_CEV_25_20_bad = 100 * ((W_new_bad / W_old_bad) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old = W_old_good + W_old_bad
+    W_new = W_new_good + W_new_bad
+    welfare_CEV_25_20 = 100 * ((W_new / W_old) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
 
     welfare_favor_25_20_good_with_debt = 100 * sum((variables_T_25_20.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .> variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
     welfare_favor_25_20_good_without_debt = 100 * sum((variables_T_25_20.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .> variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
@@ -445,11 +485,11 @@ if Indicator_solve_transitional_dynamics_across_η == true
         "" "" "" "" "" ""
         "Total" HHs_total welfare_CEV_25_20 welfare_favor_25_20 welfare_CEV_25_30 welfare_favor_25_30
         "" "" "" "" "" ""
-        "Have good credit history" HHs_good welfare_CEV_25_20_good welfare_favor_25_20_good welfare_CEV_25_30_good welfare_favor_25_30_good
+        "Good credit history" HHs_good welfare_CEV_25_20_good welfare_favor_25_20_good welfare_CEV_25_30_good welfare_favor_25_30_good
         "Indebted" HHs_good_debt_cond welfare_CEV_25_20_good_with_debt welfare_favor_25_20_good_with_debt welfare_CEV_25_30_good_with_debt welfare_favor_25_30_good_with_debt
         "Not indebted" HHs_good_without_debt_cond welfare_CEV_25_20_good_without_debt welfare_favor_25_20_good_without_debt welfare_CEV_25_30_good_without_debt welfare_favor_25_30_good_without_debt
         "" "" "" "" "" ""
-        "Have bad credit history" HHs_bad welfare_CEV_25_20_bad welfare_favor_25_20_bad welfare_CEV_25_30_bad welfare_favor_25_30_bad
+        "Bad credit history" HHs_bad welfare_CEV_25_20_bad welfare_favor_25_20_bad welfare_CEV_25_30_bad welfare_favor_25_30_bad
     ]
     display(results_welfare_across_η)
 
@@ -816,11 +856,23 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     plot_welfare_CEV_all_good_with_debt
     Plots.savefig(plot_welfare_CEV_all_good_with_debt, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_with_debt.pdf")
 
+    plot_welfare_CEV_all_good_with_debt_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks = collect(0.20:0.05:0.30))
+    plot_welfare_CEV_all_good_with_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_with_debt[1:3], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_with_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_with_debt_NFF[1:3], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_with_debt_selected
+    Plots.savefig(plot_welfare_CEV_all_good_with_debt_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_with_debt_selected.pdf")
+
     plot_welfare_CEV_all_good_without_debt = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
     plot_welfare_CEV_all_good_without_debt = plot!(η_all, welfare_CEV_all_good_without_debt, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_without_debt = plot!(η_all, welfare_CEV_all_good_without_debt_NFF, linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{withoutout\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_without_debt
     Plots.savefig(plot_welfare_CEV_all_good_without_debt, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_without_debt.pdf")
+
+    plot_welfare_CEV_all_good_without_debt_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks = collect(0.20:0.05:0.30))
+    plot_welfare_CEV_all_good_without_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_without_debt[1:3], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_without_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_without_debt_NFF[1:3], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_without_debt_selected
+    Plots.savefig(plot_welfare_CEV_all_good_without_debt_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_without_debt_selected.pdf")
 
     plot_welfare_CEV_all_good = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
     plot_welfare_CEV_all_good = plot!(η_all, welfare_CEV_all_good, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
@@ -828,17 +880,35 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     plot_welfare_CEV_all_good
     Plots.savefig(plot_welfare_CEV_all_good, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good.pdf")
 
+    plot_welfare_CEV_all_good_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks = collect(0.20:0.05:0.30))
+    plot_welfare_CEV_all_good_selected = plot!(η_all[1:3], welfare_CEV_all_good[1:3], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_selected = plot!(η_all[1:3], welfare_CEV_all_good_NFF[1:3], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_selected
+    Plots.savefig(plot_welfare_CEV_all_good_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_selected.pdf")
+
     plot_welfare_CEV_all_bad = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
     plot_welfare_CEV_all_bad = plot!(η_all, welfare_CEV_all_bad, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_bad = plot!(η_all, welfare_CEV_all_bad_NFF, linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{withoutout\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_bad
     Plots.savefig(plot_welfare_CEV_all_bad, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_bad.pdf")
 
+    plot_welfare_CEV_all_bad_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks = collect(0.20:0.05:0.30))
+    plot_welfare_CEV_all_bad_selected = plot!(η_all[1:3], welfare_CEV_all_bad[1:3], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_bad_selected = plot!(η_all[1:3], welfare_CEV_all_bad_NFF[1:3], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_bad_selected
+    Plots.savefig(plot_welfare_CEV_all_bad_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_bad_selected.pdf")
+
     plot_welfare_CEV_all = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
     plot_welfare_CEV_all = plot!(η_all, welfare_CEV_all, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
     plot_welfare_CEV_all = plot!(η_all, welfare_CEV_all_NFF, linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all
     Plots.savefig(plot_welfare_CEV_all, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all.pdf")
+
+    plot_welfare_CEV_all_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks = collect(0.20:0.05:0.30))
+    plot_welfare_CEV_all_selected = plot!(η_all[1:3], welfare_CEV_all[1:3], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_selected = plot!(η_all[1:3], welfare_CEV_all_NFF[1:3], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_selected
+    Plots.savefig(plot_welfare_CEV_all_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_selected.pdf")
 
     plot_welfare_CEV_all_newborn = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
     plot_welfare_CEV_all_newborn = plot!(η_all, welfare_CEV_all_newborn, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
@@ -875,6 +945,12 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     plot_welfare_favor_all = plot!(η_all, welfare_favor_all_NFF, linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_favor_all
     Plots.savefig(plot_welfare_favor_all, pwd() * "\\figures\\transition path\\eta\\plot_welfare_favor_all.pdf")
+
+    plot_welfare_favor_all_selected = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\eta \$")
+    plot_welfare_favor_all_selected = plot!(η_all[1:3], welfare_favor_all[1:3], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
+    plot_welfare_favor_all_selected = plot!(η_all[1:3], welfare_favor_all_NFF[1:3], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
+    plot_welfare_favor_all_selected
+    Plots.savefig(plot_welfare_favor_all_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_favor_all_selected.pdf")
 
 end
 
@@ -951,7 +1027,7 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     transitional_dynamic_λ_function!(variables_T_10_12, variables_10, variables_12, parameters_12; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transition_path_p_h_10_12 = variables_T_10_12.aggregate_prices.leverage_ratio_λ
     plot_transition_path_p_h_10_12 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transition_path_p_h_10_12 = plot!(transition_path_p_h_10_12, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_p_h_10_12 = plot!(transition_path_p_h_10_12, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = :none)
     plot_transition_path_p_h_10_12
     Plots.savefig(plot_transition_path_p_h_10_12, pwd() * "\\figures\\plot_transition_path_p_h_10_12.pdf")
 
@@ -965,7 +1041,7 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     transitional_dynamic_λ_function!(variables_T_10_8, variables_10, variables_8, parameters_8; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
     transition_path_p_h_10_8 = variables_T_10_8.aggregate_prices.leverage_ratio_λ
     plot_transition_path_p_h_10_8 = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transition_path_p_h_10_8 = plot!(transition_path_p_h_10_8, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_p_h_10_8 = plot!(transition_path_p_h_10_8, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = :none)
     plot_transition_path_p_h_10_8
     Plots.savefig(plot_transition_path_p_h_10_8, pwd() * "\\figures\\plot_transition_path_p_h_10_8.pdf")
 
@@ -973,11 +1049,31 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     @save "results_transition_p_h.jld2" transition_path_p_h_10_12 transition_path_p_h_10_8
 
     # compute welfare metrics from p_h = 1/10 to p_h = 1/12
-    welfare_CEV_10_12_good_with_debt = 100 * sum(((variables_T_10_12.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] ./ variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
-    welfare_CEV_10_12_good_without_debt = 100 * sum(((variables_T_10_12.V[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
-    welfare_CEV_10_12_good = 100 * sum(((variables_T_10_12.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
-    welfare_CEV_10_12_bad =  100 * sum(((variables_T_10_12.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
-    welfare_CEV_10_12 = 100 * (sum(((variables_T_10_12.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[:,:,:,:,:,1]) + sum(((variables_T_10_12.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+    # welfare_CEV_10_12_good_with_debt = 100 * sum(((variables_T_10_12.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] ./ variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
+    # welfare_CEV_10_12_good_without_debt = 100 * sum(((variables_T_10_12.V[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    # welfare_CEV_10_12_good = 100 * sum(((variables_T_10_12.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
+    # welfare_CEV_10_12_bad =  100 * sum(((variables_T_10_12.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    # welfare_CEV_10_12 = 100 * (sum(((variables_T_10_12.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[:,:,:,:,:,1]) + sum(((variables_T_10_12.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+
+    W_old_good_with_debt = sum(variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] .* variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
+    W_new_good_with_debt = sum(variables_T_10_12.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .* variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
+    welfare_CEV_10_12_good_with_debt = 100 * ((W_new_good_with_debt / W_old_good_with_debt) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old_good_without_debt = sum(variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
+    W_new_good_without_debt = sum(variables_T_10_12.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
+    welfare_CEV_10_12_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old_good = W_old_good_with_debt + W_old_good_without_debt
+    W_new_good = W_new_good_with_debt + W_new_good_without_debt
+    welfare_CEV_10_12_good = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old_bad = sum(variables_10.V_pos[:,:,:,:,:] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])
+    W_new_bad = sum(variables_T_10_12.V_pos[:,:,:,:,:,2] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])
+    welfare_CEV_10_12_bad = 100 * ((W_new_bad / W_old_bad) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old = W_old_good + W_old_bad
+    W_new = W_new_good + W_new_bad
+    welfare_CEV_10_12 = 100 * ((W_new / W_old) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
 
     welfare_favor_10_12_good_with_debt = 100 * sum((variables_T_10_12.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .> variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
     welfare_favor_10_12_good_without_debt = 100 * sum((variables_T_10_12.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .> variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
@@ -986,11 +1082,31 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     welfare_favor_10_12 = 100 * (sum((variables_T_10_12.V[:,:,:,:,:,2] .> variables_10.V) .* variables_10.μ[:,:,:,:,:,1]) + sum((variables_T_10_12.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
 
     # compute welfare metrics from η = 0.25 to η = 0.20
-    welfare_CEV_10_8_good_with_debt = 100 * sum(((variables_T_10_8.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] ./ variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
-    welfare_CEV_10_8_good_without_debt = 100 * sum(((variables_T_10_8.V[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
-    welfare_CEV_10_8_good = 100 * sum(((variables_T_10_8.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
-    welfare_CEV_10_8_bad =  100 * sum(((variables_T_10_8.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
-    welfare_CEV_10_8 = 100 * (sum(((variables_T_10_8.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[:,:,:,:,:,1]) + sum(((variables_T_10_8.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+    # welfare_CEV_10_8_good_with_debt = 100 * sum(((variables_T_10_8.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] ./ variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
+    # welfare_CEV_10_8_good_without_debt = 100 * sum(((variables_T_10_8.V[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    # welfare_CEV_10_8_good = 100 * sum(((variables_T_10_8.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
+    # welfare_CEV_10_8_bad =  100 * sum(((variables_T_10_8.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    # welfare_CEV_10_8 = 100 * (sum(((variables_T_10_8.V[:,:,:,:,:,2] ./ variables_10.V[:,:,:,:,:]) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[:,:,:,:,:,1]) + sum(((variables_T_10_8.V_pos[:,:,:,:,:,2] ./ variables_10.V_pos) .^ (1.0/(1.0-parameters_10.σ)) .- 1.0) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
+
+    W_old_good_with_debt = sum(variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:] .* variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
+    W_new_good_with_debt = sum(variables_T_10_8.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .* variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
+    welfare_CEV_10_8_good_with_debt = 100 * ((W_new_good_with_debt / W_old_good_with_debt) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old_good_without_debt = sum(variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
+    W_new_good_without_debt = sum(variables_T_10_8.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
+    welfare_CEV_10_8_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old_good = W_old_good_with_debt + W_old_good_without_debt
+    W_new_good = W_new_good_with_debt + W_new_good_without_debt
+    welfare_CEV_10_8_good = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old_bad = sum(variables_10.V_pos[:,:,:,:,:] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])
+    W_new_bad = sum(variables_T_10_8.V_pos[:,:,:,:,:,2] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])
+    welfare_CEV_10_8_bad = 100 * ((W_new_bad / W_old_bad) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old = W_old_good + W_old_bad
+    W_new = W_new_good + W_new_bad
+    welfare_CEV_10_8 = 100 * ((W_new / W_old) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
 
     welfare_favor_10_8_good_with_debt = 100 * sum((variables_T_10_8.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .> variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
     welfare_favor_10_8_good_without_debt = 100 * sum((variables_T_10_8.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .> variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
@@ -1386,11 +1502,23 @@ if Indicator_solve_transitional_dynamics_across_p_h_general == true
     plot_welfare_CEV_all_good_with_debt
     Plots.savefig(plot_welfare_CEV_all_good_with_debt, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_with_debt.pdf")
 
+    plot_welfare_CEV_all_good_with_debt_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks = collect(5:5:15))
+    plot_welfare_CEV_all_good_with_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_with_debt[end-2:end], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_with_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_with_debt_NFF[end-2:end], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_with_debt_selected
+    Plots.savefig(plot_welfare_CEV_all_good_with_debt_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_with_debt_selected.pdf")
+
     plot_welfare_CEV_all_good_without_debt = plot(size = (800,500), box = :on, legend = :topright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\mathbb{P}_h \$")
     plot_welfare_CEV_all_good_without_debt = plot!(p_h_all, welfare_CEV_all_good_without_debt, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_without_debt = plot!(p_h_all, welfare_CEV_all_good_without_debt_NFF, linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{withoutout\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_without_debt
     Plots.savefig(plot_welfare_CEV_all_good_without_debt, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_without_debt.pdf")
+
+    plot_welfare_CEV_all_good_without_debt_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks = collect(5:5:15))
+    plot_welfare_CEV_all_good_without_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_without_debt[end-2:end], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_without_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_without_debt_NFF[end-2:end], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_without_debt_selected
+    Plots.savefig(plot_welfare_CEV_all_good_without_debt_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_without_debt_selected.pdf")
 
     plot_welfare_CEV_all_good = plot(size = (800,500), box = :on, legend = :topright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\mathbb{P}_h \$")
     plot_welfare_CEV_all_good = plot!(p_h_all, welfare_CEV_all_good, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
@@ -1398,17 +1526,35 @@ if Indicator_solve_transitional_dynamics_across_p_h_general == true
     plot_welfare_CEV_all_good
     Plots.savefig(plot_welfare_CEV_all_good, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good.pdf")
 
+    plot_welfare_CEV_all_good_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks = collect(5:5:15))
+    plot_welfare_CEV_all_good_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good[end-2:end], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_NFF[end-2:end], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_selected
+    Plots.savefig(plot_welfare_CEV_all_good_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_selected.pdf")
+
     plot_welfare_CEV_all_bad = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\mathbb{P}_h \$")
     plot_welfare_CEV_all_bad = plot!(p_h_all, welfare_CEV_all_bad, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_bad = plot!(p_h_all, welfare_CEV_all_bad_NFF, linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{withoutout\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_bad
     Plots.savefig(plot_welfare_CEV_all_bad, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_bad.pdf")
 
+    plot_welfare_CEV_all_bad_selected = plot(size = (800,500), box = :on, legend = :topright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks = collect(5:5:15))
+    plot_welfare_CEV_all_bad_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_bad[end-2:end], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_bad_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_bad_NFF[end-2:end], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_bad_selected
+    Plots.savefig(plot_welfare_CEV_all_bad_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_bad_selected.pdf")
+
     plot_welfare_CEV_all = plot(size = (800,500), box = :on, legend = :topright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\mathbb{P}_h \$")
     plot_welfare_CEV_all = plot!(p_h_all, welfare_CEV_all, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
     plot_welfare_CEV_all = plot!(p_h_all, welfare_CEV_all_NFF, linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all
     Plots.savefig(plot_welfare_CEV_all, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all.pdf")
+
+    plot_welfare_CEV_all_selected = plot(size = (800,500), box = :on, legend = :topleft, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks = collect(5:5:15))
+    plot_welfare_CEV_all_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all[end-2:end], linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_NFF[end-2:end], linecolor = :red, linestyle = :dash, linewidth = 3, markershapes = :square, markercolor = :red, markersize = 4, markerstrokecolor = :red, label = "\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_selected
+    Plots.savefig(plot_welfare_CEV_all_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_selected.pdf")
 
     plot_welfare_CEV_all_newborn = plot(size = (800,500), box = :on, legend = :topright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "%", xlabel = "\$ \\mathbb{P}_h \$")
     plot_welfare_CEV_all_newborn = plot!(p_h_all, welfare_CEV_all_newborn, linecolor = :blue, linewidth = 3, markershapes = :circle, markercolor = :blue, markersize = 6, markerstrokecolor = :blue, label = "\$ \\textrm{with\\ financial\\ frictions} \$")
@@ -1476,10 +1622,10 @@ if Indicator_solve_transitional_dynamics_MIT_z == true
     slow_updating_transitional_dynamics = 0.1
 
     # set up transition path of MIT shock to z
-    ρ_z = 0.80
-    σ_z = 0.01
     path_z_negative = zeros(T_size+2)
     path_z_positive = zeros(T_size+2)
+    ρ_z = 0.00
+    σ_z = 0.01
     for t in 2:(T_size+1)
         path_z_negative[t] = t == 2 ? -σ_z : ρ_z * path_z_negative[t-1]
         path_z_positive[t] = t == 2 ? σ_z : ρ_z * path_z_positive[t-1]
@@ -1507,14 +1653,14 @@ if Indicator_solve_transitional_dynamics_MIT_z == true
     Plots.savefig(plot_transition_path_MIT_z_negative_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_negative_banking_leverage.pdf")
 
     # solve the transition path of banking leverage ratio if positive shock
-    println("Solving transitions path for negative MIT shock to z")
-    variables_T_MIT_z_positive = variables_T_function(transition_path_MIT_z_positive_banking_leverage, path_z_positive, variables_benchmark, variables_benchmark, parameters_benchmark)
-    transitional_dynamic_λ_function!(variables_T_MIT_z_positive, variables_benchmark, variables_benchmark, parameters_benchmark; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
-    transition_path_MIT_z_positive_banking_leverage = variables_T_MIT_z_positive.aggregate_prices.leverage_ratio_λ
-    plot_transition_path_MIT_z_positive_banking_leverage = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transition_path_MIT_z_positive_banking_leverage = plot!(transition_path_MIT_z_positive_banking_leverage, linecolor = :blue, linewidth = 3, legend=:none)
-    plot_transition_path_MIT_z_positive_banking_leverage
-    Plots.savefig(plot_transition_path_MIT_z_positive_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_positive_banking_leverage.pdf")
+    # println("Solving transitions path for negative MIT shock to z")
+    # variables_T_MIT_z_positive = variables_T_function(transition_path_MIT_z_positive_banking_leverage, path_z_positive, variables_benchmark, variables_benchmark, parameters_benchmark)
+    # transitional_dynamic_λ_function!(variables_T_MIT_z_positive, variables_benchmark, variables_benchmark, parameters_benchmark; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
+    # transition_path_MIT_z_positive_banking_leverage = variables_T_MIT_z_positive.aggregate_prices.leverage_ratio_λ
+    # plot_transition_path_MIT_z_positive_banking_leverage = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    # plot_transition_path_MIT_z_positive_banking_leverage = plot!(transition_path_MIT_z_positive_banking_leverage, linecolor = :blue, linewidth = 3, legend=:none)
+    # plot_transition_path_MIT_z_positive_banking_leverage
+    # Plots.savefig(plot_transition_path_MIT_z_positive_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_positive_banking_leverage.pdf")
 
     # save transition path
     @save "results_transition_MIT_z.jld2" transition_path_MIT_z_negative_banking_leverage transition_path_MIT_z_positive_banking_leverage

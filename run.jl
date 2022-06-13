@@ -49,6 +49,7 @@ Indicator_solve_stationary_equlibrium = false
 Indicator_decomposition = false
 
 Indicator_solve_stationary_equlibria_across_η = false
+Indicator_solve_stationary_equlibria_across_η_higher_θ = false
 Indicator_solve_stationary_equlibria_across_p_h = false
 Indicator_solve_stationary_equlibria_across_θ = false
 Indicator_solve_stationary_equlibria_across_ψ = false
@@ -215,23 +216,82 @@ if Indicator_decomposition == true
 
     # collect results
     results = Any[
-        "" "Without Financial Frictions" "Without Financial Frictions / Higher Lending Costs" "With Financial Frictions"
+        "Variable" "Benchmark" "Fixed Wage" "Fixed Wage & No Premium"
         "" "" "" ""
-        "Incentive premium (%)" variables_NFF.aggregate_prices.ι_λ*100 variables_τ.aggregate_prices.ι_λ*100 variables_benchmark.aggregate_prices.ι_λ*100
-        "Lending costs (%)" (parameters.r_f + variables_NFF.aggregate_prices.ι_λ)*100 parameters_τ.τ*100 (parameters.r_f + variables_benchmark.aggregate_prices.ι_λ)*100
+        "Levels" "" "" ""
+        "Wage" variables_benchmark.aggregate_prices.w_λ variables_τ.aggregate_prices.w_λ variables_NFF.aggregate_prices.w_λ 
+        "Incentive premium (%)" variables_benchmark.aggregate_prices.ι_λ*100 variables_benchmark.aggregate_prices.ι_λ*100  variables_NFF.aggregate_prices.ι_λ*100
+        "Conditional default rate (%)"  (variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts)*100 (variables_τ.aggregate_variables.share_of_filers/variables_τ.aggregate_variables.share_in_debts)*100 (variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts)*100
+        "Avg. borrowing interest rate (%)" variables_benchmark.aggregate_variables.avg_loan_rate*100 variables_τ.aggregate_variables.avg_loan_rate*100 variables_NFF.aggregate_variables.avg_loan_rate*100
+        "Fraction of HHs in debt (%)" variables_benchmark.aggregate_variables.share_in_debts*100 variables_τ.aggregate_variables.share_in_debts*100 variables_NFF.aggregate_variables.share_in_debts*100  
+        "Debt-to-earnings ratio (%)" variables_benchmark.aggregate_variables.debt_to_earning_ratio*100 variables_τ.aggregate_variables.debt_to_earning_ratio*100 variables_NFF.aggregate_variables.debt_to_earning_ratio*100
         "" "" "" ""
-        "Wage" variables_NFF.aggregate_prices.w_λ variables_τ.aggregate_prices.w_λ variables_benchmark.aggregate_prices.w_λ
-        "" "" "" ""
-        "Share in debts (%)" variables_NFF.aggregate_variables.share_in_debts*100 variables_τ.aggregate_variables.share_in_debts*100 variables_benchmark.aggregate_variables.share_in_debts*100
-        "Conditional default rate (%)"  (variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts)*100 (variables_τ.aggregate_variables.share_of_filers/variables_τ.aggregate_variables.share_in_debts)*100 (variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts)*100
-        "Debt-to-earnings ratio (%)" variables_NFF.aggregate_variables.debt_to_earning_ratio*100 variables_τ.aggregate_variables.debt_to_earning_ratio*100 variables_benchmark.aggregate_variables.debt_to_earning_ratio*100
-        "" "" "" ""
-        "Average interest rate (%)" variables_NFF.aggregate_variables.avg_loan_rate*100 variables_τ.aggregate_variables.avg_loan_rate*100 variables_benchmark.aggregate_variables.avg_loan_rate*100
+        "% change w.r.t. benchmark" "" "" ""
+        "Wage" "" "" ""
+        "Incentive premium" "" "" ""
+        "Conditional default rate" "" "" ""
+        "Avg. borrowing interest rate" "" "" ""
+        "Fraction of HHs in debt" "" "" ""
+        "Debt-to-earnings ratio" "" "" ""
     ]
     display(results)
 
     # save results
-    CSV.write("decomposition.csv", Tables.table(results), header = false)
+    CSV.write("results_channels.csv", Tables.table(results), header = false)
+
+    # moments across permanent types
+    debt_to_earning_ratio_benchmark, debt_to_earning_ratio_permanent_low_benchmark, debt_to_earning_ratio_permanent_high_benchmark, share_of_filers_benchmark, share_of_filers_permanent_low_benchmark, share_of_filers_permanent_high_benchmark, share_in_debts_benchmark, share_in_debts_permanent_low_benchmark, share_in_debts_permanent_high_benchmark, avg_loan_rate_benchmark, avg_loan_rate_permanent_low_benchmark, avg_loan_rate_permanent_high_benchmark = solve_aggregate_variable_across_HH_function(variables_benchmark.policy_a, variables_benchmark.policy_d, variables_benchmark.policy_pos_a, variables_benchmark.q, variables_benchmark.μ, variables_benchmark.aggregate_prices.w_λ, parameters)
+
+    debt_to_earning_ratio_NFF, debt_to_earning_ratio_permanent_low_NFF, debt_to_earning_ratio_permanent_high_NFF, share_of_filers_NFF, share_of_filers_permanent_low_NFF, share_of_filers_permanent_high_NFF, share_in_debts_NFF, share_in_debts_permanent_low_NFF, share_in_debts_permanent_high_NFF, avg_loan_rate_NFF, avg_loan_rate_permanent_low_NFF, avg_loan_rate_permanent_high_NFF = solve_aggregate_variable_across_HH_function(variables_NFF.policy_a, variables_NFF.policy_d, variables_NFF.policy_pos_a, variables_NFF.q, variables_NFF.μ, variables_NFF.aggregate_prices.w_λ, parameters)
+
+    debt_to_earning_ratio_τ, debt_to_earning_ratio_permanent_low_τ, debt_to_earning_ratio_permanent_high_τ, share_of_filers_τ, share_of_filers_permanent_low_τ, share_of_filers_permanent_high_τ, share_in_debts_τ, share_in_debts_permanent_low_τ, share_in_debts_permanent_high_τ, avg_loan_rate_τ, avg_loan_rate_permanent_low_τ, avg_loan_rate_permanent_high_τ = solve_aggregate_variable_across_HH_function(variables_τ.policy_a, variables_τ.policy_d, variables_τ.policy_pos_a, variables_τ.q, variables_τ.μ, variables_τ.aggregate_prices.w_λ, parameters_τ)
+    
+    # collect results
+    results_HH_permanent = Any[
+        "Variable" "Low Permanent" "" "" "High Permanent" "" ""
+        "" "" "" "" "" "" ""
+        "Channels" "" "" "" "" "" ""
+        "Incentive channel" "checkmark" "checkmark" "" "checkmark" "checkmark" ""
+        "Divestment channel" "checkmark" "" "" "checkmark" "" ""
+        "" "" "" "" "" "" ""
+        "Levels" "" "" "" "" "" ""
+        "Conditional default rate (%)" share_of_filers_permanent_low_benchmark/share_in_debts_permanent_low_benchmark*100 share_of_filers_permanent_low_τ/share_in_debts_permanent_low_τ*100 share_of_filers_permanent_low_NFF/share_in_debts_permanent_low_NFF*100 share_of_filers_permanent_high_benchmark/share_in_debts_permanent_high_benchmark*100 share_of_filers_permanent_high_τ/share_in_debts_permanent_high_τ*100 share_of_filers_permanent_high_NFF/share_in_debts_permanent_high_NFF*100
+        "Avg. borrowing interest rate (%)" avg_loan_rate_permanent_low_benchmark*100 avg_loan_rate_permanent_low_τ*100 avg_loan_rate_permanent_low_NFF*100 avg_loan_rate_permanent_high_benchmark*100 avg_loan_rate_permanent_high_τ*100 avg_loan_rate_permanent_high_NFF*100
+        "Fraction of HHs in debt (%)" share_in_debts_permanent_low_benchmark*100 share_in_debts_permanent_low_τ*100 share_in_debts_permanent_low_NFF*100 share_in_debts_permanent_high_benchmark*100 share_in_debts_permanent_high_τ*100 share_in_debts_permanent_high_NFF*100
+        "Debt-to-earnings ratio (%)" debt_to_earning_ratio_permanent_low_benchmark*100 debt_to_earning_ratio_permanent_low_τ*100 debt_to_earning_ratio_permanent_low_NFF*100 debt_to_earning_ratio_permanent_high_benchmark*100 debt_to_earning_ratio_permanent_high_τ*100 debt_to_earning_ratio_permanent_high_NFF*100
+        "" "" "" "" "" "" ""
+        "% change w.r.t. benchmark" "" "" "" "" "" ""
+        "Conditional default rate" "" "" "" "" "" ""
+        "Avg. borrowing interest rate" "" "" "" "" "" ""
+        "Fraction of HHs in debt" "" "" "" "" "" ""
+        "Debt-to-earnings ratio" "" "" "" "" "" ""
+    ]
+    display(results_HH_permanent)
+
+    # save results
+    CSV.write("results_channels_HH_permanent.csv", Tables.table(results_HH_permanent), header = false)
+
+    # borrowing prices and endogenous limits across two types
+    high_e_1_ind, high_e_2_ind = 2, 3
+    low_e_1_ind, low_e_2_ind = 1, 1
+    
+    # plot for high productivity
+    a_ind = findfirst(parameters.a_grid_neg .>= -2.0)
+    plot_qa_channels_high = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "Discounted borrowing amount", xlabel = "Bank loan")
+    plot_qa_channels_high = plot!(parameters.a_grid_neg[a_ind:parameters.a_ind_zero], -variables_benchmark.q[a_ind:parameters.a_ind_zero,high_e_1_ind,high_e_2_ind] .* parameters.a_grid_neg[a_ind:parameters.a_ind_zero], linecolor = :blue, linewidth = 3, label = :none)
+    plot_qa_channels_high = plot!(parameters.a_grid_neg[a_ind:parameters.a_ind_zero], -variables_τ.q[a_ind:parameters.a_ind_zero,high_e_1_ind,high_e_2_ind] .* parameters.a_grid_neg[a_ind:parameters.a_ind_zero], linecolor = :red, linestyle = :dash, linewidth = 3, label = :none)
+    plot_qa_channels_high = plot!(parameters.a_grid_neg[a_ind:parameters.a_ind_zero], -variables_NFF.q[a_ind:parameters.a_ind_zero,high_e_1_ind,high_e_2_ind] .* parameters.a_grid_neg[a_ind:parameters.a_ind_zero], linecolor = :black, linestyle = :dashdot, linewidth = 3, label = :none)
+    plot_qa_channels_high
+    Plots.savefig(plot_qa_channels_high, pwd() * "\\figures\\plot_qa_channels_high.pdf")
+
+    # plot for low productivity
+    a_ind = findfirst(parameters.a_grid_neg .>= -0.5)
+    plot_qa_channels_low = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "Discounted borrowing amount", xlabel = "Bank loan")
+    plot_qa_channels_low = plot!(parameters.a_grid_neg[a_ind:parameters.a_ind_zero], -variables_benchmark.q[a_ind:parameters.a_ind_zero,low_e_1_ind,low_e_2_ind] .* parameters.a_grid_neg[a_ind:parameters.a_ind_zero], linecolor = :blue, linewidth = 3, label = :none)
+    plot_qa_channels_low = plot!(parameters.a_grid_neg[a_ind:parameters.a_ind_zero], -variables_τ.q[a_ind:parameters.a_ind_zero,low_e_1_ind,low_e_2_ind] .* parameters.a_grid_neg[a_ind:parameters.a_ind_zero], linecolor = :red, linestyle = :dash, linewidth = 3, label = :none)
+    plot_qa_channels_low = plot!(parameters.a_grid_neg[a_ind:parameters.a_ind_zero], -variables_NFF.q[a_ind:parameters.a_ind_zero,low_e_1_ind,low_e_2_ind] .* parameters.a_grid_neg[a_ind:parameters.a_ind_zero], linecolor = :black, linestyle = :dashdot, linewidth = 3, label = :none)
+    plot_qa_channels_low
+    Plots.savefig(plot_qa_channels_low, pwd() * "\\figures\\plot_qa_channels_low.pdf")
 
 end
 
@@ -261,6 +321,17 @@ if Indicator_solve_stationary_equlibria_across_η == true
 
 end
 
+if Indicator_solve_stationary_equlibria_across_η_higher_θ == true
+
+    θ = (1.0/(4.57*0.75)) * 1.2
+    η_min_search = 0.20
+    η_max_search = 0.30
+    η_step_search = 0.05
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_η_function(η_min = η_min_search, η_max = η_max_search, η_step = η_step_search, θ = θ)
+    @save "results_eta_higher_theta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+end
+
 if Indicator_solve_stationary_equlibria_across_p_h == true
 
     p_h_min_search = 5.0
@@ -284,7 +355,7 @@ if Indicator_solve_stationary_equlibria_across_p_h == true
 end
 
 if Indicator_solve_stationary_equlibria_across_θ == true
-
+    
     θ_min_search = 1.0/3.0 * 0.9
     θ_max_search = 1.0/3.0 * 1.1
     θ_step_search = 1.0/3.0 * 0.1

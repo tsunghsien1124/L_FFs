@@ -1622,35 +1622,53 @@ if Indicator_solve_transitional_dynamics_MIT_z == true
     slow_updating_transitional_dynamics = 0.1
 
     # set up transition path of MIT shock to z
-    path_z_negative = zeros(T_size+2)
-    path_z_positive = zeros(T_size+2)
-    ρ_z = 0.00
+    path_z_persistent_negative = zeros(T_size+2)
+    path_z_persistent_positive = zeros(T_size+2)
+    path_z_transitory_negative = zeros(T_size+2)
+    path_z_transitory_positive = zeros(T_size+2)
+    ρ_z = 0.80
     σ_z = 0.01
     for t in 2:(T_size+1)
-        path_z_negative[t] = t == 2 ? -σ_z : ρ_z * path_z_negative[t-1]
-        path_z_positive[t] = t == 2 ? σ_z : ρ_z * path_z_positive[t-1]
+        path_z_persistent_negative[t] = t == 2 ? -σ_z : ρ_z * path_z_persistent_negative[t-1]
+        path_z_persistent_positive[t] = t == 2 ? σ_z : ρ_z * path_z_persistent_positive[t-1]
+        path_z_transitory_negative[t] = t == 2 ? -σ_z : 0.0
+        path_z_transitory_positive[t] = t == 2 ? σ_z : 0.0
     end
-    path_z_negative = exp.(path_z_negative)
-    path_z_positive = exp.(path_z_positive)
+    path_z_persistent_negative = exp.(path_z_persistent_negative)
+    path_z_persistent_positive = exp.(path_z_persistent_positive)
+    path_z_transitory_negative = exp.(path_z_transitory_negative)
+    path_z_transitory_positive = exp.(path_z_transitory_positive)
 
     # set up transition path of banking leverage ratio
-    load_initial_value = true
+    load_initial_value = false
     if load_initial_value == true
-        @load "results_transition_MIT_z.jld2" transition_path_MIT_z_negative_banking_leverage transition_path_MIT_z_positive_banking_leverage
+        @load "results_transition_MIT_z.jld2" transition_path_MIT_z_persistent_negative_banking_leverage transition_path_MIT_z_persistent_positive_banking_leverage transition_path_MIT_z_transitory_negative_banking_leverage transition_path_MIT_z_transitory_positive_banking_leverage
     else
-        transition_path_MIT_z_negative_banking_leverage = path_z_positive .* variables_benchmark.aggregate_variables.leverage_ratio
-        transition_path_MIT_z_positive_banking_leverage = path_z_negative .* variables_benchmark.aggregate_variables.leverage_ratio
+        transition_path_MIT_z_persistent_negative_banking_leverage = path_z_persistent_positive .* variables_benchmark.aggregate_variables.leverage_ratio
+        transition_path_MIT_z_persistent_positive_banking_leverage = path_z_persistent_negative .* variables_benchmark.aggregate_variables.leverage_ratio
+        transition_path_MIT_z_transitory_negative_banking_leverage = path_z_transitory_positive .* variables_benchmark.aggregate_variables.leverage_ratio
+        transition_path_MIT_z_transitory_positive_banking_leverage = path_z_transitory_negative .* variables_benchmark.aggregate_variables.leverage_ratio
     end
 
-    # solve the transition path of banking leverage ratio if negative shock
-    println("Solving transitions path for negative MIT shock to z")
-    variables_T_MIT_z_negative = variables_T_function(transition_path_MIT_z_negative_banking_leverage, path_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark)
-    transitional_dynamic_λ_function!(variables_T_MIT_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
-    transition_path_MIT_z_negative_banking_leverage = variables_T_MIT_z_negative.aggregate_prices.leverage_ratio_λ
-    plot_transition_path_MIT_z_negative_banking_leverage = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
-    plot_transition_path_MIT_z_negative_banking_leverage = plot!(transition_path_MIT_z_negative_banking_leverage, linecolor = :blue, linewidth = 3, legend=:none)
-    plot_transition_path_MIT_z_negative_banking_leverage
-    Plots.savefig(plot_transition_path_MIT_z_negative_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_negative_banking_leverage.pdf")
+    # solve the transition path of banking leverage ratio if persistent negative shock
+    println("Solving transitions path for persistent negative MIT shock to z")
+    variables_T_MIT_persistent_z_negative = variables_T_function(transition_path_MIT_z_persistent_negative_banking_leverage, path_z_persistent_negative, variables_benchmark, variables_benchmark, parameters_benchmark)
+    transitional_dynamic_λ_function!(variables_T_MIT_persistent_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
+    transition_path_MIT_z_persistent_negative_banking_leverage = variables_T_MIT_persistent_z_negative.aggregate_prices.leverage_ratio_λ
+    plot_transition_path_MIT_z_persistent_negative_banking_leverage = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transition_path_MIT_z_persistent_negative_banking_leverage = plot!(transition_path_MIT_z_persistent_negative_banking_leverage, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_MIT_z_persistent_negative_banking_leverage
+    Plots.savefig(plot_transition_path_MIT_z_persistent_negative_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_persistent_negative_banking_leverage.pdf")
+
+    # solve the transition path of banking leverage ratio if transitory negative shock
+    println("Solving transitions path for transitory negative MIT shock to z")
+    variables_T_MIT_transitory_z_negative = variables_T_function(transition_path_MIT_z_transitory_negative_banking_leverage, path_z_transitory_negative, variables_benchmark, variables_benchmark, parameters_benchmark)
+    transitional_dynamic_λ_function!(variables_T_MIT_transitory_z_negative, variables_benchmark, variables_benchmark, parameters_benchmark; tol = tol, iter_max = iter_max, slow_updating = slow_updating_transitional_dynamics)
+    transition_path_MIT_z_transitory_negative_banking_leverage = variables_T_MIT_transitory_z_negative.aggregate_prices.leverage_ratio_λ
+    plot_transition_path_MIT_z_transitory_negative_banking_leverage = plot(size = (800,500), box = :on, legend = :bottomright, xtickfont = font(18, "Computer Modern", :black), ytickfont = font(18, "Computer Modern", :black), titlefont = font(18, "Computer Modern", :black), guidefont = font(18, "Computer Modern", :black), legendfont = font(18, "Computer Modern", :black), margin = 4mm, ylabel = "", xlabel = "Time")
+    plot_transition_path_MIT_z_transitory_negative_banking_leverage = plot!(transition_path_MIT_z_transitory_negative_banking_leverage, linecolor = :blue, linewidth = 3, legend=:none)
+    plot_transition_path_MIT_z_transitory_negative_banking_leverage
+    Plots.savefig(plot_transition_path_MIT_z_transitory_negative_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_transitory_negative_banking_leverage.pdf")
 
     # solve the transition path of banking leverage ratio if positive shock
     # println("Solving transitions path for negative MIT shock to z")
@@ -1663,38 +1681,38 @@ if Indicator_solve_transitional_dynamics_MIT_z == true
     # Plots.savefig(plot_transition_path_MIT_z_positive_banking_leverage, pwd() * "\\figures\\plot_transition_path_MIT_z_positive_banking_leverage.pdf")
 
     # save transition path
-    @save "results_transition_MIT_z.jld2" transition_path_MIT_z_negative_banking_leverage transition_path_MIT_z_positive_banking_leverage
+    @save "results_transition_MIT_z.jld2" transition_path_MIT_z_persistent_negative_banking_leverage transition_path_MIT_z_persistent_positive_banking_leverage transition_path_MIT_z_transitory_negative_banking_leverage transition_path_MIT_z_transitory_positive_banking_leverage
 
     #========================#
     # plot impulse responses #
     #========================#
-    plot((path_z_negative .- 1.0) * 100, title = "Negative MIT Shock to z", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((path_z_persistent_negative .- 1.0) * 100, title = "Persistent Negative MIT Shock to z", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_variables.leverage_ratio .- variables_benchmark.aggregate_variables.leverage_ratio) ./ variables_benchmark.aggregate_variables.leverage_ratio * 100, title = "Banking Leverage Ratio", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_variables.leverage_ratio .- variables_benchmark.aggregate_variables.leverage_ratio) ./ variables_benchmark.aggregate_variables.leverage_ratio * 100, title = "Banking Leverage Ratio", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_variables.N .- variables_benchmark.aggregate_variables.N) ./ variables_benchmark.aggregate_variables.N * 100, title = "Banking Net Worth", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_variables.N .- variables_benchmark.aggregate_variables.N) ./ variables_benchmark.aggregate_variables.N * 100, title = "Banking Net Worth", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_variables.K_p .- variables_benchmark.aggregate_variables.K) ./ variables_benchmark.aggregate_variables.K * 100, title = "Aggregate Physical Capital", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_variables.K_p .- variables_benchmark.aggregate_variables.K) ./ variables_benchmark.aggregate_variables.K * 100, title = "Aggregate Physical Capital", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
     # plot((variables_T_MIT_z_negative.aggregate_prices.K_p_λ .- variables_benchmark.aggregate_prices.K_λ) ./ variables_benchmark.aggregate_prices.K_λ * 100, title = "Aggregate Physical Capital (supply side)", legend = :none)
 
-    plot((variables_T_MIT_z_negative.aggregate_variables.L_p .- variables_benchmark.aggregate_variables.L) ./ variables_benchmark.aggregate_variables.L * 100, title = "Aggregate Unsecured Loans", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_variables.L_p .- variables_benchmark.aggregate_variables.L) ./ variables_benchmark.aggregate_variables.L * 100, title = "Aggregate Unsecured Loans", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_variables.share_of_filers .- variables_benchmark.aggregate_variables.share_of_filers) ./ variables_benchmark.aggregate_variables.share_of_filers * 100, title = "Share of Filers", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_variables.share_of_filers .- variables_benchmark.aggregate_variables.share_of_filers) ./ variables_benchmark.aggregate_variables.share_of_filers * 100, title = "Share of Filers", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_variables.avg_loan_rate .- variables_benchmark.aggregate_variables.avg_loan_rate) ./ variables_benchmark.aggregate_variables.avg_loan_rate * 100, title = "Average Interest Rate", legend = :none,markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_variables.avg_loan_rate .- variables_benchmark.aggregate_variables.avg_loan_rate) ./ variables_benchmark.aggregate_variables.avg_loan_rate * 100, title = "Average Interest Rate", legend = :none,markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_variables.share_in_debts .- variables_benchmark.aggregate_variables.share_in_debts) ./ variables_benchmark.aggregate_variables.share_in_debts * 100, title = "Share in Debts", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_variables.share_in_debts .- variables_benchmark.aggregate_variables.share_in_debts) ./ variables_benchmark.aggregate_variables.share_in_debts * 100, title = "Share in Debts", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot(((variables_T_MIT_z_negative.aggregate_variables.share_of_filers ./ variables_T_MIT_z_negative.aggregate_variables.share_in_debts) .- (variables_benchmark.aggregate_variables.share_of_filers / variables_benchmark.aggregate_variables.share_in_debts)) ./ (variables_benchmark.aggregate_variables.share_of_filers / variables_benchmark.aggregate_variables.share_in_debts) * 100, title = "Share of Filers (cond.)", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot(((variables_T_MIT_persistent_z_negative.aggregate_variables.share_of_filers ./ variables_T_MIT_persistent_z_negative.aggregate_variables.share_in_debts) .- (variables_benchmark.aggregate_variables.share_of_filers / variables_benchmark.aggregate_variables.share_in_debts)) ./ (variables_benchmark.aggregate_variables.share_of_filers / variables_benchmark.aggregate_variables.share_in_debts) * 100, title = "Share of Filers (cond.)", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_variables.debt_to_earning_ratio .- variables_benchmark.aggregate_variables.debt_to_earning_ratio) ./ variables_benchmark.aggregate_variables.debt_to_earning_ratio * 100, title = "Debt-to-Earnings Ratio", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_variables.debt_to_earning_ratio .- variables_benchmark.aggregate_variables.debt_to_earning_ratio) ./ variables_benchmark.aggregate_variables.debt_to_earning_ratio * 100, title = "Debt-to-Earnings Ratio", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_prices.λ .- variables_benchmark.aggregate_prices.λ) ./ variables_benchmark.aggregate_prices.λ * 100, title = "Incentive Multiplier", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_prices.λ .- variables_benchmark.aggregate_prices.λ) ./ variables_benchmark.aggregate_prices.λ * 100, title = "Incentive Multiplier", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_prices.ι_λ .- variables_benchmark.aggregate_prices.ι_λ) ./ variables_benchmark.aggregate_prices.ι_λ * 100, title = "Incentive Premium", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_prices.ι_λ .- variables_benchmark.aggregate_prices.ι_λ) ./ variables_benchmark.aggregate_prices.ι_λ * 100, title = "Incentive Premium", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
-    plot((variables_T_MIT_z_negative.aggregate_prices.w_λ .- variables_benchmark.aggregate_prices.w_λ) ./ variables_benchmark.aggregate_prices.w_λ * 100, title = "Wage", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
+    plot((variables_T_MIT_persistent_z_negative.aggregate_prices.w_λ .- variables_benchmark.aggregate_prices.w_λ) ./ variables_benchmark.aggregate_prices.w_λ * 100, title = "Wage", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")
 
     #===#
     plot((path_z_positive .- 1.0) * 100, title = "Negative MIT Shock to z", legend = :none, markershapes = :circle, markercolor = :blue, markersize = 5, markerstrokecolor = :blue, linecolor = :blue, linewidth = 3, box = :on, xlabel = "Time", ylabel = "%")

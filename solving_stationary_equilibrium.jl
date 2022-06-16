@@ -1261,7 +1261,7 @@ function results_η_function(; η_min::Real, η_max::Real, η_step::Real, θ::Re
     return var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF
 end
 
-function results_p_h_function(; p_h_min::Real, p_h_max::Real, p_h_step::Real)
+function results_p_h_function(; p_h_min::Real, p_h_max::Real, p_h_step::Real, θ::Real = 1.0/(4.57*0.75))
     """
     compute stationary equilibrium with various p_h
     """
@@ -1272,7 +1272,7 @@ function results_p_h_function(; p_h_min::Real, p_h_max::Real, p_h_step::Real)
     p_h_size = length(p_h_grid)
 
     # initialize pparameters
-    parameters = parameters_function()
+    parameters = parameters_function(θ = θ)
     @unpack a_size, a_size_pos, a_size_μ, e_1_size, e_2_size, e_3_size, ν_size = parameters
 
     # initialize variables that will be saved
@@ -1308,7 +1308,7 @@ function results_p_h_function(; p_h_min::Real, p_h_max::Real, p_h_step::Real)
     for p_h_i = 1:p_h_size
 
         p_h = p_h_grid[p_h_i]
-        parameters_p_h = parameters_function(p_h = p_h)
+        parameters_p_h = parameters_function(p_h = p_h, θ = θ)
         # λ_min_adhoc_p_h = p_h_i > 1 ? results_A_FF[3,p_h_i-1] : -Inf
         λ_min_adhoc_p_h = -Inf
         variables_NFF, variables_FF, flag, crit_V, crit_μ = optimal_multiplier_function(parameters_p_h; λ_min_adhoc = λ_min_adhoc_p_h, slow_updating = slow_updating)

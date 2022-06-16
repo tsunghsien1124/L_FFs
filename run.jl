@@ -525,6 +525,14 @@ if Indicator_solve_transitional_dynamics_across_η == true
     W_new_good_without_debt = sum(variables_T_25_30.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])
     welfare_CEV_25_30_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
 
+    W_old_good_impatient = sum(variables_25.V[:,:,:,:,1] .* variables_25.μ[:,:,:,:,1,1])
+    W_new_good_impatient = sum(variables_T_25_30.V[:,:,:,:,1,2] .* variables_25.μ[:,:,:,:,1,1])
+    welfare_CEV_25_30_good_impatient = 100 * ((W_new_good_impatient / W_old_good_impatient) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old_good_patient = sum(variables_25.V[:,:,:,:,2] .* variables_25.μ[:,:,:,:,2,1])
+    W_new_good_patient = sum(variables_T_25_30.V[:,:,:,:,2,2] .* variables_25.μ[:,:,:,:,2,1])
+    welfare_CEV_25_30_good_patient = 100 * ((W_new_good_patient / W_old_good_patient) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
     W_old_good = W_old_good_with_debt + W_old_good_without_debt
     W_new_good = W_new_good_with_debt + W_new_good_without_debt
     welfare_CEV_25_30_good = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
@@ -540,8 +548,14 @@ if Indicator_solve_transitional_dynamics_across_η == true
     # welfare_favor_25_30_good_with_large_debt = 100 * sum((ind_large_debt .* (variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V[:,:,:,:,:])) .* ((ind_large_debt .* variables_25.μ[:,:,:,:,:,1]) ./ sum(ind_large_debt .* variables_25.μ[:,:,:,:,:,1])))
     welfare_favor_25_30_good_with_debt = 100 * sum((variables_T_25_30.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .> variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
     welfare_favor_25_30_good_without_debt = 100 * sum((variables_T_25_30.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .> variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
+    
+    welfare_favor_25_30_good_impatient = 100 * sum((variables_T_25_30.V[:,:,:,:,1,2] .> variables_25.V[:,:,:,:,1]) .* (variables_25.μ[:,:,:,:,1,1] ./ sum(variables_25.μ[:,:,:,:,1,1])))
+    welfare_favor_25_30_good_patient = 100 * sum((variables_T_25_30.V[:,:,:,:,2,2] .> variables_25.V[:,:,:,:,2]) .* (variables_25.μ[:,:,:,:,2,1] ./ sum(variables_25.μ[:,:,:,:,2,1])))
+    
     welfare_favor_25_30_good = 100 * sum((variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
+    
     welfare_favor_25_30_bad = 100 * sum((variables_T_25_30.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
+    
     welfare_favor_25_30 = 100 * (sum((variables_T_25_30.V[:,:,:,:,:,2] .> variables_25.V) .* variables_25.μ[:,:,:,:,:,1]) + sum((variables_T_25_30.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
 
     # compute welfare metrics from η = 0.25 to η = 0.20
@@ -559,6 +573,14 @@ if Indicator_solve_transitional_dynamics_across_η == true
     W_new_good_without_debt = sum(variables_T_25_20.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])
     welfare_CEV_25_20_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
 
+    W_old_good_impatient = sum(variables_25.V[:,:,:,:,1] .* variables_25.μ[:,:,:,:,1,1])
+    W_new_good_impatient = sum(variables_T_25_20.V[:,:,:,:,1,2] .* variables_25.μ[:,:,:,:,1,1])
+    welfare_CEV_25_20_good_impatient = 100 * ((W_new_good_impatient / W_old_good_impatient) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
+    W_old_good_patient = sum(variables_25.V[:,:,:,:,2] .* variables_25.μ[:,:,:,:,2,1])
+    W_new_good_patient = sum(variables_T_25_20.V[:,:,:,:,2,2] .* variables_25.μ[:,:,:,:,2,1])
+    welfare_CEV_25_20_good_patient = 100 * ((W_new_good_patient / W_old_good_patient) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
+
     W_old_good = W_old_good_with_debt + W_old_good_without_debt
     W_new_good = W_new_good_with_debt + W_new_good_without_debt
     welfare_CEV_25_20_good = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_25.σ)) - 1.0)
@@ -573,16 +595,26 @@ if Indicator_solve_transitional_dynamics_across_η == true
 
     welfare_favor_25_20_good_with_debt = 100 * sum((variables_T_25_20.V[1:(parameters_25.a_ind_zero-1),:,:,:,:,2] .> variables_25.V[1:(parameters_25.a_ind_zero-1),:,:,:,:]) .* (variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])))
     welfare_favor_25_20_good_without_debt = 100 * sum((variables_T_25_20.V[parameters_25.a_ind_zero:end,:,:,:,:,2] .> variables_25.V[parameters_25.a_ind_zero:end,:,:,:,:]) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])))
+    
+    welfare_favor_25_20_good_impatient = 100 * sum((variables_T_25_20.V[:,:,:,:,1,2] .> variables_25.V[:,:,:,:,1]) .* (variables_25.μ[:,:,:,:,1,1] ./ sum(variables_25.μ[:,:,:,:,1,1])))
+    welfare_favor_25_20_good_patient = 100 * sum((variables_T_25_20.V[:,:,:,:,2,2] .> variables_25.V[:,:,:,:,2]) .* (variables_25.μ[:,:,:,:,2,1] ./ sum(variables_25.μ[:,:,:,:,2,1])))
+
     welfare_favor_25_20_good = 100 * sum((variables_T_25_20.V[:,:,:,:,:,2] .> variables_25.V) .* (variables_25.μ[:,:,:,:,:,1] ./ sum(variables_25.μ[:,:,:,:,:,1])))
+    
     welfare_favor_25_20_bad = 100* sum((variables_T_25_20.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* (variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2])))
+    
     welfare_favor_25_20 = 100 * (sum((variables_T_25_20.V[:,:,:,:,:,2] .> variables_25.V) .* variables_25.μ[:,:,:,:,:,1]) + sum((variables_T_25_20.V_pos[:,:,:,:,:,2] .> variables_25.V_pos) .* variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,2]))
 
     # share of households
     HHs_good_debt = 100 * sum(variables_25.μ[1:(parameters_25.a_ind_zero-1),:,:,:,:,1])
     HHs_good_without_debt = 100 * sum(variables_25.μ[parameters_25.a_ind_zero:end,:,:,:,:,1])
+    HHs_good_impatient = 100 * sum(variables_25.μ[:,:,:,:,1,1])
+    HHs_good_patient = 100 * sum(variables_25.μ[:,:,:,:,2,1])
     HHs_good = HHs_good_debt + HHs_good_without_debt
     HHs_good_debt_cond = HHs_good_debt / HHs_good * 100
     HHs_good_without_debt_cond = HHs_good_without_debt / HHs_good * 100
+    HHs_good_impatient_cond = HHs_good_impatient / HHs_good * 100
+    HHs_good_patient_cond = HHs_good_patient / HHs_good * 100
     HHs_bad = 100 * sum(variables_25.μ[:,:,:,:,:,2])
     HHs_total = HHs_good + HHs_bad
 
@@ -594,8 +626,12 @@ if Indicator_solve_transitional_dynamics_across_η == true
         "Total" HHs_total welfare_CEV_25_20 welfare_favor_25_20 welfare_CEV_25_30 welfare_favor_25_30
         "" "" "" "" "" ""
         "Good credit history" HHs_good welfare_CEV_25_20_good welfare_favor_25_20_good welfare_CEV_25_30_good welfare_favor_25_30_good
+        "" "" "" "" "" ""
         "Indebted" HHs_good_debt_cond welfare_CEV_25_20_good_with_debt welfare_favor_25_20_good_with_debt welfare_CEV_25_30_good_with_debt welfare_favor_25_30_good_with_debt
         "Not indebted" HHs_good_without_debt_cond welfare_CEV_25_20_good_without_debt welfare_favor_25_20_good_without_debt welfare_CEV_25_30_good_without_debt welfare_favor_25_30_good_without_debt
+        "" "" "" "" "" ""
+        "Patient" HHs_good_patient_cond welfare_CEV_25_20_good_patient welfare_favor_25_20_good_patient welfare_CEV_25_30_good_patient welfare_favor_25_30_good_patient
+        "Impatient" HHs_good_impatient_cond welfare_CEV_25_20_good_impatient welfare_favor_25_20_good_impatient welfare_CEV_25_30_good_impatient welfare_favor_25_30_good_impatient
         "" "" "" "" "" ""
         "Bad credit history" HHs_bad welfare_CEV_25_20_bad welfare_favor_25_20_bad welfare_CEV_25_30_bad welfare_favor_25_30_bad
     ]
@@ -1744,6 +1780,14 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     W_new_good_without_debt = sum(variables_T_10_12.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
     welfare_CEV_10_12_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
 
+    W_old_good_impatient = sum(variables_10.V[:,:,:,:,1] .* variables_10.μ[:,:,:,:,1,1])
+    W_new_good_impatient = sum(variables_T_10_12.V[:,:,:,:,1,2] .* variables_10.μ[:,:,:,:,1,1])
+    welfare_CEV_10_12_good_impatient = 100 * ((W_new_good_impatient / W_old_good_impatient) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old_good_patient = sum(variables_10.V[:,:,:,:,2] .* variables_10.μ[:,:,:,:,2,1])
+    W_new_good_patient = sum(variables_T_10_12.V[:,:,:,:,2,2] .* variables_10.μ[:,:,:,:,2,1])
+    welfare_CEV_10_12_good_patient = 100 * ((W_new_good_patient / W_old_good_patient) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
     W_old_good = W_old_good_with_debt + W_old_good_without_debt
     W_new_good = W_new_good_with_debt + W_new_good_without_debt
     welfare_CEV_10_12_good = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
@@ -1758,8 +1802,14 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
 
     welfare_favor_10_12_good_with_debt = 100 * sum((variables_T_10_12.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .> variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
     welfare_favor_10_12_good_without_debt = 100 * sum((variables_T_10_12.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .> variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+
+    welfare_favor_10_12_good_impatient = 100 * sum((variables_T_10_12.V[:,:,:,:,1,2] .> variables_10.V[:,:,:,:,1]) .* (variables_10.μ[:,:,:,:,1,1] ./ sum(variables_10.μ[:,:,:,:,1,1])))
+    welfare_favor_10_12_good_patient = 100 * sum((variables_T_10_12.V[:,:,:,:,2,2] .> variables_10.V[:,:,:,:,2]) .* (variables_10.μ[:,:,:,:,2,1] ./ sum(variables_10.μ[:,:,:,:,2,1])))
+
     welfare_favor_10_12_good = 100 * sum((variables_T_10_12.V[:,:,:,:,:,2] .> variables_10.V) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
+    
     welfare_favor_10_12_bad = 100 * sum((variables_T_10_12.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    
     welfare_favor_10_12 = 100 * (sum((variables_T_10_12.V[:,:,:,:,:,2] .> variables_10.V) .* variables_10.μ[:,:,:,:,:,1]) + sum((variables_T_10_12.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
 
     # compute welfare metrics from η = 0.25 to η = 0.20
@@ -1777,6 +1827,14 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
     W_new_good_without_debt = sum(variables_T_10_8.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
     welfare_CEV_10_8_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
 
+    W_old_good_impatient = sum(variables_10.V[:,:,:,:,1] .* variables_10.μ[:,:,:,:,1,1])
+    W_new_good_impatient = sum(variables_T_10_8.V[:,:,:,:,1,2] .* variables_10.μ[:,:,:,:,1,1])
+    welfare_CEV_10_8_good_impatient = 100 * ((W_new_good_impatient / W_old_good_impatient) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
+    W_old_good_patient = sum(variables_10.V[:,:,:,:,2] .* variables_10.μ[:,:,:,:,2,1])
+    W_new_good_patient = sum(variables_T_10_8.V[:,:,:,:,2,2] .* variables_10.μ[:,:,:,:,2,1])
+    welfare_CEV_10_8_good_patient = 100 * ((W_new_good_patient / W_old_good_patient) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
+
     W_old_good = W_old_good_with_debt + W_old_good_without_debt
     W_new_good = W_new_good_with_debt + W_new_good_without_debt
     welfare_CEV_10_8_good = 100 * ((W_new_good / W_old_good) ^ (1.0/(1.0-parameters_10.σ)) - 1.0)
@@ -1791,16 +1849,26 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
 
     welfare_favor_10_8_good_with_debt = 100 * sum((variables_T_10_8.V[1:(parameters_10.a_ind_zero-1),:,:,:,:,2] .> variables_10.V[1:(parameters_10.a_ind_zero-1),:,:,:,:]) .* (variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1] ./ sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])))
     welfare_favor_10_8_good_without_debt = 100 * sum((variables_T_10_8.V[parameters_10.a_ind_zero:end,:,:,:,:,2] .> variables_10.V[parameters_10.a_ind_zero:end,:,:,:,:]) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])))
+    
+    welfare_favor_10_8_good_impatient = 100 * sum((variables_T_10_8.V[:,:,:,:,1,2] .> variables_10.V[:,:,:,:,1]) .* (variables_10.μ[:,:,:,:,1,1] ./ sum(variables_10.μ[:,:,:,:,1,1])))
+    welfare_favor_10_8_good_patient = 100 * sum((variables_T_10_8.V[:,:,:,:,2,2] .> variables_10.V[:,:,:,:,2]) .* (variables_10.μ[:,:,:,:,2,1] ./ sum(variables_10.μ[:,:,:,:,2,1])))
+
     welfare_favor_10_8_good = 100 * sum((variables_T_10_8.V[:,:,:,:,:,2] .> variables_10.V) .* (variables_10.μ[:,:,:,:,:,1] ./ sum(variables_10.μ[:,:,:,:,:,1])))
+    
     welfare_favor_10_8_bad = 100* sum((variables_T_10_8.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* (variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2] ./ sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2])))
+    
     welfare_favor_10_8 = 100 * (sum((variables_T_10_8.V[:,:,:,:,:,2] .> variables_10.V) .* variables_10.μ[:,:,:,:,:,1]) + sum((variables_T_10_8.V_pos[:,:,:,:,:,2] .> variables_10.V_pos) .* variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,2]))
 
     # share of households
     HHs_good_debt = 100 * sum(variables_10.μ[1:(parameters_10.a_ind_zero-1),:,:,:,:,1])
     HHs_good_without_debt = 100 * sum(variables_10.μ[parameters_10.a_ind_zero:end,:,:,:,:,1])
+    HHs_good_impatient = 100 * sum(variables_10.μ[:,:,:,:,1,1])
+    HHs_good_patient = 100 * sum(variables_10.μ[:,:,:,:,2,1])
     HHs_good = HHs_good_debt + HHs_good_without_debt
     HHs_good_debt_cond = HHs_good_debt / HHs_good * 100
     HHs_good_without_debt_cond = HHs_good_without_debt / HHs_good * 100
+    HHs_good_impatient_cond = HHs_good_impatient / HHs_good * 100
+    HHs_good_patient_cond = HHs_good_patient / HHs_good * 100
     HHs_bad = 100 * sum(variables_10.μ[:,:,:,:,:,2])
     HHs_total = HHs_good + HHs_bad
 
@@ -1812,8 +1880,12 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
         "Total" HHs_total welfare_CEV_10_8 welfare_favor_10_8 welfare_CEV_10_12 welfare_favor_10_12
         "" "" "" "" "" ""
         "Good credit history" HHs_good welfare_CEV_10_8_good welfare_favor_10_8_good welfare_CEV_10_12_good welfare_favor_10_12_good
+        "" "" "" "" "" ""
         "Indebted" HHs_good_debt_cond welfare_CEV_10_8_good_with_debt welfare_favor_10_8_good_with_debt welfare_CEV_10_12_good_with_debt welfare_favor_10_12_good_with_debt
         "Not indebted" HHs_good_without_debt_cond welfare_CEV_10_8_good_without_debt welfare_favor_10_8_good_without_debt welfare_CEV_10_12_good_without_debt welfare_favor_10_12_good_without_debt
+        "" "" "" "" "" ""
+        "Patient" HHs_good_patient_cond welfare_CEV_10_8_good_patient welfare_favor_10_8_good_patient welfare_CEV_10_12_good_patient welfare_favor_10_12_good_patient
+        "Impatient" HHs_good_impatient_cond welfare_CEV_10_8_good_impatient welfare_favor_10_8_good_impatient welfare_CEV_10_12_good_impatient welfare_favor_10_12_good_impatient
         "" "" "" "" "" ""
         "Bad credit history" HHs_bad welfare_CEV_10_8_bad welfare_favor_10_8_bad welfare_CEV_10_12_bad welfare_favor_10_12_bad
     ]

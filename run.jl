@@ -2040,8 +2040,8 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     Plots.savefig(plot_welfare_CEV_all_good_with_debt, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_with_debt.pdf")
 
     plot_welfare_CEV_all_good_with_debt_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks=collect(0.20:0.05:0.30))
-    plot_welfare_CEV_all_good_with_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_with_debt[1:3], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_good_with_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_with_debt_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_with_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_with_debt[1:3], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_with_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_with_debt_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_with_debt_selected
     Plots.savefig(plot_welfare_CEV_all_good_with_debt_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_with_debt_selected.pdf")
 
@@ -2052,8 +2052,8 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     Plots.savefig(plot_welfare_CEV_all_good_without_debt, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_without_debt.pdf")
 
     plot_welfare_CEV_all_good_without_debt_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks=collect(0.20:0.05:0.30))
-    plot_welfare_CEV_all_good_without_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_without_debt[1:3], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_good_without_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_without_debt_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_without_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_without_debt[1:3], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_without_debt_selected = plot!(η_all[1:3], welfare_CEV_all_good_without_debt_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_without_debt_selected
     Plots.savefig(plot_welfare_CEV_all_good_without_debt_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_without_debt_selected.pdf")
 
@@ -2064,8 +2064,8 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     Plots.savefig(plot_welfare_CEV_all_good, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good.pdf")
 
     plot_welfare_CEV_all_good_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks=collect(0.20:0.05:0.30))
-    plot_welfare_CEV_all_good_selected = plot!(η_all[1:3], welfare_CEV_all_good[1:3], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_good_selected = plot!(η_all[1:3], welfare_CEV_all_good_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_selected = plot!(η_all[1:3], welfare_CEV_all_good[1:3], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_selected = plot!(η_all[1:3], welfare_CEV_all_good_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_selected
     Plots.savefig(plot_welfare_CEV_all_good_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_good_selected.pdf")
 
@@ -2076,8 +2076,8 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     Plots.savefig(plot_welfare_CEV_all_bad, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_bad.pdf")
 
     plot_welfare_CEV_all_bad_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks=collect(0.20:0.05:0.30))
-    plot_welfare_CEV_all_bad_selected = plot!(η_all[1:3], welfare_CEV_all_bad[1:3], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_bad_selected = plot!(η_all[1:3], welfare_CEV_all_bad_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_bad_selected = plot!(η_all[1:3], welfare_CEV_all_bad[1:3], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_bad_selected = plot!(η_all[1:3], welfare_CEV_all_bad_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_bad_selected
     Plots.savefig(plot_welfare_CEV_all_bad_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_bad_selected.pdf")
 
@@ -2088,8 +2088,8 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     Plots.savefig(plot_welfare_CEV_all, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all.pdf")
 
     plot_welfare_CEV_all_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks=collect(0.20:0.05:0.30))
-    plot_welfare_CEV_all_selected = plot!(η_all[1:3], welfare_CEV_all[1:3], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_selected = plot!(η_all[1:3], welfare_CEV_all_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_selected = plot!(η_all[1:3], welfare_CEV_all[1:3], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_selected = plot!(η_all[1:3], welfare_CEV_all_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_selected
     Plots.savefig(plot_welfare_CEV_all_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_selected.pdf")
 
@@ -2134,6 +2134,40 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     plot_welfare_favor_all_selected = plot!(η_all[1:3], welfare_favor_all_NFF[1:3], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{without\\ financial\\ frictions} \$")
     plot_welfare_favor_all_selected
     Plots.savefig(plot_welfare_favor_all_selected, pwd() * "\\figures\\transition path\\eta\\plot_welfare_favor_all_selected.pdf")
+
+    #===============================#
+    # Degree of financial frictions #
+    #===============================#
+    η_selected = collect(0.20:0.05:0.30)
+
+    # lower θ
+    csv_theta_L = CSV.read("results_welfare_across_eta_0.99_theta_same_benchmark.csv", DataFrame)
+    welfare_L = zeros(3)
+    welfare_L[1] = parse(Float64, csv_theta_L[3,3])
+    welfare_L[3] = parse(Float64, csv_theta_L[3,5])
+
+    # benchmark θ
+    csv_theta_B = CSV.read("results_welfare_across_eta.csv", DataFrame)
+    welfare_B = zeros(3)
+    welfare_B[1] = parse(Float64, csv_theta_B[3,3])
+    welfare_B[3] = parse(Float64, csv_theta_B[3,5])
+
+    # higher θ
+    csv_theta_H = CSV.read("results_welfare_across_eta_1.01_theta_same_benchmark.csv", DataFrame)
+    welfare_H = zeros(3)
+    welfare_H[1] = parse(Float64, csv_theta_H[3,3])
+    welfare_H[3] = parse(Float64, csv_theta_H[3,5])
+
+    # plot welfare for all households
+    plot_welfare_favor_all_θ = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Wage\\ garnishment\\ rate} \$", xticks=collect(0.20:0.05:0.30))
+    # plot_welfare_favor_all_theta = plot!(η_selected, welfare_B, linecolor=:blue, linewidth=3, label="\$ \\theta^B \$")
+    # plot_welfare_favor_all_theta = plot!(η_selected, welfare_L, linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\theta^L \$")
+    # plot_welfare_favor_all_theta = plot!(η_selected, welfare_H, linecolor=:black, linestyle=:dashdot, linewidth=3, label="\$ \\theta^H \$")
+    plot_welfare_favor_all_theta = plot!(η_selected, welfare_B, linecolor=:blue, linewidth=3, label="\$ \\textrm{Benchmark} \$") # 
+    plot_welfare_favor_all_theta = plot!(η_selected, welfare_L, linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Weaker\\ financial\\ frictions} \$")
+    plot_welfare_favor_all_theta = plot!(η_selected, welfare_H, linecolor=:black, linestyle=:dashdot, linewidth=3, label="\$ \\textrm{Stronger\\ financial\\ frictions} \$")
+    plot_welfare_favor_all_theta
+    Plots.savefig(plot_welfare_favor_all_theta, pwd() * "\\figures\\transition path\\eta\\plot_welfare_favor_all_theta.pdf")
 
 end
 
@@ -2563,7 +2597,7 @@ if Indicator_solve_transitional_dynamics_across_p_h_higher_θ_1 == true
         "Bad credit history" HHs_bad welfare_CEV_10_8_bad welfare_favor_10_8_bad welfare_CEV_10_12_bad welfare_favor_10_12_bad
     ]
     display(results_welfare_across_p_h)
-    
+
     # save results
     CSV.write("results_welfare_across_p_h_1.01_theta.csv", Tables.table(results_welfare_across_p_h), header=false)
 
@@ -3118,8 +3152,8 @@ if Indicator_solve_transitional_dynamics_across_p_h_general == true
     Plots.savefig(plot_welfare_CEV_all_good_with_debt, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_with_debt.pdf")
 
     plot_welfare_CEV_all_good_with_debt_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks=collect(5:5:15))
-    plot_welfare_CEV_all_good_with_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_with_debt[end-2:end], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_good_with_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_with_debt_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_with_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_with_debt[end-2:end], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_with_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_with_debt_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_with_debt_selected
     Plots.savefig(plot_welfare_CEV_all_good_with_debt_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_with_debt_selected.pdf")
 
@@ -3130,8 +3164,8 @@ if Indicator_solve_transitional_dynamics_across_p_h_general == true
     Plots.savefig(plot_welfare_CEV_all_good_without_debt, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_without_debt.pdf")
 
     plot_welfare_CEV_all_good_without_debt_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks=collect(5:5:15))
-    plot_welfare_CEV_all_good_without_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_without_debt[end-2:end], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_good_without_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_without_debt_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_without_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_without_debt[end-2:end], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_without_debt_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_without_debt_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_without_debt_selected
     Plots.savefig(plot_welfare_CEV_all_good_without_debt_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_without_debt_selected.pdf")
 
@@ -3142,8 +3176,8 @@ if Indicator_solve_transitional_dynamics_across_p_h_general == true
     Plots.savefig(plot_welfare_CEV_all_good, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good.pdf")
 
     plot_welfare_CEV_all_good_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks=collect(5:5:15))
-    plot_welfare_CEV_all_good_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good[end-2:end], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_good_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good[end-2:end], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_good_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_good_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_good_selected
     Plots.savefig(plot_welfare_CEV_all_good_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_good_selected.pdf")
 
@@ -3154,8 +3188,8 @@ if Indicator_solve_transitional_dynamics_across_p_h_general == true
     Plots.savefig(plot_welfare_CEV_all_bad, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_bad.pdf")
 
     plot_welfare_CEV_all_bad_selected = plot(size=(800, 500), box=:on, legend=:topright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks=collect(5:5:15))
-    plot_welfare_CEV_all_bad_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_bad[end-2:end], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_bad_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_bad_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_bad_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_bad[end-2:end], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_bad_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_bad_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_bad_selected
     Plots.savefig(plot_welfare_CEV_all_bad_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_bad_selected.pdf")
 
@@ -3166,8 +3200,8 @@ if Indicator_solve_transitional_dynamics_across_p_h_general == true
     Plots.savefig(plot_welfare_CEV_all, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all.pdf")
 
     plot_welfare_CEV_all_selected = plot(size=(800, 500), box=:on, legend=:topleft, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="%", xlabel="\$ \\textrm{Average\\ length\\ of\\ exclusion} \$", xticks=collect(5:5:15))
-    plot_welfare_CEV_all_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all[end-2:end], linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label="\$ \\textrm{With\\ financial\\ frictions} \$")
-    plot_welfare_CEV_all_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, markershapes=:square, markercolor=:red, markersize=4, markerstrokecolor=:red, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all[end-2:end], linecolor=:blue, linewidth=3, label="\$ \\textrm{With\\ financial\\ frictions} \$")
+    plot_welfare_CEV_all_selected = plot!(1 ./ p_h_all[end-2:end], welfare_CEV_all_NFF[end-2:end], linecolor=:red, linestyle=:dash, linewidth=3, label="\$ \\textrm{Without\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_selected
     Plots.savefig(plot_welfare_CEV_all_selected, pwd() * "\\figures\\transition path\\p_h\\plot_welfare_CEV_all_selected.pdf")
 

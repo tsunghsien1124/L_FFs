@@ -2140,6 +2140,7 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     #===============================#
     η_selected = collect(0.20:0.05:0.30)
 
+    # welfare
     # lower θ
     csv_theta_L = CSV.read("results_welfare_across_eta_0.99_theta_same_benchmark.csv", DataFrame)
     welfare_L = zeros(3)
@@ -2168,6 +2169,36 @@ if Indicator_solve_transitional_dynamics_across_η_general == true
     plot_welfare_CEV_all_theta = plot!(η_selected, welfare_H, linecolor=:black, linestyle=:dashdot, linewidth=3, label="\$ \\textrm{Stronger\\ financial\\ frictions} \$")
     plot_welfare_CEV_all_theta
     Plots.savefig(plot_welfare_CEV_all_theta, pwd() * "\\figures\\transition path\\eta\\plot_welfare_CEV_all_theta.pdf")
+
+    # incentive and divestment channels
+    # benchmark θ
+    E_theta_B = CSV.read("results_equilibria_across_eta.csv", DataFrame)
+    ι_B = collect(E_theta_B[8,2:4])
+    w_B = collect(E_theta_B[9,2:4])
+
+    # lower θ
+    E_theta_L = CSV.read("results_equilibria_across_eta_0.99_theta_same_benchmark.csv", DataFrame)
+    ι_L = collect(E_theta_L[8,2:4])
+    w_L = collect(E_theta_L[9,2:4])
+
+    # higher θ
+    E_theta_H = CSV.read("results_equilibria_across_eta_1.01_theta_same_benchmark.csv", DataFrame)
+    ι_H = collect(E_theta_H[8,2:4])
+    w_H = collect(E_theta_H[9,2:4])
+
+    # printout results
+    results_channels_across_eta = Any[
+        "Variable (in %)" "Lower Garnishment" "" "Higher Garnishment" ""
+        "" "delta iota" "delta w" "delta iota" "delta w"
+        "" "" "" "" ""
+        "Benchmark" "$((ι_B[1]-ι_B[2])/ι_B[2]*100)" "$((w_B[1]-w_B[2])/w_B[2]*100)" "$((ι_B[3]-ι_B[2])/ι_B[2]*100)" "$((w_B[3]-w_B[2])/w_B[2]*100)"
+        "Weaker financial frictions" "$((ι_L[1]-ι_L[2])/ι_L[2]*100)" "$((w_L[1]-w_L[2])/w_L[2]*100)" "$((ι_L[3]-ι_L[2])/ι_L[2]*100)" "$((w_L[3]-w_L[2])/w_L[2]*100)"
+        "Stronger financial frictions" "$((ι_H[1]-ι_H[2])/ι_H[2]*100)" "$((w_H[1]-w_H[2])/w_H[2]*100)" "$((ι_H[3]-ι_H[2])/ι_H[2]*100)" "$((w_H[3]-w_H[2])/w_H[2]*100)"
+    ]
+    display(results_channels_across_eta)
+
+    # save results
+    CSV.write("results_channels_across_eta.csv", Tables.table(results_channels_across_eta), header=false)
 
 end
 

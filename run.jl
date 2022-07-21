@@ -46,6 +46,7 @@ Indicator_solve_equlibria_λ_min_and_max = false
 Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
 
+Indicator_FF_and_NFF = false
 Indicator_decomposition = false
 
 Indicator_solve_stationary_equlibria_across_η = false
@@ -204,6 +205,47 @@ end
 #===============#
 # Decomposition #
 #===============#
+
+if Indicator_FF_and_NFF == true
+
+    # set up parameters
+    parameters = parameters_function()
+
+    # benchmark with financial frictions
+    variables_benchmark = variables_function(parameters; λ=0.0267604155273437)
+    solve_economy_function!(variables_benchmark, parameters; slow_updating=slow_updating)
+    Y_benchmark = variables_benchmark.aggregate_variables.K^parameters.α
+
+    # without financial frictions
+    variables_NFF = variables_function(parameters; λ=0.0)
+    solve_economy_function!(variables_NFF, parameters; slow_updating=slow_updating)
+    Y_NFF = variables_NFF.aggregate_variables.K^parameters.α
+
+    # collect results
+    results = Any[
+        "Variable" "Benchmark" "Without Financial Frictions"
+        "" "" ""
+        "Levels" "" ""
+        "Wage" variables_benchmark.aggregate_prices.w_λ variables_NFF.aggregate_prices.w_λ
+        "Incentive premium (%)" variables_benchmark.aggregate_prices.ι_λ*100 variables_NFF.aggregate_prices.ι_λ*100
+        "Conditional default rate (%)" (variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts)*100 (variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts)*100
+        "Avg. borrowing interest rate (%)" variables_benchmark.aggregate_variables.avg_loan_rate*100 variables_NFF.aggregate_variables.avg_loan_rate*100
+        "Fraction of HHs in debt (%)" variables_benchmark.aggregate_variables.share_in_debts*100 variables_NFF.aggregate_variables.share_in_debts*100
+        "Debt-to-earnings ratio (%)" variables_benchmark.aggregate_variables.debt_to_earning_ratio*100 variables_NFF.aggregate_variables.debt_to_earning_ratio*100
+        "HH debt-to-GDP ratio (%)" variables_benchmark.aggregate_variables.L/Y_benchmark*100 variables_NFF.aggregate_variables.L/Y_NFF*100
+        # "Debt-to-GDP ratio (%)" (variables_benchmark.aggregate_variables.K+variables_benchmark.aggregate_variables.L)/Y_benchmark*100 (variables_NFF.aggregate_variables.K+variables_NFF.aggregate_variables.L)/Y_NFF*100
+        "" "" ""
+        "% change w.r.t. benchmark" "" ""
+        "Wage" "" ""
+        "Incentive premium" "" ""
+        "Conditional default rate" "" ""
+        "Avg. borrowing interest rate" "" ""
+        "Fraction of HHs in debt" "" ""
+        "Debt-to-earnings ratio" "" ""
+    ]
+    display(results)
+
+end
 
 if Indicator_decomposition == true
 

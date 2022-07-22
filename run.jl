@@ -47,6 +47,7 @@ Indicator_solve_equlibrium_given_λ = false
 Indicator_solve_stationary_equlibrium = false
 
 Indicator_FF_and_NFF = false
+Indicator_varying_θ = false
 Indicator_decomposition = false
 
 Indicator_solve_stationary_equlibria_across_η = false
@@ -223,27 +224,37 @@ if Indicator_FF_and_NFF == true
 
     # collect results
     results = Any[
-        "Variable" "Benchmark" "Without Financial Frictions"
+        "Variable" "Benchmark" "Frictionless"
         "" "" ""
         "Levels" "" ""
-        "Wage" variables_benchmark.aggregate_prices.w_λ variables_NFF.aggregate_prices.w_λ
+        "" "" ""
         "Incentive premium (%)" variables_benchmark.aggregate_prices.ι_λ*100 variables_NFF.aggregate_prices.ι_λ*100
-        "Conditional default rate (%)" (variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts)*100 (variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts)*100
         "Avg. borrowing interest rate (%)" variables_benchmark.aggregate_variables.avg_loan_rate*100 variables_NFF.aggregate_variables.avg_loan_rate*100
         "Fraction of HHs in debt (%)" variables_benchmark.aggregate_variables.share_in_debts*100 variables_NFF.aggregate_variables.share_in_debts*100
         "Debt-to-earnings ratio (%)" variables_benchmark.aggregate_variables.debt_to_earning_ratio*100 variables_NFF.aggregate_variables.debt_to_earning_ratio*100
+        "Conditional default rate (%)" (variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts)*100 (variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts)*100
+        "" "" ""
+        "GDP" Y_benchmark Y_NFF 
+        "Wage" variables_benchmark.aggregate_prices.w_λ variables_NFF.aggregate_prices.w_λ
         "HH debt-to-GDP ratio (%)" variables_benchmark.aggregate_variables.L/Y_benchmark*100 variables_NFF.aggregate_variables.L/Y_NFF*100
         # "Debt-to-GDP ratio (%)" (variables_benchmark.aggregate_variables.K+variables_benchmark.aggregate_variables.L)/Y_benchmark*100 (variables_NFF.aggregate_variables.K+variables_NFF.aggregate_variables.L)/Y_NFF*100
         "" "" ""
         "% change w.r.t. benchmark" "" ""
-        "Wage" "" ""
-        "Incentive premium" "" ""
-        "Conditional default rate" "" ""
-        "Avg. borrowing interest rate" "" ""
-        "Fraction of HHs in debt" "" ""
-        "Debt-to-earnings ratio" "" ""
+        "" "" ""
+        "Incentive premium" "-" ""
+        "Avg. borrowing interest rate" "-" ""
+        "Fraction of HHs in debt" "-" ""
+        "Debt-to-earnings ratio" "-" ""
+        "Conditional default rate" "-" ""
+        "" "" ""
+        "GDP" "-" ""
+        "Wage" "-" ""
+        "HH debt-to-GDP ratio" "-" ""
     ]
     display(results)
+
+    # save results
+    CSV.write("results_FF_and_NFF.csv", Tables.table(results), header=false)
 
 end
 
@@ -439,9 +450,9 @@ end
 
 if Indicator_solve_stationary_equlibria_across_θ == true
 
-    θ_min_search = 1.0 / 3.0 * 0.9
-    θ_max_search = 1.0 / 3.0 * 1.1
-    θ_step_search = 1.0 / 3.0 * 0.1
+    θ_min_search = (1.0 / (4.57 * 0.75)) * 0.99
+    θ_max_search = (1.0 / (4.57 * 0.75)) * 1.01
+    θ_step_search = (1.0 / (4.57 * 0.75)) * 0.01
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_θ_function(θ_min=θ_min_search, θ_max=θ_max_search, θ_step=θ_step_search)
     @save "results_theta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
@@ -449,9 +460,9 @@ end
 
 if Indicator_solve_stationary_equlibria_across_ψ == true
 
-    ψ_min_search = 18
-    ψ_max_search = 22
-    ψ_step_search = 2
+    ψ_min_search = 8
+    ψ_max_search = 12
+    ψ_step_search = 1
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_ψ_function(ψ_min=ψ_min_search, ψ_max=ψ_max_search, ψ_step=ψ_step_search)
     @save "results_psi.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 

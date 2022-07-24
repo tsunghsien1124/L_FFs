@@ -48,6 +48,7 @@ Indicator_solve_stationary_equlibrium = false
 
 Indicator_FF_and_NFF = false
 Indicator_varying_θ = false
+Indicator_varying_ψ = false
 Indicator_decomposition = false
 
 Indicator_solve_stationary_equlibria_across_η = false
@@ -236,8 +237,8 @@ if Indicator_FF_and_NFF == true
         "" "" ""
         "GDP" Y_benchmark Y_NFF 
         "Wage" variables_benchmark.aggregate_prices.w_λ variables_NFF.aggregate_prices.w_λ
+        "Household debt" variables_benchmark.aggregate_variables.L variables_NFF.aggregate_variables.L
         "HH debt-to-GDP ratio (%)" variables_benchmark.aggregate_variables.L/Y_benchmark*100 variables_NFF.aggregate_variables.L/Y_NFF*100
-        # "Debt-to-GDP ratio (%)" (variables_benchmark.aggregate_variables.K+variables_benchmark.aggregate_variables.L)/Y_benchmark*100 (variables_NFF.aggregate_variables.K+variables_NFF.aggregate_variables.L)/Y_NFF*100
         "" "" ""
         "% change w.r.t. benchmark" "" ""
         "" "" ""
@@ -249,12 +250,108 @@ if Indicator_FF_and_NFF == true
         "" "" ""
         "GDP" "-" ""
         "Wage" "-" ""
+        "Household debt" "-" ""
         "HH debt-to-GDP ratio" "-" ""
     ]
     display(results)
 
     # save results
     CSV.write("results_FF_and_NFF.csv", Tables.table(results), header=false)
+
+end
+
+if Indicator_varying_θ == true
+
+    # combine worksapces
+    @load "results_theta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    results_A_FF_all = similar(results_A_FF)
+    copyto!(results_A_FF_all, results_A_FF)
+
+    @load "results_theta_from_0.0_to_0.5_by_0.1.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    θ_already = results_A_FF_all[1, :]
+    θ_new = results_A_NFF[1, :]
+    θ_new_index = []
+    for θ_new_i in 1:length(θ_new)
+        if all(θ_already .!= θ_new[θ_new_i])
+            append!(θ_new_index, [θ_new_i])
+        end
+    end
+    results_A_FF_all = hcat(results_A_FF_all, results_A_FF[:, θ_new_index])
+    results_A_FF_all = results_A_FF_all[:, sortperm(results_A_FF_all[1, :], rev=true)]
+
+    @load "results_theta_from_b0.98_to_b1.02_by_0.02.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    θ_already = results_A_FF_all[1, :]
+    θ_new = results_A_NFF[1, :]
+    θ_new_index = []
+    for θ_new_i in 1:length(θ_new)
+        if all(θ_already .!= θ_new[θ_new_i])
+            append!(θ_new_index, [θ_new_i])
+        end
+    end
+    results_A_FF_all = hcat(results_A_FF_all, results_A_FF[:, θ_new_index])
+    results_A_FF_all = results_A_FF_all[:, sortperm(results_A_FF_all[1, :], rev=true)]
+
+    @save "results_theta_all.jld2" var_names results_A_FF_all
+
+    # set up parameters
+    parameters = parameters_function()
+    
+    # collect results
+    results = Any[
+        "Variable" results_A_FF_all[1,4] results_A_FF_all[1,5] results_A_FF_all[1,6] results_A_FF_all[1,8] results_A_FF_all[1,9]
+        "" "" "" "" "" ""
+        "Incentive premium (%)" results_A_FF_all[4,4]*100 results_A_FF_all[4,5]*100 results_A_FF_all[4,6]*100 results_A_FF_all[4,8]*100 results_A_FF_all[4,9]*100
+        "Avg. borrowing interest rate (%)" results_A_FF_all[13,4]*100 results_A_FF_all[13,5]*100 results_A_FF_all[13,6]*100 results_A_FF_all[13,8]*100 results_A_FF_all[13,9]*100
+        "Fraction of HHs in debt (%)" results_A_FF_all[11,4]*100 results_A_FF_all[11,5]*100 results_A_FF_all[11,6]*100 results_A_FF_all[11,8]*100 results_A_FF_all[11,9]*100
+        "Debt-to-earnings ratio (%)" results_A_FF_all[12,4]*100 results_A_FF_all[12,5]*100 results_A_FF_all[12,6]*100 results_A_FF_all[12,8]*100 results_A_FF_all[12,9]*100
+        "Conditional default rate (%)" results_A_FF_all[10,4]*100 results_A_FF_all[10,5]*100 results_A_FF_all[10,6]*100 results_A_FF_all[10,8]*100 results_A_FF_all[10,9]*100
+        "" "" "" "" "" ""
+        "GDP" results_A_FF_all[5,4]^parameters.α results_A_FF_all[5,5]^parameters.α results_A_FF_all[5,6]^parameters.α results_A_FF_all[5,8]^parameters.α results_A_FF_all[5,9]^parameters.α
+        "Wage" (1.0-parameters.α)*results_A_FF_all[5,4]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,5]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,6]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,8]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,9]^parameters.α
+        "Household debt" results_A_FF_all[6,4] results_A_FF_all[6,5] results_A_FF_all[6,6] results_A_FF_all[6,8] results_A_FF_all[6,9]
+        "HH debt-to-GDP ratio (%)" results_A_FF_all[6,4]/(results_A_FF_all[5,4]^parameters.α)*100 results_A_FF_all[6,5]/(results_A_FF_all[5,5]^parameters.α)*100 results_A_FF_all[6,6]/(results_A_FF_all[5,6]^parameters.α)*100 results_A_FF_all[6,8]/(results_A_FF_all[5,8]^parameters.α)*100 results_A_FF_all[6,9]/(results_A_FF_all[5,9]^parameters.α)*100
+    ]
+    display(results)
+
+    # save results
+    CSV.write("results_FF_across_theta.csv", Tables.table(results), header=false)
+
+end
+
+if Indicator_varying_ψ == true
+
+    # load worksapce
+    # @load "results_psi_from_8_to_12_by_1.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    # @load "results_psi_from_6_to_14_by_2.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    # @load "results_psi_from_9_to_13_by_1.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    # @load "results_psi_from_4_to_12_by_2.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    @load "results_psi_from_7_to_11_by_1.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    results_A_FF_all = similar(results_A_FF)
+    copyto!(results_A_FF_all, results_A_FF)
+
+    # set up parameters
+    parameters = parameters_function()
+    
+    # collect results
+    results = Any[
+        "Variable" results_A_FF_all[1,1] results_A_FF_all[1,2] results_A_FF_all[1,3] results_A_FF_all[1,4] results_A_FF_all[1,5]
+        "" "" "" "" "" ""
+        "Incentive premium (%)" results_A_FF_all[4,1]*100 results_A_FF_all[4,2]*100 results_A_FF_all[4,3]*100 results_A_FF_all[4,4]*100 results_A_FF_all[4,5]*100
+        "Avg. borrowing interest rate (%)" results_A_FF_all[13,1]*100 results_A_FF_all[13,2]*100 results_A_FF_all[13,3]*100 results_A_FF_all[13,4]*100 results_A_FF_all[13,5]*100
+        "Fraction of HHs in debt (%)" results_A_FF_all[11,1]*100 results_A_FF_all[11,2]*100 results_A_FF_all[11,3]*100 results_A_FF_all[11,4]*100 results_A_FF_all[11,5]*100
+        "Debt-to-earnings ratio (%)" results_A_FF_all[12,1]*100 results_A_FF_all[12,2]*100 results_A_FF_all[12,3]*100 results_A_FF_all[12,4]*100 results_A_FF_all[12,5]*100
+        "Conditional default rate (%)" results_A_FF_all[10,1]*100 results_A_FF_all[10,2]*100 results_A_FF_all[10,3]*100 results_A_FF_all[10,4]*100 results_A_FF_all[10,5]*100
+        "" "" "" "" "" ""
+        "GDP" results_A_FF_all[5,1]^parameters.α results_A_FF_all[5,2]^parameters.α results_A_FF_all[5,3]^parameters.α results_A_FF_all[5,4]^parameters.α results_A_FF_all[5,5]^parameters.α
+        "Wage" (1.0-parameters.α)*results_A_FF_all[5,1]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,2]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,3]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,4]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,5]^parameters.α
+        "Household debt" results_A_FF_all[6,1] results_A_FF_all[6,2] results_A_FF_all[6,3] results_A_FF_all[6,4] results_A_FF_all[6,5]
+        "HH debt-to-GDP ratio (%)" results_A_FF_all[6,1]/(results_A_FF_all[5,1]^parameters.α)*100 results_A_FF_all[6,2]/(results_A_FF_all[5,2]^parameters.α)*100 results_A_FF_all[6,3]/(results_A_FF_all[5,3]^parameters.α)*100 results_A_FF_all[6,4]/(results_A_FF_all[5,4]^parameters.α)*100 results_A_FF_all[6,5]/(results_A_FF_all[5,5]^parameters.α)*100
+    ]
+    display(results)
+
+    # save results
+    CSV.write("results_FF_across_psi.csv", Tables.table(results), header=false)
 
 end
 
@@ -456,6 +553,18 @@ if Indicator_solve_stationary_equlibria_across_θ == true
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_θ_function(θ_min=θ_min_search, θ_max=θ_max_search, θ_step=θ_step_search)
     @save "results_theta.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
+    θ_min_search = 0.0
+    θ_max_search = 0.5
+    θ_step_search = 0.1
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_θ_function(θ_min=θ_min_search, θ_max=θ_max_search, θ_step=θ_step_search)
+    @save "results_theta_from_0.0_to_0.5_by_0.1.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    θ_min_search = (1.0 / (4.57 * 0.75)) * 0.98
+    θ_max_search = (1.0 / (4.57 * 0.75)) * 1.02
+    θ_step_search = (1.0 / (4.57 * 0.75)) * 0.02
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_θ_function(θ_min=θ_min_search, θ_max=θ_max_search, θ_step=θ_step_search)
+    @save "results_theta_from_b0.98_to_b1.02_by_0.02.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
 end
 
 if Indicator_solve_stationary_equlibria_across_ψ == true
@@ -464,7 +573,31 @@ if Indicator_solve_stationary_equlibria_across_ψ == true
     ψ_max_search = 12
     ψ_step_search = 1
     var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_ψ_function(ψ_min=ψ_min_search, ψ_max=ψ_max_search, ψ_step=ψ_step_search)
-    @save "results_psi.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+    @save "results_psi_from_8_to_12_by_1.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    ψ_min_search = 6
+    ψ_max_search = 14
+    ψ_step_search = 2
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_ψ_function(ψ_min=ψ_min_search, ψ_max=ψ_max_search, ψ_step=ψ_step_search)
+    @save "results_psi_from_6_to_14_by_2.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    ψ_min_search = 9
+    ψ_max_search = 13
+    ψ_step_search = 1
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_ψ_function(ψ_min=ψ_min_search, ψ_max=ψ_max_search, ψ_step=ψ_step_search)
+    @save "results_psi_from_9_to_13_by_1.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    ψ_min_search = 4
+    ψ_max_search = 12
+    ψ_step_search = 2
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_ψ_function(ψ_min=ψ_min_search, ψ_max=ψ_max_search, ψ_step=ψ_step_search)
+    @save "results_psi_from_4_to_12_by_2.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
+
+    ψ_min_search = 7
+    ψ_max_search = 11
+    ψ_step_search = 1
+    var_names, results_A_NFF, results_V_NFF, results_V_pos_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_V_pos_FF, results_μ_FF = results_ψ_function(ψ_min=ψ_min_search, ψ_max=ψ_max_search, ψ_step=ψ_step_search)
+    @save "results_psi_from_7_to_11_by_1.jld2" var_names results_A_NFF results_V_NFF results_V_pos_NFF results_μ_NFF results_A_FF results_V_FF results_V_pos_FF results_μ_FF
 
 end
 

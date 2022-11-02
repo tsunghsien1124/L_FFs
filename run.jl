@@ -235,6 +235,7 @@ if Indicator_FF_and_NFF == true
         "Debt-to-earnings ratio (%)" variables_benchmark.aggregate_variables.debt_to_earning_ratio*100 variables_NFF.aggregate_variables.debt_to_earning_ratio*100
         "Conditional default rate (%)" (variables_benchmark.aggregate_variables.share_of_filers/variables_benchmark.aggregate_variables.share_in_debts)*100 (variables_NFF.aggregate_variables.share_of_filers/variables_NFF.aggregate_variables.share_in_debts)*100
         "" "" ""
+        "Capital" variables_benchmark.aggregate_variables.K variables_NFF.aggregate_variables.K
         "GDP" Y_benchmark Y_NFF 
         "Wage" variables_benchmark.aggregate_prices.w_λ variables_NFF.aggregate_prices.w_λ
         "Household debt" variables_benchmark.aggregate_variables.L variables_NFF.aggregate_variables.L
@@ -248,6 +249,7 @@ if Indicator_FF_and_NFF == true
         "Debt-to-earnings ratio" "-" ""
         "Conditional default rate" "-" ""
         "" "" ""
+        "Capital" "" ""
         "GDP" "-" ""
         "Wage" "-" ""
         "Household debt" "-" ""
@@ -300,12 +302,13 @@ if Indicator_varying_θ == true
     results = Any[
         "Variable" results_A_FF_all[1,4] results_A_FF_all[1,5] results_A_FF_all[1,6] results_A_FF_all[1,8] results_A_FF_all[1,9]
         "" "" "" "" "" ""
-        "Incentive premium (%)" results_A_FF_all[4,4]*100 results_A_FF_all[4,5]*100 results_A_FF_all[4,6]*100 results_A_FF_all[4,8]*100 results_A_FF_all[4,9]*100
         "Avg. borrowing interest rate (%)" results_A_FF_all[13,4]*100 results_A_FF_all[13,5]*100 results_A_FF_all[13,6]*100 results_A_FF_all[13,8]*100 results_A_FF_all[13,9]*100
         "Fraction of HHs in debt (%)" results_A_FF_all[11,4]*100 results_A_FF_all[11,5]*100 results_A_FF_all[11,6]*100 results_A_FF_all[11,8]*100 results_A_FF_all[11,9]*100
         "Debt-to-earnings ratio (%)" results_A_FF_all[12,4]*100 results_A_FF_all[12,5]*100 results_A_FF_all[12,6]*100 results_A_FF_all[12,8]*100 results_A_FF_all[12,9]*100
         "Conditional default rate (%)" results_A_FF_all[10,4]*100 results_A_FF_all[10,5]*100 results_A_FF_all[10,6]*100 results_A_FF_all[10,8]*100 results_A_FF_all[10,9]*100
         "" "" "" "" "" ""
+        "Incentive premium (%)" results_A_FF_all[4,4]*100 results_A_FF_all[4,5]*100 results_A_FF_all[4,6]*100 results_A_FF_all[4,8]*100 results_A_FF_all[4,9]*100
+        "Capital" results_A_FF_all[5,4] results_A_FF_all[5,5] results_A_FF_all[5,6] results_A_FF_all[5,8] results_A_FF_all[5,9] 
         "GDP" results_A_FF_all[5,4]^parameters.α results_A_FF_all[5,5]^parameters.α results_A_FF_all[5,6]^parameters.α results_A_FF_all[5,8]^parameters.α results_A_FF_all[5,9]^parameters.α
         "Wage" (1.0-parameters.α)*results_A_FF_all[5,4]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,5]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,6]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,8]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,9]^parameters.α
         "Household debt" results_A_FF_all[6,4] results_A_FF_all[6,5] results_A_FF_all[6,6] results_A_FF_all[6,8] results_A_FF_all[6,9]
@@ -343,6 +346,7 @@ if Indicator_varying_ψ == true
         "Debt-to-earnings ratio (%)" results_A_FF_all[12,1]*100 results_A_FF_all[12,2]*100 results_A_FF_all[12,3]*100 results_A_FF_all[12,4]*100 results_A_FF_all[12,5]*100
         "Conditional default rate (%)" results_A_FF_all[10,1]*100 results_A_FF_all[10,2]*100 results_A_FF_all[10,3]*100 results_A_FF_all[10,4]*100 results_A_FF_all[10,5]*100
         "" "" "" "" "" ""
+        "Capital" results_A_FF_all[5,1] results_A_FF_all[5,2] results_A_FF_all[5,3] results_A_FF_all[5,4] results_A_FF_all[5,5]
         "GDP" results_A_FF_all[5,1]^parameters.α results_A_FF_all[5,2]^parameters.α results_A_FF_all[5,3]^parameters.α results_A_FF_all[5,4]^parameters.α results_A_FF_all[5,5]^parameters.α
         "Wage" (1.0-parameters.α)*results_A_FF_all[5,1]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,2]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,3]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,4]^parameters.α (1.0-parameters.α)*results_A_FF_all[5,5]^parameters.α
         "Household debt" results_A_FF_all[6,1] results_A_FF_all[6,2] results_A_FF_all[6,3] results_A_FF_all[6,4] results_A_FF_all[6,5]
@@ -644,6 +648,8 @@ if Indicator_solve_transitional_dynamics_across_η == true
         "" "" "" ""
         "Banking leverage ratio" variables_20.aggregate_variables.leverage_ratio variables_25.aggregate_variables.leverage_ratio variables_30.aggregate_variables.leverage_ratio
         "Incentive premium (%)" variables_20.aggregate_prices.ι_λ*100 variables_25.aggregate_prices.ι_λ*100 variables_30.aggregate_prices.ι_λ*100
+        "Capital" variables_20.aggregate_variables.K variables_25.aggregate_variables.K variables_30.aggregate_variables.K
+        "GDP" variables_20.aggregate_variables.K^parameters_20.α variables_25.aggregate_variables.K^parameters_25.α variables_30.aggregate_variables.K^parameters_30.α
         "Wage" variables_20.aggregate_prices.w_λ variables_25.aggregate_prices.w_λ variables_30.aggregate_prices.w_λ
     ]
     display(results_equilibria_across_η)
@@ -2432,6 +2438,8 @@ if Indicator_solve_transitional_dynamics_across_p_h == true
         "" "" "" ""
         "Banking leverage ratio" variables_8.aggregate_variables.leverage_ratio variables_10.aggregate_variables.leverage_ratio variables_12.aggregate_variables.leverage_ratio
         "Incentive premium (%)" variables_8.aggregate_prices.ι_λ*100 variables_10.aggregate_prices.ι_λ*100 variables_12.aggregate_prices.ι_λ*100
+        "Capital" variables_8.aggregate_variables.K variables_10.aggregate_variables.K variables_12.aggregate_variables.K
+        "GDP" variables_8.aggregate_variables.K^parameters_8.α variables_10.aggregate_variables.K^parameters_10.α variables_12.aggregate_variables.K^parameters_12.α
         "Wage" variables_8.aggregate_prices.w_λ variables_10.aggregate_prices.w_λ variables_12.aggregate_prices.w_λ
     ]
     display(results_equilibria_across_p_h)

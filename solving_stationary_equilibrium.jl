@@ -35,14 +35,13 @@ function parameters_function(;
     β_f::Real = 1.0 / (1.0 + r_f),  # discount factor (bank)
     τ::Real = r_f,                  # transaction cost
     σ::Real = 2.00,                 # CRRA coefficient
-    η::Real = 0.25,                 # garnishment rate
     δ::Real = 0.08,                 # depreciation rate
     α::Real = 0.36,                 # capital share
     ψ::Real = 0.972^4,              # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Real = 1.0/(4.57*0.75),      # diverting fraction # 1.0 / 3.0
     p_h::Real = 1.0 / 10.0,         # prob. of history erased
-    κ::Real = 0.00,                 # filing cost
-    ζ_d::Real = 0.02150,            # EV scale parameter (default)
+    ξ::Real = 0.00,                 # stigma utility filing cost
+    κ::Real = 0.00,                 # out-of-pocket monetary filing cost
     e_1_σ::Real = 0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer = 2,          # number of permanent endowment shock
     e_2_ρ::Real = 0.957,            # AR(1) of persistent endowment shock
@@ -50,9 +49,7 @@ function parameters_function(;
     e_2_size::Integer = 3,          # number of persistent endowment shock
     e_3_σ::Real = 0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer = 3,          # number oftransitory endowment shock
-    ν_s::Real = 0.0000,             # scale of patience
-    ν_p::Real = 0.010570,           # probability of patience
-    ν_size::Integer = 2,            # number of preference shock
+    ν_size::Integer = 2,            # number of expenditure shock
     a_min::Real = -6.0,             # min of asset holding
     a_max::Real = 400.0,            # max of asset holding
     a_size_neg::Integer = 101,      # number of grid of negative asset holding for VFI
@@ -89,7 +86,7 @@ function parameters_function(;
     # aggregate labor endowment
     E = 1.0
 
-    # preference schock
+    # expenditure schock
     ν_grid = [ν_s, 1.0]
     ν_Γ = [ν_p, 1.0 - ν_p]
     G_ν = [0.0, 1.0]
@@ -125,8 +122,8 @@ function parameters_function(;
         ψ = ψ,
         θ = θ,
         p_h = p_h,
+        ξ = ξ,
         κ = κ,
-        ζ_d = ζ_d,
         e_1_σ = e_1_σ,
         e_1_size = e_1_size,
         e_1_Γ = e_1_Γ,
@@ -144,8 +141,6 @@ function parameters_function(;
         e_3_grid = e_3_grid,
         G_e_3 = G_e_3,
         E = E,
-        ν_s = ν_s,
-        ν_p = ν_p,
         ν_size = ν_size,
         ν_Γ = ν_Γ,
         ν_grid = ν_grid,

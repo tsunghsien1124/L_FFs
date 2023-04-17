@@ -24,6 +24,6 @@ using Measures
 #==================#
 # Import functions #
 #==================#
-# include("solving_stationary_equilibrium.jl")
+include("solving_stationary_equilibrium.jl")
 # include("solving_transitional_dynamics.jl")
 # include("simulation.jl")

@@ -502,7 +502,6 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
                     @inbounds variables.V[a_i, e_i, t_i, ν_i] = variables.V_nd[a_i, e_i, t_i, ν_i]
                 end
 
-                #=
                 if variables.V_nd[a_i, e_i, t_i, ν_i] > variables.V_d[e_i, t_i, ν_i]
                     # repayment
                     @inbounds variables.V[a_i, e_i, t_i, ν_i] = variables.V_nd[a_i, e_i, t_i, ν_i]
@@ -510,7 +509,6 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
                     # voluntary default
                     @inbounds variables.V[a_i, e_i, t_i, ν_i] = variables.V_d[e_i, t_i, ν_i]
                 end
-                =#
             else
                 # involuntary default
                 @inbounds variables.V_nd[a_i, e_i, t_i, ν_i] = utility_function(0.0, σ)
@@ -538,7 +536,6 @@ function threshold_function!(variables::MutableVariables, parameters::NamedTuple
     for ν_i = 1:ν_size, t_i = 1:t_size
 
         # defaulting thresholds in wealth (a)
-        #=
         for e_i = 1:e_size
             @inbounds @views V_nd_Non_Inf = findall(variables.V_nd[:, e_i, t_i, ν_i] .!= -Inf)
             @inbounds @views a_grid_itp = a_grid[V_nd_Non_Inf]
@@ -552,17 +549,16 @@ function threshold_function!(variables::MutableVariables, parameters::NamedTuple
                 @inbounds variables.threshold_a[e_i, t_i, ν_i] = find_zero(a -> V_diff_itp(a), (V_diff_lb, V_diff_ub), Bisection())
             end
         end
-        =#
 
-        for e_i = 1:e_size
-            @inbounds y = w * exp(e_grid[e_i] + t_grid[t_i])
-            if y + a_grid[1] - variables.rbl[e_i, 2] > 0.0
-                @inbounds variables.threshold_a[e_i, t_i, ν_i] = -Inf
-            else
-                @inbounds involuntary_itp(a) = y + a - variables.rbl[e_i, 2]
-                @inbounds variables.threshold_a[e_i, t_i, ν_i] = find_zero(a -> involuntary_itp(a), (a_grid[1], 0.0), Bisection())
-            end
-        end
+        # for e_i = 1:e_size
+        #     @inbounds y = w * exp(e_grid[e_i] + t_grid[t_i])
+        #     if y + a_grid[1] - variables.rbl[e_i, 2] > 0.0
+        #         @inbounds variables.threshold_a[e_i, t_i, ν_i] = -Inf
+        #     else
+        #         @inbounds involuntary_itp(a) = y + a - variables.rbl[e_i, 2]
+        #         @inbounds variables.threshold_a[e_i, t_i, ν_i] = find_zero(a -> involuntary_itp(a), (a_grid[1], 0.0), Bisection())
+        #     end
+        # end
 
         # defaulting thresholds in endowment (e)
         @inbounds @views thres_a_Non_Inf = findall(variables.threshold_a[:, t_i, ν_i] .!= -Inf)
@@ -885,10 +881,10 @@ function solve_economy_function!(variables::MutableVariables, parameters::NamedT
     solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, figure_track = false, slow_updating = 1.0)
 
     # solve the cross-sectional distribution
-    solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
+    # solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
 
     # compute aggregate variables
-    solve_aggregate_variable_function!(variables, parameters)
+    # solve_aggregate_variable_function!(variables, parameters)
 
     # compute the difference between demand and supply sides
     ED = variables.aggregate_variables.KL_to_D_ratio - parameters.KL_to_D_ratio
@@ -1098,9 +1094,9 @@ solve_economy_function!(variables, parameters)
 #======================================================#
 # Solve the model with different bankruptcy strictness #
 #======================================================#
-var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF = results_η_function(η_min = 0.20, η_max = 0.80, η_step = 0.10)
-@save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
-@load "C:/Users/User/Desktop/results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
+# var_names, results_A_NFF, results_V_NFF, results_μ_NFF, results_A_FF, results_V_FF, results_μ_FF = results_η_function(η_min = 0.20, η_max = 0.80, η_step = 0.10)
+# @save "results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
+# @load "C:/Users/User/Desktop/results_eta.jld2" var_names results_A_NFF results_V_NFF results_μ_NFF results_A_FF results_V_FF results_μ_FF
 
-parameters_CEV, results_CEV_NFF = results_CEV_function(results_V_NFF)
-parameters_CEV, results_CEV_FF = results_CEV_function(results_V_FF)
+# parameters_CEV, results_CEV_NFF = results_CEV_function(results_V_NFF)
+# parameters_CEV, results_CEV_FF = results_CEV_function(results_V_FF)

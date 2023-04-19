@@ -731,8 +731,8 @@ end
 parameters = parameters_function()
 variables = variables_function(parameters)
 solve_value_and_pricing_function!(variables, parameters; tol = 1E-4, iter_max = 100, figure_track = true)
-solve_stationary_distribution_function!(variables, parameters; tol = 1E-8, iter_max = 1000)
-solve_aggregate_variable_function!(variables, parameters)
+# solve_stationary_distribution_function!(variables, parameters; tol = 1E-8, iter_max = 1000)
+# solve_aggregate_variable_function!(variables, parameters)
 
 #==================#
 # Checking moments #

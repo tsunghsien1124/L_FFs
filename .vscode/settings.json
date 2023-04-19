@@ -3,4 +3,5 @@
     "settingsSync.ignoredSettings": [
         "-julia.NumThreads"
     ],
+    "terminal.integrated.persistentSessionReviveProcess": "never"
 }

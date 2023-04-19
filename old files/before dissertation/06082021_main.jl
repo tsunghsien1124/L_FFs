@@ -9,12 +9,13 @@ using LinearAlgebra: norm
 # using Measures
 using Optim
 using Parameters: @unpack
-# using Plots
+using Plots
 using PrettyTables
 using ProgressMeter
 using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions
 using Roots
 using UnicodePlots
+using Interpolations
 
 # print out the number of threads
 println("Julia is running with $(Threads.nthreads()) threads...")
@@ -38,13 +39,13 @@ function parameters_function(;
     e_σ::Real = 0.1300,             # s.d. of persistent endowment shock
     e_size::Integer = 9,            # number of persistent endowment shock
     t_σ::Real = 0.35,               # s.d. of transitory endowment shock
-    t_size::Integer = 3,            # number oftransitory endowment shock
+    t_size::Integer = 3,            # number of transitory endowment shock
     ν_s::Real = 0.00,               # scale of patience
-    ν_p::Real = 0.01,               # probability of patience
+    ν_p::Real = 0.00,               # probability of patience
     ν_size::Integer = 2,            # number of preference shock
     a_min::Real = -8.0,             # min of asset holding
     a_max::Real = 300.0,            # max of asset holding
-    a_size_neg::Integer = 201,      # number of grid of negative asset holding for VFI
+    a_size_neg::Integer = 401,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer = 51,       # number of grid of positive asset holding for VFI
     a_degree::Integer = 3,          # curvature of the positive asset gridpoints
     a_size_pos_μ::Integer = 751,    # number of grid of positive asset holding for distribution
@@ -442,7 +443,8 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
         # compute the next-period discounted expected value funtions and interpolated functions
         # V_hat_itp(a_p) = ν * β * EV_itp_function(a_p, e_i, V_d_p, V_nd_p, variables.threshold_a, parameters)
         V_hat = ν * β * EV_function(e_i, V_p, parameters)
-        V_hat_itp = Akima(a_grid, V_hat)
+        # V_hat_itp = Akima(a_grid, V_hat)
+        V_hat_itp = linear_interpolation(a_grid, V_hat, extrapolation_bc=Line()) 
 
         #=
         EV_nd_hat = EV_function(e_i, V_nd_p, parameters)
@@ -535,7 +537,8 @@ function threshold_function!(variables::MutableVariables, parameters::NamedTuple
             @inbounds @views V_nd_Non_Inf = findall(variables.V_nd[:, e_i, t_i, ν_i] .!= -Inf)
             @inbounds @views a_grid_itp = a_grid[V_nd_Non_Inf]
             @inbounds @views V_nd_grid_itp = variables.V_nd[V_nd_Non_Inf, e_i, t_i, ν_i]
-            V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
+            # V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
+            V_nd_itp = linear_interpolation(a_grid_itp, V_nd_grid_itp, extrapolation_bc=Line()) 
             @inbounds V_diff_itp(a) = V_nd_itp(a) - variables.V_d[e_i, t_i, ν_i]
             if minimum(V_nd_grid_itp) > variables.V_d[e_i, t_i, ν_i]
                 @inbounds variables.threshold_a[e_i, t_i, ν_i] = -Inf
@@ -549,7 +552,8 @@ function threshold_function!(variables::MutableVariables, parameters::NamedTuple
         @inbounds @views thres_a_Non_Inf = findall(variables.threshold_a[:, t_i, ν_i] .!= -Inf)
         @inbounds @views thres_a_grid_itp = -variables.threshold_a[thres_a_Non_Inf, t_i, ν_i]
         earning_grid_itp = w * exp.(e_grid[thres_a_Non_Inf] .+ t_grid[t_i])
-        threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k = 1, bc = "extrapolate")
+        # threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k = 1, bc = "extrapolate")
+        threshold_earning_itp = linear_interpolation(thres_a_grid_itp, earning_grid_itp, extrapolation_bc=Line())
         Threads.@threads for a_i = 1:a_size
             @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
             e_thres = earning_thres > 0.0 ? log(earning_thres / w) - t_grid[t_i] : -Inf
@@ -877,10 +881,10 @@ function solve_economy_function!(variables::MutableVariables, parameters::NamedT
     solve_value_and_pricing_function!(variables, parameters; tol = tol_h, iter_max = 500, figure_track = false, slow_updating = 1.0)
 
     # solve the cross-sectional distribution
-    solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
+    # solve_stationary_distribution_function!(variables, parameters; tol = tol_μ, iter_max = 1000)
 
     # compute aggregate variables
-    solve_aggregate_variable_function!(variables, parameters)
+    # solve_aggregate_variable_function!(variables, parameters)
 
     # compute the difference between demand and supply sides
     ED = variables.aggregate_variables.KL_to_D_ratio - parameters.KL_to_D_ratio
@@ -1084,6 +1088,12 @@ parameters = parameters_function(λ = 0.0034137294588653328)
 variables = variables_function(parameters)
 solve_economy_function!(variables, parameters)
 
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,:])
+plot(parameters.a_grid_neg[301:end], variables.V[301:parameters.a_ind_zero,5,:,2])
+plot(parameters.a_grid_neg[351:end], variables.V_nd[351:parameters.a_ind_zero,1,:,2])
+plot(parameters.e_grid, variables.threshold_a[:,:,2])
+plot(parameters.a_grid_neg, variables.threshold_e[1:parameters.a_ind_zero,:,2])
+
 # parameters_NFF = parameters_function(λ = 0.0)
 # variables_NFF = variables_function(parameters_NFF)
 # solve_economy_function!(variables_NFF, parameters_NFF)
@@ -1101,109 +1111,109 @@ solve_economy_function!(variables, parameters)
 #=============================#
 # Solve transitional dynamics #
 #=============================#
-periods = 80
+# periods = 80
 
-mutable struct MutableAggregateVariables_T
-    """
-    construct a type for mutable aggregate variables of periods T
-    """
-    L::Array{Float64,1}
-    D::Array{Float64,1}
-    N::Array{Float64,1}
-    leverage_ratio::Array{Float64,1}
-    KL_to_D_ratio::Array{Float64,1}
-    debt_to_earning_ratio::Array{Float64,1}
-    share_of_filers::Array{Float64,1}
-    share_of_involuntary_filers::Array{Float64,1}
-    share_in_debts::Array{Float64,1}
-    avg_loan_rate::Array{Float64,1}
-    avg_loan_rate_pw::Array{Float64,1}
-end
+# mutable struct MutableAggregateVariables_T
+#     """
+#     construct a type for mutable aggregate variables of periods T
+#     """
+#     L::Array{Float64,1}
+#     D::Array{Float64,1}
+#     N::Array{Float64,1}
+#     leverage_ratio::Array{Float64,1}
+#     KL_to_D_ratio::Array{Float64,1}
+#     debt_to_earning_ratio::Array{Float64,1}
+#     share_of_filers::Array{Float64,1}
+#     share_of_involuntary_filers::Array{Float64,1}
+#     share_in_debts::Array{Float64,1}
+#     avg_loan_rate::Array{Float64,1}
+#     avg_loan_rate_pw::Array{Float64,1}
+# end
 
-mutable struct MutableVariables_T
-    """
-    construct a type for mutable variables of periods T
-    """
-    R::Array{Float64,3}
-    q::Array{Float64,3}
-    rbl::Array{Float64,3}
-    V::Array{Float64,5}
-    V_d::Array{Float64,4}
-    V_nd::Array{Float64,5}
-    policy_a::Array{Float64,5}
-    threshold_a::Array{Float64,4}
-    threshold_e::Array{Float64,4}
-    μ::Array{Float64,5}
-    aggregate_variables::MutableAggregateVariables_T
-end
+# mutable struct MutableVariables_T
+#     """
+#     construct a type for mutable variables of periods T
+#     """
+#     R::Array{Float64,3}
+#     q::Array{Float64,3}
+#     rbl::Array{Float64,3}
+#     V::Array{Float64,5}
+#     V_d::Array{Float64,4}
+#     V_nd::Array{Float64,5}
+#     policy_a::Array{Float64,5}
+#     threshold_a::Array{Float64,4}
+#     threshold_e::Array{Float64,4}
+#     μ::Array{Float64,5}
+#     aggregate_variables::MutableAggregateVariables_T
+# end
 
-function variables_T_function(parameters::NamedTuple, T_size::Integer)
-    """
-    construct a mutable object containing endogenous variables of periods T
-    """
+# function variables_T_function(parameters::NamedTuple, T_size::Integer)
+#     """
+#     construct a mutable object containing endogenous variables of periods T
+#     """
 
-    # unpack parameters
-    @unpack a_size, a_grid, a_size_neg, a_grid_neg, a_size_μ, e_size, e_grid, t_size, t_grid, t_Γ, e_ρ, e_σ, ν_size, w, r_f, τ, ι, η, σ = parameters
+#     # unpack parameters
+#     @unpack a_size, a_grid, a_size_neg, a_grid_neg, a_size_μ, e_size, e_grid, t_size, t_grid, t_Γ, e_ρ, e_σ, ν_size, w, r_f, τ, ι, η, σ = parameters
 
-    # define repayment probability, pricing function, and risky borrowing limit
-    R = zeros(a_size_neg, e_size, T_size)
-    q = ones(a_size, e_size, T_size) ./ (1.0 + r_f)
-    rbl = zeros(e_size, 2, T_size)
+#     # define repayment probability, pricing function, and risky borrowing limit
+#     R = zeros(a_size_neg, e_size, T_size)
+#     q = ones(a_size, e_size, T_size) ./ (1.0 + r_f)
+#     rbl = zeros(e_size, 2, T_size)
 
-    # define value and policy functions
-    V = zeros(a_size, e_size, t_size, ν_size, T_size)
-    V_d = zeros(e_size, t_size, ν_size, T_size)
-    V_nd = zeros(a_size, e_size, t_size, ν_size, T_size)
-    policy_a = zeros(a_size, e_size, t_size, ν_size, T_size)
+#     # define value and policy functions
+#     V = zeros(a_size, e_size, t_size, ν_size, T_size)
+#     V_d = zeros(e_size, t_size, ν_size, T_size)
+#     V_nd = zeros(a_size, e_size, t_size, ν_size, T_size)
+#     policy_a = zeros(a_size, e_size, t_size, ν_size, T_size)
 
-    # define thresholds conditional on endowment or asset
-    threshold_a = zeros(e_size, t_size, ν_size, T_size)
-    threshold_e = zeros(a_size, t_size, ν_size, T_size)
+#     # define thresholds conditional on endowment or asset
+#     threshold_a = zeros(e_size, t_size, ν_size, T_size)
+#     threshold_e = zeros(a_size, t_size, ν_size, T_size)
 
-    # define cross-sectional distribution
-    μ_size = a_size_μ * e_size * t_size * ν_size
-    μ = ones(a_size_μ, e_size, t_size, ν_size, T_size) ./ μ_size
+#     # define cross-sectional distribution
+#     μ_size = a_size_μ * e_size * t_size * ν_size
+#     μ = ones(a_size_μ, e_size, t_size, ν_size, T_size) ./ μ_size
 
-    # define aggregate variables
-    L = zeros(T_size)
-    D = zeros(T_size)
-    N = zeros(T_size)
-    leverage_ratio = zeros(T_size)
-    KL_to_D_ratio = zeros(T_size)
-    debt_to_earning_ratio = zeros(T_size)
-    share_of_filers = zeros(T_size)
-    share_of_involuntary_filers = zeros(T_size)
-    share_in_debts = zeros(T_size)
-    avg_loan_rate = zeros(T_size)
-    avg_loan_rate_pw = zeros(T_size)
-    aggregate_variables =
-        MutableAggregateVariables_T(L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+#     # define aggregate variables
+#     L = zeros(T_size)
+#     D = zeros(T_size)
+#     N = zeros(T_size)
+#     leverage_ratio = zeros(T_size)
+#     KL_to_D_ratio = zeros(T_size)
+#     debt_to_earning_ratio = zeros(T_size)
+#     share_of_filers = zeros(T_size)
+#     share_of_involuntary_filers = zeros(T_size)
+#     share_in_debts = zeros(T_size)
+#     avg_loan_rate = zeros(T_size)
+#     avg_loan_rate_pw = zeros(T_size)
+#     aggregate_variables =
+#         MutableAggregateVariables_T(L, D, N, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
-    # return outputs
-    variables = MutableVariables_T(R, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ, aggregate_variables)
-    return variables
-end
+#     # return outputs
+#     variables = MutableVariables_T(R, q, rbl, V, V_d, V_nd, policy_a, threshold_a, threshold_e, μ, aggregate_variables)
+#     return variables
+# end
 
-function transitional_dynamic_λ_function(
-    λ_old::Real = 0.0,
-    λ_new::Real = 0.0034137294588653328;
-    periods::Integer = periods
-    )
+# function transitional_dynamic_λ_function(
+#     λ_old::Real = 0.0,
+#     λ_new::Real = 0.0034137294588653328;
+#     periods::Integer = periods
+#     )
 
-    # old stationary equilibrium
-    parameters_old = parameters_function(λ = λ_old)
-    variables_old = variables_function(parameters_old)
-    solve_economy_function!(variables_old, parameters_old)
+#     # old stationary equilibrium
+#     parameters_old = parameters_function(λ = λ_old)
+#     variables_old = variables_function(parameters_old)
+#     solve_economy_function!(variables_old, parameters_old)
 
-    # new stationary equilibrium
-    parameters_new = parameters_function(λ = λ_new)
-    variables_new = variables_function(parameters_new)
-    solve_economy_function!(variables_new, parameters_new)
+#     # new stationary equilibrium
+#     parameters_new = parameters_function(λ = λ_new)
+#     variables_new = variables_function(parameters_new)
+#     solve_economy_function!(variables_new, parameters_new)
 
-    # conjecture of leverage ratio
-    LR_path = zeros(periods)
-    ι_path = zeros(periods)
-    r_k_path = zeros(periods)
-    w_path = zeros(periods)
+#     # conjecture of leverage ratio
+#     LR_path = zeros(periods)
+#     ι_path = zeros(periods)
+#     r_k_path = zeros(periods)
+#     w_path = zeros(periods)
 
-end
+# end

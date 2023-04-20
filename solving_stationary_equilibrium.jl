@@ -38,9 +38,9 @@ function parameters_function(;
     δ::Real=0.08,                 # depreciation rate
     α::Real=0.36,                 # capital share
     ψ::Real=0.972^4,              # exogenous retention ratio # 1.0 - 1.0 / 20.0
-    θ::Real=1.0 / (4.57 * 0.75),      # diverting fraction # 1.0 / 3.0
+    θ::Real=1.0 / (4.57 * 0.75),  # diverting fraction # 1.0 / 3.0
     p_h::Real=1.0 / 10.0,         # prob. of history erased
-    η::Real=0.40,                 # wage garnishment rate
+    η::Real=0.30,                 # wage garnishment rate
     ξ::Real=0.00,                 # stigma utility filing cost
     κ::Real=0.02,                 # out-of-pocket monetary filing cost
     e_1_σ::Real=0.448,            # s.d. of permanent endowment shock
@@ -49,9 +49,9 @@ function parameters_function(;
     e_2_σ::Real=0.129,            # s.d. of persistent endowment shock
     e_2_size::Integer=9,          # number of persistent endowment shock
     e_3_σ::Real=0.351,            # s.d. of transitory endowment shock
-    e_3_size::Integer=5,          # number oftransitory endowment shock
+    e_3_size::Integer=3,          # number oftransitory endowment shock
     ν_size::Integer=3,            # number of expenditure shock
-    a_min::Real=-4.0,             # min of asset holding
+    a_min::Real=-2.0,             # min of asset holding
     a_max::Real=400.0,            # max of asset holding
     a_size_neg::Integer=101,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer=101,      # number of grid of positive asset holding for VFI
@@ -78,10 +78,10 @@ function parameters_function(;
     # G_e_2 = [1.0, 0.0, 0.0]
 
     # transitory endowment shock
-    e_3_grid, e_3_Γ = adda_cooper(e_3_size, 0.0, e_3_σ)
-    # e_3_bar = sqrt((3 / 2) * e_3_σ^2)
-    # e_3_grid = [-e_3_bar, 0.0, e_3_bar]
-    # e_3_Γ = [1.0 / e_3_size for i = 1:e_3_size]
+    # e_3_grid, e_3_Γ = adda_cooper(e_3_size, 0.0, e_3_σ)
+    e_3_bar = sqrt((3 / 2) * e_3_σ^2)
+    e_3_grid = [-e_3_bar, 0.0, e_3_bar]
+    e_3_Γ = [1.0 / e_3_size for i = 1:e_3_size]
     G_e_3 = [0.0, 1.0, 0.0]
 
     # aggregate labor endowment
@@ -315,6 +315,8 @@ function threshold_function(V_d::Array{Float64,4}, V_nd::Array{Float64,5}, w::Re
     # loop over states
     for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_1_i = 1:e_1_size
 
+        println("v_i = $ν_i, e_3_i = $e_3_i, e_1_i = $e_1_i")
+
         # defaulting thresholds in wealth (a)
         for e_2_i = 1:e_2_size
             @inbounds @views V_nd_Non_Inf = findall(V_nd[:, e_1_i, e_2_i, e_3_i, ν_i] .!= -Inf)
@@ -543,6 +545,9 @@ function value_and_policy_function(
     # loop over all states
     for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
 
+        # extract unexpected expenses
+        @inbounds ν = ν_grid[ν_i]
+
         # construct earning
         @inbounds y = w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i])
 
@@ -552,9 +557,6 @@ function value_and_policy_function(
         # construct interpolated discounted borrowing amount functions
         @inbounds @views qa = q[:, e_1_i, e_2_i] .* a_grid
         qa_function_itp = Akima(a_grid, qa)
-
-        # extract unexpected expenses
-        @inbounds ν = ν_grid[ν_i]
 
         # compute the next-period discounted expected value funtions and interpolated functions
         V_hat = ρ * β * EV_function(e_1_i, e_2_i, V_p, parameters)

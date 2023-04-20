@@ -1089,8 +1089,8 @@ variables = variables_function(parameters)
 solve_economy_function!(variables, parameters)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,:])
-plot(parameters.a_grid_neg[301:end], variables.V[301:parameters.a_ind_zero,5,:,2])
-plot(parameters.a_grid_neg[351:end], variables.V_nd[351:parameters.a_ind_zero,1,:,2])
+plot(parameters.a_grid_neg[371:end], variables.V[371:parameters.a_ind_zero,5,:,2])
+plot(parameters.a_grid_neg[371:end], variables.V_nd[371:parameters.a_ind_zero,5,:,2])
 plot(parameters.e_grid, variables.threshold_a[:,:,2])
 plot(parameters.a_grid_neg, variables.threshold_e[1:parameters.a_ind_zero,:,2])
 

@@ -443,8 +443,8 @@ function value_and_policy_function!(V_p::Array{Float64,4}, V_d_p::Array{Float64,
         # compute the next-period discounted expected value funtions and interpolated functions
         # V_hat_itp(a_p) = ν * β * EV_itp_function(a_p, e_i, V_d_p, V_nd_p, variables.threshold_a, parameters)
         V_hat = ν * β * EV_function(e_i, V_p, parameters)
-        # V_hat_itp = Akima(a_grid, V_hat)
-        V_hat_itp = linear_interpolation(a_grid, V_hat, extrapolation_bc=Line()) 
+        V_hat_itp = Akima(a_grid, V_hat)
+        # V_hat_itp = linear_interpolation(a_grid, V_hat, extrapolation_bc=Line()) 
 
         #=
         EV_nd_hat = EV_function(e_i, V_nd_p, parameters)
@@ -537,8 +537,8 @@ function threshold_function!(variables::MutableVariables, parameters::NamedTuple
             @inbounds @views V_nd_Non_Inf = findall(variables.V_nd[:, e_i, t_i, ν_i] .!= -Inf)
             @inbounds @views a_grid_itp = a_grid[V_nd_Non_Inf]
             @inbounds @views V_nd_grid_itp = variables.V_nd[V_nd_Non_Inf, e_i, t_i, ν_i]
-            # V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
-            V_nd_itp = linear_interpolation(a_grid_itp, V_nd_grid_itp, extrapolation_bc=Line()) 
+            V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
+            # V_nd_itp = linear_interpolation(a_grid_itp, V_nd_grid_itp, extrapolation_bc=Line()) 
             @inbounds V_diff_itp(a) = V_nd_itp(a) - variables.V_d[e_i, t_i, ν_i]
             if minimum(V_nd_grid_itp) > variables.V_d[e_i, t_i, ν_i]
                 @inbounds variables.threshold_a[e_i, t_i, ν_i] = -Inf
@@ -1088,7 +1088,7 @@ parameters = parameters_function(λ = 0.0034137294588653328)
 variables = variables_function(parameters)
 solve_economy_function!(variables, parameters)
 
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,:])
+plot(parameters.a_grid_neg[301:end], variables.q[301:parameters.a_ind_zero,:])
 plot(parameters.a_grid_neg[371:end], variables.V[371:parameters.a_ind_zero,5,:,2])
 plot(parameters.a_grid_neg[371:end], variables.V_nd[371:parameters.a_ind_zero,5,:,2])
 plot(parameters.e_grid, variables.threshold_a[:,:,2])

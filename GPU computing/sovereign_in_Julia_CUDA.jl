@@ -33,7 +33,8 @@ function def_init(sumdef,τ,Y,α)
     iy = threadIdx().x
     stride = blockDim().x
     for i = iy:stride:length(sumdef)
-        sumdef[i] = CUDA.pow((1-τ)*exp(Y[i]),(1-α))/(1-α)
+        # sumdef[i] = CUDA.pow((1-τ)*exp(Y[i]),(1-α))/(1-α)
+        sumdef[i] = (1-τ)*exp(Y[i])^(1-α)/(1-α)
     end
     return
 end
@@ -66,8 +67,10 @@ function vr(Nb,Ny,α,β,τ,Vr,V0,Y,B,Price0,P)
                     sumret += V0[y,b]*P[iy,y]
                 end
 
-                vr = CUDA.pow(c,(1-α))/(1-α) + β * sumret
-                Max = CUDA.max(Max, vr)
+                # vr = CUDA.pow(c,(1-α))/(1-α) + β * sumret
+                vr = c^(1-α)/(1-α) + β * sumret
+                # Max = CUDA.max(Max, vr)
+                Max = max(Max, vr)
             end
         end
         Vr[iy,ib] = Max
@@ -109,20 +112,20 @@ end
 function main()
 
     #Setting parameters
-    Ny = 10 #grid number of endowment
-    Nb = 200 #grid number of bond
+    Ny = 7 #grid number of endowment
+    Nb = 100 #grid number of bond
     maxInd = Ny * Nb #total grid points
     rstar = 0.017 #r* used in price calculation
     α = 2.0 #α used in utility function
 
     #lower bound and upper bound for bond initialization
-    lbd = -2
+    lbd = -1
     ubd = 0
 
     #β,ϕ,τ used as in part 4 of original paper
     β = 0.953
     ϕ = 0.282
-    τ = 0.010
+    τ = 0.15
 
     δ = 0.8 #weighting average of new and old matrixs
 
@@ -251,3 +254,5 @@ CSV.write("./Price.csv", dfPrice)
 CSV.write("./Vr.csv", dfVr)
 CSV.write("./Vd.csv", dfVd)
 CSV.write("./Decision.csv", dfDecision)
+
+=#

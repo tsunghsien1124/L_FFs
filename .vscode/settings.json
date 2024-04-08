@@ -1,5 +1,5 @@
 {
-    "julia.NumThreads": 20,
+    "julia.NumThreads": "auto",
     "settingsSync.ignoredSettings": [
         "-julia.NumThreads"
     ],

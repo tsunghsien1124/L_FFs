@@ -49,7 +49,7 @@ function parameters_function(;
     e_2_σ::Real=0.129,            # s.d. of persistent endowment shock
     e_2_size::Integer=3,          # number of persistent endowment shock
     e_3_σ::Real=0.351,            # s.d. of transitory endowment shock
-    e_3_size::Integer=3,          # number oftransitory endowment shock
+    e_3_size::Integer=3,          # number of transitory endowment shock
     ν_size::Integer=3,            # number of expenditure shock
     a_min::Real=-5.0,             # min of asset holding
     a_max::Real=900.0,            # max of asset holding
@@ -64,7 +64,7 @@ function parameters_function(;
 
     # permanent endowment shock
     e_1_grid, e_1_Γ = adda_cooper(e_1_size, 0.0, e_1_σ)
-    e_1_Γ = e_1_Γ[1,:]
+    e_1_Γ = e_1_Γ[1, :]
     # e_1_grid = [-e_1_σ, e_1_σ]
     # e_1_Γ = Matrix(1.0I, e_1_size, e_1_size)
     # G_e_1 = [1.0 / e_1_size for i = 1:e_1_size]
@@ -81,7 +81,7 @@ function parameters_function(;
 
     # transitory endowment shock
     e_3_grid, e_3_Γ = adda_cooper(e_3_size, 0.0, e_3_σ)
-    e_3_Γ = e_3_Γ[1,:]
+    e_3_Γ = e_3_Γ[1, :]
     # e_3_bar = sqrt((3 / 2) * e_3_σ^2)
     # e_3_grid = [-e_3_bar, 0.0, e_3_bar]
     # e_3_Γ = [1.0 / e_3_size for i = 1:e_3_size]
@@ -106,7 +106,7 @@ function parameters_function(;
     a_size_neg_μ = a_size_neg * μ_scale
     a_size_pos_μ = a_size_pos * μ_scale
     a_grid_neg_μ = collect(range(a_min, 0.0, length=a_size_neg_μ))
-    a_grid_pos_μ = collect(range(0.0, a_max, length = a_size_pos_μ))
+    a_grid_pos_μ = collect(range(0.0, a_max, length=a_size_pos_μ))
     # a_grid_pos_μ = ((range(0.0, stop=a_size_pos_μ - 1, length=a_size_pos_μ) / (a_size_pos_μ - 1)) .^ a_degree) * a_max
     a_grid_μ = cat(a_grid_neg_μ[1:(end-1)], a_grid_pos_μ, dims=1)
     a_size_μ = length(a_grid_μ)

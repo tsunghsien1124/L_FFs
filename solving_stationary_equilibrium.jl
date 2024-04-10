@@ -51,7 +51,7 @@ function parameters_function(;
     e_3_σ::Real=0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer=3,          # number of transitory endowment shock
     ν_size::Integer=3,            # number of expenditure shock
-    a_min::Real=-5.0,             # min of asset holding
+    a_min::Real=-10.0,             # min of asset holding
     a_max::Real=900.0,            # max of asset holding
     a_size_neg::Integer=501,      # number of grid of negative asset holding for VFI
     a_size_pos::Integer=101,      # number of grid of positive asset holding for VFI

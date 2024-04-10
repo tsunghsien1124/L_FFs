@@ -15,7 +15,7 @@ cd(homedir() * "\\Dropbox\\Dissertation\\Chapter 3 - Consumer Bankruptcy with Fi
 plot_col = 1
 plot_row = 1
 plot_q_e_1_index = 2
-plot_q_index = findall(-3.0 .<= parameters.a_grid .<= 0.0)
+plot_q_index = findall(parameters.a_grid .<= 0.0) # findall(-3.0 .<= parameters.a_grid .<= 0.0)
 plot_q = plot(
     size = (plot_col * 800, plot_row * 500),
     box = :on,

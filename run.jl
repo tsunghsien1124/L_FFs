@@ -45,6 +45,7 @@ V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd,
 # cases
 κ_1 = 697 / 33176
 κ_2 = 975 / 33176
+slow_updating = 1.0;
 
 # old economy
 parameters_κ_1 = parameters_function(κ = κ_1);
@@ -61,11 +62,11 @@ variables_κ_2 = variables_function(parameters_κ_2; λ=0.026877527099609392);
 ED_KL_to_D_ratio_min_κ_2, ED_leverage_ratio_min_κ_2, crit_V_min_κ_2, crit_μ_min_κ_2 = solve_economy_function!(variables_κ_2, parameters_κ_2; slow_updating=slow_updating);
 
 # set parameters for computation
-T_size = 120
+T_size = 250
 T_degree = 15.0
-iter_max = 500
-tol = 1E-4
-slow_updating_transitional_dynamics = 0.1
+iter_max = 1
+tol = 1E-2
+slow_updating_transitional_dynamics = 0.5
 initial_z = ones(T_size + 2);
 
 # from κ_1 to κ_2

@@ -31,12 +31,12 @@ include("solving_transitional_dynamics.jl")
 #==============================#
 # Solve stationary equilibrium #
 #==============================#
-parameters = parameters_function();
-variables = variables_function(parameters; λ=0.028143848632812524, load_init=true);
-slow_updating = 1.0;
-ED_KL_to_D_ratio_min, ED_leverage_ratio_min, crit_V_min, crit_μ_min = solve_economy_function!(variables, parameters; slow_updating=slow_updating);
-V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.R, variables.q, variables.rbl, variables.μ;
-@save "results_int.jld2" V V_d V_nd V_pos R q rbl μ;
+# parameters = parameters_function();
+# variables = variables_function(parameters; λ=0.028143848632812524, load_init=true);
+# slow_updating = 1.0;
+# ED_KL_to_D_ratio_min, ED_leverage_ratio_min, crit_V_min, crit_μ_min = solve_economy_function!(variables, parameters; slow_updating=slow_updating);
+# V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.R, variables.q, variables.rbl, variables.μ;
+# @save "results_int.jld2" V V_d V_nd V_pos R q rbl μ;
 # variables_λ_lower, variables, flag, crit_V, crit_μ = optimal_multiplier_function(parameters; slow_updating=slow_updating);
 
 #=============================#
@@ -47,14 +47,14 @@ V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd,
 κ_2 = 975 / 33176
 slow_updating = 1.0;
 
-# old economy
+# old economy - low κ
 parameters_κ_1 = parameters_function(κ = κ_1);
 # variables_λ_lower_κ_1, variables_κ_1, flag_κ_1, crit_V_κ_1, crit_μ_κ_1 = optimal_multiplier_function(parameters_κ_1; slow_updating=slow_updating);
 # λ_κ_1 = variables_κ_1.aggregate_prices.λ # 0.0279290036621094
 variables_κ_1 = variables_function(parameters_κ_1; λ=0.0279290036621094);
 ED_KL_to_D_ratio_min_κ_1, ED_leverage_ratio_min_κ_1, crit_V_min_κ_1, crit_μ_min_κ_1 = solve_economy_function!(variables_κ_1, parameters_κ_1; slow_updating=slow_updating);
 
-# new economy
+# new economy - high κ
 parameters_κ_2 = parameters_function(κ = κ_2);
 # variables_λ_lower_κ_2, variables_κ_2, flag_κ_2, crit_V_κ_2, crit_μ_κ_2 = optimal_multiplier_function(parameters_κ_2; slow_updating=slow_updating);
 # λ_κ_2 = variables_κ_2.aggregate_prices.λ # 0.026877527099609392
@@ -62,11 +62,11 @@ variables_κ_2 = variables_function(parameters_κ_2; λ=0.026877527099609392);
 ED_KL_to_D_ratio_min_κ_2, ED_leverage_ratio_min_κ_2, crit_V_min_κ_2, crit_μ_min_κ_2 = solve_economy_function!(variables_κ_2, parameters_κ_2; slow_updating=slow_updating);
 
 # set parameters for computation
-T_size = 250
+T_size = 80
 T_degree = 15.0
-iter_max = 1
-tol = 1E-2
-slow_updating_transitional_dynamics = 0.5
+iter_max = 500
+tol = 1E-4
+slow_updating_transitional_dynamics = 0.1
 initial_z = ones(T_size + 2);
 
 # from κ_1 to κ_2

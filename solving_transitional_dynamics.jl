@@ -204,7 +204,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     R[:,:,:,1] = variables_old.R
     R[:,:,:,end] = variables_new.R
 
-    q = ones(a_size, e_1_size, e_2_size, T_size) .* ρ ./ (1.0 + r_f + τ)
+    q = ones(a_size, e_1_size, e_2_size, T_size) .* ρ ./ (1.0 + r_f)
     q[:,:,:,1] = variables_old.q
     q[:,:,:,end] = variables_new.q
 
@@ -424,9 +424,13 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
 
             # pricing function and borrowing risky limit
             variables_T.R[:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i] = pricing_and_rbl_function(variables_T.threshold_e_2[:,:,:,:,T_i+1], variables_T.aggregate_prices.w_λ[T_i+1], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
-
+            
             # value and policy functions
             variables_T.V[:,:,:,:,:,T_i], variables_T.V_d[:,:,:,:,T_i], variables_T.V_nd[:,:,:,:,:,T_i], variables_T.V_pos[:,:,:,:,:,T_i], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i] = value_and_policy_function(variables_T.V[:,:,:,:,:,T_i+1], variables_T.V_d[:,:,:,:,T_i+1], variables_T.V_nd[:,:,:,:,:,T_i+1], variables_T.V_pos[:,:,:,:,:,T_i+1], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.aggregate_prices.w_λ[T_i], parameters_new)
+
+            # default thresholds
+            variables_T.threshold_a[:,:,:,:,T_i], variables_T.threshold_e_2[:,:,:,:,T_i] = threshold_function(variables_T.V_d[:,:,:,:,T_i], variables_T.V_nd[:,:,:,:,:,T_i], variables_T.aggregate_prices.w_λ[T_i], parameters_new)
+
         end
 
         # solve distribution forward and update aggregate variables and prices

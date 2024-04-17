@@ -43,7 +43,7 @@ function parameters_function(;
     p_h::Real=1.0 / 6.0,          # prob. of history erased
     η::Real=0.44,                 # wage garnishment rate
     ξ::Real=0.00,                 # stigma utility filing cost
-    κ::Real=0.02,                 # out-of-pocket monetary filing cost
+    κ::Real=697 / 33176,          # out-of-pocket monetary filing cost
     e_1_σ::Real=0.448,            # s.d. of permanent endowment shock
     e_1_size::Integer=2,          # number of permanent endowment shock
     e_2_ρ::Real=0.957,            # AR(1) of persistent endowment shock

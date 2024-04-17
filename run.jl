@@ -39,12 +39,12 @@ include("solving_transitional_dynamics.jl")
 # @save "results_int.jld2" V V_d V_nd V_pos R q rbl μ;
 # variables_λ_lower, variables, flag, crit_V, crit_μ = optimal_multiplier_function(parameters; slow_updating=slow_updating);
 
-#=============================#
-# Solve transitional dynamics #
-#=============================#
+#============================================#
+# Solve transitional dynamics - Filing costs #
+#============================================#
 # cases
-κ_1 = 697 / 33176
-κ_2 = 975 / 33176
+κ_1 = 697 / 33176;
+κ_2 = 975 / 33176;
 slow_updating = 1.0;
 
 # old economy - low κ
@@ -62,6 +62,50 @@ variables_κ_2 = variables_function(parameters_κ_2; λ=0.026877527099609392);
 ED_KL_to_D_ratio_min_κ_2, ED_leverage_ratio_min_κ_2, crit_V_min_κ_2, crit_μ_min_κ_2 = solve_economy_function!(variables_κ_2, parameters_κ_2; slow_updating=slow_updating);
 
 # set parameters for computation
+T_size = 80;
+T_degree = 15.0;
+iter_max = 500;
+tol = 1E-4;
+slow_updating_transitional_dynamics = 0.1;
+initial_z = ones(T_size + 2);
+
+# from κ_1 to κ_2
+if isfile("C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_κ.jld2")
+    @load "C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_κ.jld2" transition_path_κ
+    variables_T_κ = variables_T_function(transition_path_κ, variables_κ_1, variables_κ_2, parameters_κ_2; T_size=T_size, T_degree=T_degree);
+else
+    variables_T_κ = variables_T_function(variables_κ_1, variables_κ_2, parameters_κ_2; T_size=T_size, T_degree=T_degree);
+end
+transitional_dynamic_λ_function!(variables_T_κ, variables_κ_1, variables_κ_2, parameters_κ_2; tol=tol, iter_max=iter_max, slow_updating=slow_updating_transitional_dynamics)
+transition_path_κ = variables_T_κ.aggregate_prices.leverage_ratio_λ
+@save "C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_κ.jld2" transition_path_κ
+plot_transition_path_κ = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Period")
+plot_transition_path_κ = plot!(transition_path_κ, linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label=:none)
+plot_transition_path_κ
+
+#=========================================#
+# Solve transitional dynamics - Exclusion #
+#=========================================#
+# cases
+p_h_1 = 1.0 / 6.0;
+p_h_2 = 1.0 / 10.0;
+slow_updating = 1.0;
+
+# old economy - shorter p_h
+parameters_p_h_1 = parameters_function(p_h = p_h_1);
+# variables_λ_lower_p_h_1, variables_p_h_1, flag_p_h_1, crit_V_p_h_1, crit_μ_p_h_1 = optimal_multiplier_function(parameters_p_h_1; slow_updating=slow_updating);
+# λ_p_h_1 = variables_p_h_1.aggregate_prices.λ # 0.0279290036621094
+variables_p_h_1 = variables_function(parameters_p_h_1; λ=0.0279290036621094);
+ED_KL_to_D_ratio_min_p_h_1, ED_leverage_ratio_min_p_h_1, crit_V_min_p_h_1, crit_μ_min_p_h_1 = solve_economy_function!(variables_p_h_1, parameters_p_h_1; slow_updating=slow_updating);
+
+# new economy - longer p_h
+parameters_p_h_2 = parameters_function(p_h = p_h_2);
+# variables_λ_lower_p_h_2, variables_p_h_2, flag_p_h_2, crit_V_p_h_2, crit_μ_p_h_2 = optimal_multiplier_function(parameters_p_h_2; slow_updating=slow_updating);
+# λ_p_h_2 = variables_p_h_2.aggregate_prices.λ # 0.03424291821289066
+variables_p_h_2 = variables_function(parameters_p_h_2; λ=0.03424291821289066);
+ED_KL_to_D_ratio_min_p_h_2, ED_leverage_ratio_min_p_h_2, crit_V_min_p_h_2, crit_μ_min_p_h_2 = solve_economy_function!(variables_p_h_2, parameters_p_h_2; slow_updating=slow_updating);
+
+# set parameters for computation
 T_size = 80
 T_degree = 15.0
 iter_max = 500
@@ -69,10 +113,62 @@ tol = 1E-4
 slow_updating_transitional_dynamics = 0.1
 initial_z = ones(T_size + 2);
 
-# from κ_1 to κ_2
-variables_T_κ = variables_T_function(variables_κ_1, variables_κ_2, parameters_κ_2; T_size=T_size, T_degree=T_degree);
-transitional_dynamic_λ_function!(variables_T_κ, variables_κ_1, variables_κ_2, parameters_κ_2; tol=tol, iter_max=iter_max, slow_updating=slow_updating_transitional_dynamics)
-transition_path_κ = variables_T_κ.aggregate_prices.leverage_ratio_λ
-plot_transition_path_κ = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Time")
-plot_transition_path_κ = plot!(transition_path_κ, linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label=:none)
-plot_transition_path_κ
+# from p_h_1 to p_h_2
+if isfile("C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_p_h.jld2")
+    @load "C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_p_h.jld2" transition_path_p_h
+    variables_T_p_h = variables_T_function(transition_path_p_h, variables_p_h_1, variables_p_h_2, parameters_p_h_2; T_size=T_size, T_degree=T_degree);
+else
+    variables_T_p_h = variables_T_function(variables_p_h_1, variables_p_h_2, parameters_p_h_2; T_size=T_size, T_degree=T_degree);
+end
+transitional_dynamic_λ_function!(variables_T_p_h, variables_p_h_1, variables_p_h_2, parameters_p_h_2; tol=tol, iter_max=iter_max, slow_updating=slow_updating_transitional_dynamics)
+transition_path_p_h = variables_T_p_h.aggregate_prices.leverage_ratio_λ
+@save "C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_p_h.jld2" transition_path_p_h
+plot_transition_path_p_h = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Period")
+plot_transition_path_p_h = plot!(transition_path_p_h, linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label=:none)
+plot_transition_path_p_h
+
+#===========================================#
+# Solve transitional dynamics - 2005 BAPCPA #
+#===========================================#
+# cases
+κ_1, p_h_1 = 697 / 33176, 1.0 / 6.0;
+κ_2, p_h_2 = 975 / 33176, 1.0 / 10.0;
+slow_updating = 1.0;
+
+# old economy - pre BAPCPA
+parameters_BAPCPA_1 = parameters_function(κ = κ_1, p_h = p_h_1);
+# variables_λ_lower_BAPCPA_1, variables_BAPCPA_1, flag_BAPCPA_1, crit_V_BAPCPA_1, crit_μ_BAPCPA_1 = optimal_multiplier_function(parameters_BAPCPA_1; slow_updating=slow_updating);
+# λ_BAPCPA_1 = variables_BAPCPA_1.aggregate_prices.λ # 0.0279290036621094
+variables_BAPCPA_1 = variables_function(parameters_BAPCPA_1; λ=0.0279290036621094);
+ED_KL_to_D_ratio_min_BAPCPA_1, ED_leverage_ratio_min_BAPCPA_1, crit_V_min_BAPCPA_1, crit_μ_min_BAPCPA_1 = solve_economy_function!(variables_BAPCPA_1, parameters_BAPCPA_1; slow_updating=slow_updating);
+
+# new economy - post BAPCPA
+parameters_BAPCPA_2 = parameters_function(κ = κ_2, p_h = p_h_2);
+# variables_λ_lower_BAPCPA_2, variables_BAPCPA_2, flag_BAPCPA_2, crit_V_BAPCPA_2, crit_μ_BAPCPA_2 = optimal_multiplier_function(parameters_BAPCPA_2; slow_updating=slow_updating);
+# λ_BAPCPA_2 = variables_BAPCPA_2.aggregate_prices.λ # 0.03187119824218752
+variables_BAPCPA_2 = variables_function(parameters_BAPCPA_2; λ=0.03187119824218752);
+ED_KL_to_D_ratio_min_BAPCPA_2, ED_leverage_ratio_min_BAPCPA_2, crit_V_min_BAPCPA_2, crit_μ_min_BAPCPA_2 = solve_economy_function!(variables_BAPCPA_2, parameters_BAPCPA_2; slow_updating=slow_updating);
+
+# set parameters for computation
+T_size = 80
+T_degree = 15.0
+iter_max = 500
+tol = 1E-4
+slow_updating_transitional_dynamics = 0.1
+initial_z = ones(T_size + 2);
+
+# from pre to post BAPCPA
+if isfile("C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_BAPCPA.jld2")
+    @load "C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_BAPCPA.jld2" transition_path_BAPCPA
+    variables_T_BAPCPA = variables_T_function(transition_path_BAPCPA, variables_BAPCPA_1, variables_BAPCPA_2, parameters_BAPCPA_2; T_size=T_size, T_degree=T_degree);
+
+else
+    variables_T_BAPCPA = variables_T_function(variables_BAPCPA_1, variables_BAPCPA_2, parameters_BAPCPA_2; T_size=T_size, T_degree=T_degree);
+end
+transitional_dynamic_λ_function!(variables_T_BAPCPA, variables_BAPCPA_1, variables_BAPCPA_2, parameters_BAPCPA_2; tol=tol, iter_max=iter_max, slow_updating=slow_updating_transitional_dynamics)
+transition_path_BAPCPA = variables_T_BAPCPA.aggregate_prices.leverage_ratio_λ
+@save "C:/Users/User/Documents/Consumer_credit_FFs/results/jld2/transition_path_BAPCPA.jld2" transition_path_BAPCPA
+plot_transition_path_BAPCPA = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Period")
+plot_transition_path_BAPCPA = plot!(transition_path_BAPCPA, linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label=:none)
+plot_transition_path_BAPCPA
+savefig(plot_transition_path_BAPCPA, "C:/Users/User/Documents/Consumer_credit_FFs/results/figures/transition_path_BAPCPA.pdf")

@@ -82,6 +82,14 @@ transition_path_κ = variables_T_κ.aggregate_prices.leverage_ratio_λ
 plot_transition_path_κ = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Period")
 plot_transition_path_κ = plot!(transition_path_κ, linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label=:none)
 plot_transition_path_κ
+savefig(plot_transition_path_κ, "C:/Users/User/Documents/Consumer_credit_FFs/results/figures/plot_transition_path_κ.pdf")
+
+
+transition_path_κ_N = variables_T_κ.aggregate_variables.N
+plot_transition_path_κ_N = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Period")
+plot_transition_path_κ_N = plot!(transition_path_κ_N, linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label=:none)
+plot_transition_path_κ_N
+savefig(plot_transition_path_κ_N, "C:/Users/User/Documents/Consumer_credit_FFs/results/figures/plot_transition_path_κ_N.pdf")
 
 #=========================================#
 # Solve transitional dynamics - Exclusion #
@@ -126,6 +134,7 @@ transition_path_p_h = variables_T_p_h.aggregate_prices.leverage_ratio_λ
 plot_transition_path_p_h = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Period")
 plot_transition_path_p_h = plot!(transition_path_p_h, linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label=:none)
 plot_transition_path_p_h
+savefig(plot_transition_path_p_h, "C:/Users/User/Documents/Consumer_credit_FFs/results/figures/plot_transition_path_p_h.pdf")
 
 #===========================================#
 # Solve transitional dynamics - 2005 BAPCPA #

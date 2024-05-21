@@ -51,7 +51,7 @@ function parameters_function(;
     e_2_size::Integer=3,          # number of persistent endowment shock
     e_3_σ::Real=0.351,            # s.d. of transitory endowment shock
     e_3_size::Integer=3,          # number of transitory endowment shock
-    ν_size::Integer=2,            # number of expenditure shock
+    ν_size::Integer=3,            # number of expenditure shock
     a_min::Real=-5.0,             # min of asset holding
     a_max::Real=800.0,            # max of asset holding
     a_size_neg::Integer=501,      # number of grid of negative asset holding for VFI
@@ -228,6 +228,7 @@ mutable struct Mutable_Variables
     V_pos::Array{Float64,5}
     policy_a::Array{Float64,5}
     policy_d::Array{Float64,5}
+    policy_pos_d::Array{Float64,5}
     policy_pos_a::Array{Float64,5}
     threshold_a::Array{Float64,4}
     threshold_e_2::Array{Float64,4}
@@ -465,12 +466,13 @@ function variables_function(parameters::NamedTuple; λ::Real, load_init::Bool=fa
     end
     policy_a = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
     policy_d = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
+    policy_pos_d = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
     policy_pos_a = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
     threshold_a = zeros(e_1_size, e_2_size, e_3_size, ν_size)
     threshold_e_2 = zeros(a_size_neg, e_1_size, e_3_size, ν_size)
 
     # return outputs
-    variables = Mutable_Variables(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, threshold_a, threshold_e_2, μ)
+    variables = Mutable_Variables(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_d, policy_pos_a, threshold_a, threshold_e_2, μ)
     return variables
 end
 
@@ -537,6 +539,7 @@ function value_and_policy_function(
     V_pos = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
     policy_a = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
     policy_d = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
+    policy_pos_d = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
     policy_pos_a = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
 
     # loop over all states
@@ -586,22 +589,29 @@ function value_and_policy_function(
             # compute value with good credit history
             V_max = max(V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i], V_d[e_1_i, e_2_i, e_3_i, ν_i])
             if V_max == V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
-                V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
-                policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
+                @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
+                @inbounds policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
             else
-                V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
-                policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
+                @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
+                @inbounds policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
+                @inbounds policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
             end
 
             # bad credit history
             if a_i >= a_ind_zero
                 a_pos_i = a_i - a_ind_zero + 1
-                CoH_adjusted = CoH + ν
-                object_pos(a_p) = -(utility_function(CoH_adjusted - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
-                lb, ub = min_bounds_function(object_pos, 0.0, CoH_adjusted + eps())
-                res_pos = optimize(object_pos, lb, ub)
-                @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
-                @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
+                if CoH <= 0.0
+                    @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
+                    @inbounds policy_pos_d[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
+                    @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
+                else
+                    object_pos(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
+                    lb, ub = min_bounds_function(object_pos, 0.0, CoH + eps())
+                    res_pos = optimize(object_pos, lb, ub)
+                    @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
+                    @inbounds policy_pos_d[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
+                    @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
+                end
             end
         end
     end
@@ -615,7 +625,7 @@ function value_and_policy_function(
     end
 
     # return results
-    return V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a
+    return V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_d, policy_pos_a
 end
 
 function pricing_and_rbl_function(threshold_e_2::Array{Float64,4}, w::Real, ι::Real, parameters::NamedTuple)
@@ -686,7 +696,7 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         copyto!(q_p, variables.q)
 
         # value and policy functions
-        variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_d, variables.policy_pos_a =
+        variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_d, variables.policy_pos_d, variables.policy_pos_a =
             value_and_policy_function(V_p, V_d_p, V_nd_p, V_pos_p, variables.q, variables.rbl, variables.aggregate_prices.w_λ, parameters; slow_updating=slow_updating)
 
         # default thresholds

@@ -29,11 +29,12 @@ function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real=0.0)
 end
 
 function parameters_function(;
-    β::Real=0.958,                # discount factor (households)
+    β::Real=0.955,                # discount factor (households)
     ρ::Real=0.975,                # survival rate
     r_f::Real=0.04,               # risk-free rate # 1.04*ρ-1.0
     # r_f::Real=1.04/ρ-1.0,         # risk-free rate # 1.04*ρ-1.0
     β_f::Real=1.0 / (1.0 + r_f),  # discount factor (bank)
+    # τ::Real=0.00,                 # transaction cost
     τ::Real=0.04,                 # transaction cost
     σ::Real=2.00,                 # CRRA coefficient
     δ::Real=0.08,                 # depreciation rate
@@ -41,7 +42,7 @@ function parameters_function(;
     ψ::Real=0.972^4,              # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Real=1.0 / (4.57 * 0.75),  # diverting fraction # 1.0 / 3.0
     p_h::Real=1.0 / 6.0,          # prob. of history erased
-    η::Real=0.44,                 # wage garnishment rate
+    η::Real=0.40,                 # wage garnishment rate
     ξ::Real=0.00,                 # stigma utility filing cost
     κ::Real=697 / 33176,          # out-of-pocket monetary filing cost
     e_1_σ::Real=0.448,            # s.d. of permanent endowment shock
@@ -228,8 +229,8 @@ mutable struct Mutable_Variables
     V_pos::Array{Float64,5}
     policy_a::Array{Float64,5}
     policy_d::Array{Float64,5}
-    policy_pos_d::Array{Float64,5}
     policy_pos_a::Array{Float64,5}
+    policy_pos_d::Array{Float64,5}
     threshold_a::Array{Float64,4}
     threshold_e_2::Array{Float64,4}
     μ::Array{Float64,6}
@@ -472,7 +473,7 @@ function variables_function(parameters::NamedTuple; λ::Real, load_init::Bool=fa
     threshold_e_2 = zeros(a_size_neg, e_1_size, e_3_size, ν_size)
 
     # return outputs
-    variables = Mutable_Variables(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_d, policy_pos_a, threshold_a, threshold_e_2, μ)
+    variables = Mutable_Variables(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, policy_pos_d, threshold_a, threshold_e_2, μ)
     return variables
 end
 
@@ -539,8 +540,8 @@ function value_and_policy_function(
     V_pos = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
     policy_a = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
     policy_d = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
-    policy_pos_d = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
     policy_pos_a = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
+    policy_pos_d = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
 
     # loop over all states
     for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
@@ -594,7 +595,7 @@ function value_and_policy_function(
             else
                 @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
                 @inbounds policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
-                @inbounds policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
+                # @inbounds policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
             end
 
             # bad credit history
@@ -603,7 +604,7 @@ function value_and_policy_function(
                 if CoH <= 0.0
                     @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i, ν_i]
                     @inbounds policy_pos_d[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
-                    @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
+                    # @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
                 else
                     object_pos(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
                     lb, ub = min_bounds_function(object_pos, 0.0, CoH + eps())
@@ -625,7 +626,7 @@ function value_and_policy_function(
     end
 
     # return results
-    return V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_d, policy_pos_a
+    return V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, policy_pos_d
 end
 
 function pricing_and_rbl_function(threshold_e_2::Array{Float64,4}, w::Real, ι::Real, parameters::NamedTuple)
@@ -696,7 +697,7 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         copyto!(q_p, variables.q)
 
         # value and policy functions
-        variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_d, variables.policy_pos_d, variables.policy_pos_a =
+        variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_d, variables.policy_pos_a, variables.policy_pos_d =
             value_and_policy_function(V_p, V_d_p, V_nd_p, V_pos_p, variables.q, variables.rbl, variables.aggregate_prices.w_λ, parameters; slow_updating=slow_updating)
 
         # default thresholds
@@ -723,7 +724,7 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
     return crit
 end
 
-function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Array{Float64,5}, threshold_a::Array{Float64,4}, policy_pos_a::Array{Float64,5}, parameters::NamedTuple)
+function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Array{Float64,5}, threshold_a::Array{Float64,4}, policy_pos_a::Array{Float64,5}, policy_pos_d::Array{Float64,5}, parameters::NamedTuple)
     """
     update stationary distribution
     """
@@ -742,6 +743,7 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
         # @inbounds policy_d_itp = Akima(a_grid, policy_d[:, e_1_i, e_2_i, e_3_i, ν_i])
         @inbounds policy_d_itp(x) = x < threshold_a[e_1_i, e_2_i, e_3_i, ν_i] ? 1.0 : 0.0
         @inbounds policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i])
+        @inbounds policy_pos_d_itp = Akima(a_grid_pos, policy_pos_d[:, e_1_i, e_2_i, e_3_i, ν_i])
 
         # loop over the dimension of asset holding
         for a_μ_i = 1:a_size_μ
@@ -780,6 +782,7 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
 
             if a_μ >= 0.0
                 @inbounds a_p = clamp(policy_pos_a_itp(a_μ), 0.0, a_grid[end])
+                @inbounds d_p = clamp(policy_pos_d_itp(a_μ), 0.0, 1.0)
                 a_p_lb = findall(a_grid_μ .<= a_p)[end]
                 a_p_ub = findall(a_p .<= a_grid_μ)[1]
                 if a_p_lb != a_p_ub
@@ -793,10 +796,10 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
                 end
                 for e_1_p_i = 1:e_1_size, e_2_p_i = 1:e_2_size, e_3_p_i = 1:e_3_size, ν_p_i = 1:ν_size
                     if e_1_p_i == e_1_i
-                        @inbounds μ[a_p_lb, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += ρ * p_h * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_lower * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
-                        @inbounds μ[a_p_ub, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += ρ * p_h * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_upper * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
-                        @inbounds μ[a_p_lb, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, 2] += ρ * (1.0 - p_h) * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_lower * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
-                        @inbounds μ[a_p_ub, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, 2] += ρ * (1.0 - p_h) * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_upper * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
+                        @inbounds μ[a_p_lb, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += (1.0 - d_p) * ρ * p_h * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_lower * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
+                        @inbounds μ[a_p_ub, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += (1.0 - d_p) * ρ * p_h * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_upper * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
+                        @inbounds μ[a_p_lb, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, 2] += d_p * ρ * (1.0 - p_h) * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_lower * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
+                        @inbounds μ[a_p_ub, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, 2] += d_p * ρ * (1.0 - p_h) * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * weight_upper * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
                     end
                     @inbounds μ[a_ind_zero_μ, e_1_p_i, e_2_p_i, e_3_p_i, ν_p_i, 1] += (1.0 - ρ) * G_e_1[e_1_p_i] * G_e_2[e_2_p_i] * G_e_3[e_3_p_i] * G_ν[ν_p_i] * μ_p[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2]
                 end
@@ -832,7 +835,7 @@ function solve_stationary_distribution_function!(variables::Mutable_Variables, p
         copyto!(μ_p, variables.μ)
 
         # update stationary distribution
-        variables.μ = stationary_distribution_function(μ_p, variables.policy_a, variables.threshold_a, variables.policy_pos_a, parameters)
+        variables.μ = stationary_distribution_function(μ_p, variables.policy_a, variables.threshold_a, variables.policy_pos_a, variables.policy_pos_d, parameters)
 
         # check convergence
         crit = norm(variables.μ .- μ_p, Inf)
@@ -852,6 +855,7 @@ function solve_aggregate_variable_function(
     policy_a::Array{Float64,5},
     threshold_a::Array{Float64,4},
     policy_pos_a::Array{Float64,5},
+    policy_pos_d::Array{Float64,5},
     q::Array{Float64,3},
     rbl::Array{Float64,3},
     μ::Array{Float64,6},
@@ -899,6 +903,7 @@ function solve_aggregate_variable_function(
         # @inbounds policy_d_itp = Akima(a_grid, policy_d[:, e_1_i, e_2_i, e_3_i, ν_i])
         @inbounds policy_d_itp(x) = x < threshold_a[e_1_i, e_2_i, e_3_i, ν_i] ? 1.0 : 0.0
         @inbounds policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i])
+        @inbounds policy_pos_d_itp = Akima(a_grid_pos, policy_pos_d[:, e_1_i, e_2_i, e_3_i, ν_i])
 
         # interpolated discounted borrowing amount
         @inbounds @views q_e = q[:, e_1_i, e_2_i]
@@ -934,9 +939,11 @@ function solve_aggregate_variable_function(
 
             if a_μ >= 0.0
                 @inbounds a_pos_p = clamp(policy_pos_a_itp(a_μ), 0.0, a_grid[end])
+                @inbounds d_p = clamp(policy_pos_d_itp(a_μ), 0.0, 1.0)
                 if a_pos_p > 0.0
                     @inbounds D += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2] * qa_function_itp(a_pos_p))
                 end
+                @inbounds share_of_filers += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2] * d_p)
             end
 
             if a_μ < 0.0
@@ -1001,6 +1008,7 @@ function solve_aggregate_variable_across_HH_function(
     policy_a::Array{Float64,5},
     policy_d::Array{Float64,5},
     policy_pos_a::Array{Float64,5},
+    policy_pos_d::Array{Float64,5},
     q::Array{Float64,3},
     μ::Array{Float64,6},
     w::Real,
@@ -1050,6 +1058,7 @@ function solve_aggregate_variable_across_HH_function(
         @inbounds policy_a_itp = Akima(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf, e_1_i, e_2_i, e_3_i, ν_i])
         @inbounds policy_d_itp = Akima(a_grid, policy_d[:, e_1_i, e_2_i, e_3_i, ν_i])
         @inbounds policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i])
+        @inbounds policy_pos_d_itp = Akima(a_grid_pos, policy_pos_d[:, e_1_i, e_2_i, e_3_i, ν_i])
 
         # interpolated discounted borrowing amount
         @inbounds @views q_e = q[:, e_1_i, e_2_i]
@@ -1129,7 +1138,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=tol_μ, iter_max=1000)
 
     # compute aggregate variables
-    variables.aggregate_variables = solve_aggregate_variable_function(variables.policy_a, variables.threshold_a, variables.policy_pos_a, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
+    variables.aggregate_variables = solve_aggregate_variable_function(variables.policy_a, variables.threshold_a, variables.policy_pos_a, variables.policy_pos_d, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
     # compute the difference between demand and supply sides
     ED_KL_to_D_ratio = variables.aggregate_variables.KL_to_D_ratio - variables.aggregate_prices.KL_to_D_ratio_λ

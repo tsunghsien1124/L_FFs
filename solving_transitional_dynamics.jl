@@ -52,6 +52,7 @@ mutable struct Mutable_Variables_T
     policy_a::Array{Float64,6}
     policy_d::Array{Float64,6}
     policy_pos_a::Array{Float64,6}
+    policy_pos_d::Array{Float64,6}
     threshold_a::Array{Float64,5}
     threshold_e_2::Array{Float64,5}
     μ::Array{Float64,7}
@@ -241,6 +242,10 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     policy_pos_a[:,:,:,:,:,1] = variables_old.policy_pos_a
     policy_pos_a[:,:,:,:,:,end] = variables_new.policy_pos_a
 
+    policy_pos_d = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    policy_pos_d[:,:,:,:,:,1] = variables_old.policy_pos_d
+    policy_pos_d[:,:,:,:,:,end] = variables_new.policy_pos_d
+
     threshold_a = zeros(e_1_size, e_2_size, e_3_size, ν_size, T_size)
     threshold_a[:,:,:,:,1] = variables_old.threshold_a
     threshold_a[:,:,:,:,end] = variables_new.threshold_a
@@ -258,7 +263,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     μ[:,:,:,:,:,:,end] = variables_new.μ
 
     # return outputs
-    variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, threshold_a, threshold_e_2, μ)
+    variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, policy_pos_d, threshold_a, threshold_e_2, μ)
     return variables_T
 end
 
@@ -374,6 +379,10 @@ function variables_T_function(initial_transtion_path::Array{Float64,1}, variable
     policy_pos_a[:,:,:,:,:,1] = variables_old.policy_pos_a
     policy_pos_a[:,:,:,:,:,end] = variables_new.policy_pos_a
 
+    policy_pos_d = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, T_size)
+    policy_pos_d[:,:,:,:,:,1] = variables_old.policy_pos_d
+    policy_pos_d[:,:,:,:,:,end] = variables_new.policy_pos_d
+
     threshold_a = zeros(e_1_size, e_2_size, e_3_size, ν_size, T_size)
     threshold_a[:,:,:,:,1] = variables_old.threshold_a
     threshold_a[:,:,:,:,end] = variables_new.threshold_a
@@ -391,7 +400,7 @@ function variables_T_function(initial_transtion_path::Array{Float64,1}, variable
     μ[:,:,:,:,:,:,end] = variables_new.μ
 
     # return outputs
-    variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, threshold_a, threshold_e_2, μ)
+    variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, policy_pos_d, threshold_a, threshold_e_2, μ)
     return variables_T
 end
 
@@ -426,7 +435,7 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
             variables_T.R[:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i] = pricing_and_rbl_function(variables_T.threshold_e_2[:,:,:,:,T_i+1], variables_T.aggregate_prices.w_λ[T_i+1], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
             
             # value and policy functions
-            variables_T.V[:,:,:,:,:,T_i], variables_T.V_d[:,:,:,:,T_i], variables_T.V_nd[:,:,:,:,:,T_i], variables_T.V_pos[:,:,:,:,:,T_i], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i] = value_and_policy_function(variables_T.V[:,:,:,:,:,T_i+1], variables_T.V_d[:,:,:,:,T_i+1], variables_T.V_nd[:,:,:,:,:,T_i+1], variables_T.V_pos[:,:,:,:,:,T_i+1], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.aggregate_prices.w_λ[T_i], parameters_new)
+            variables_T.V[:,:,:,:,:,T_i], variables_T.V_d[:,:,:,:,T_i], variables_T.V_nd[:,:,:,:,:,T_i], variables_T.V_pos[:,:,:,:,:,T_i], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.policy_pos_d[:,:,:,:,:,T_i] = value_and_policy_function(variables_T.V[:,:,:,:,:,T_i+1], variables_T.V_d[:,:,:,:,T_i+1], variables_T.V_nd[:,:,:,:,:,T_i+1], variables_T.V_pos[:,:,:,:,:,T_i+1], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.aggregate_prices.w_λ[T_i], parameters_new)
 
             # default thresholds
             variables_T.threshold_a[:,:,:,:,T_i], variables_T.threshold_e_2[:,:,:,:,T_i] = threshold_function(variables_T.V_d[:,:,:,:,T_i], variables_T.V_nd[:,:,:,:,:,T_i], variables_T.aggregate_prices.w_λ[T_i], parameters_new)
@@ -441,10 +450,10 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
             # println("Solving distribution and aggregate variables/prices forward... period $(T_i-1) / $(T_size-2)")
 
             # update stationary distribution
-            variables_T.μ[:,:,:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.threshold_a[:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], parameters_new)
+            variables_T.μ[:,:,:,:,:,:,T_i] = stationary_distribution_function(variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.threshold_a[:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.policy_pos_d[:,:,:,:,:,T_i], parameters_new)
 
             # compute aggregate variables
-            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.threshold_a[:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.aggregate_prices.K_p_λ[T_i], variables_T.aggregate_prices.w_λ[T_i], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
+            aggregate_variables = solve_aggregate_variable_function(variables_T.policy_a[:,:,:,:,:,T_i], variables_T.threshold_a[:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.policy_pos_d[:,:,:,:,:,T_i], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.μ[:,:,:,:,:,:,T_i-1], variables_T.aggregate_prices.K_p_λ[T_i], variables_T.aggregate_prices.w_λ[T_i], variables_T.aggregate_prices.ι_λ[T_i], parameters_new)
 
             variables_T.aggregate_variables.K_p[T_i] = aggregate_variables.K
             variables_T.aggregate_variables.L_p[T_i] = aggregate_variables.L

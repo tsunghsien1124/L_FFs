@@ -221,3 +221,28 @@ welfare_favor_BAPCPA = 100 * (sum((variables_T_BAPCPA.V[:, :, :, :, :, 2] .> var
 #===============#
 # Decomposition #
 #===============#
+
+# no financial frictions
+variables_BAPCPA_2_NFF = variables_function(parameters_BAPCPA_2; λ=0.04244494091796878, load_init=false);
+ED_KL_to_D_ratio_min_BAPCPA_2_NFF, ED_leverage_ratio_min_BAPCPA_2_NFF, crit_V_min_BAPCPA_2_NFF, crit_μ_min_BAPCPA_2_NFF = solve_economy_function!(variables_BAPCPA_2_NFF, parameters_BAPCPA_2; slow_updating=slow_updating);
+
+# CEV welfare
+W_old_good_with_debt = sum(variables_BAPCPA_1.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :] .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
+W_new_good_with_debt = sum(variables_BAPCPA_2_NFF.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :] .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
+welfare_CEV_BAPCPA_good_with_debt_NFF = 100 * ((W_new_good_with_debt / W_old_good_with_debt)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
+
+W_old_good_without_debt = sum(variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 1])
+W_new_good_without_debt = sum(variables_BAPCPA_2_NFF.V[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 1])
+welfare_CEV_BAPCPA_good_without_debt_NFF = 100 * ((W_new_good_without_debt / W_old_good_without_debt)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
+
+W_old_good = W_old_good_with_debt + W_old_good_without_debt
+W_new_good = W_new_good_with_debt + W_new_good_without_debt
+welfare_CEV_BAPCPA_good_NFF = 100 * ((W_new_good / W_old_good)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
+
+W_old_bad = sum(variables_BAPCPA_1.V_pos[:, :, :, :, :] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
+W_new_bad = sum(variables_BAPCPA_2_NFF.V_pos[:, :, :, :, :] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
+welfare_CEV_BAPCPA_bad_NFF = 100 * ((W_new_bad / W_old_bad)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
+
+W_old = W_old_good + W_old_bad
+W_new = W_new_good + W_new_bad
+welfare_CEV_BAPCPA_NFF = 100 * ((W_new / W_old)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)

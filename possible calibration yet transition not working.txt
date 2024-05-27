@@ -1,0 +1,474 @@
+┌──────────────────────────────┬────────────┬──────────────┬─────────────┐
+│ Name                         │      Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼────────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │      0.925 │      43.8535 │       40.14 │
+│ Wage Garnishment Rate        │       0.36 │      1.09253 │        0.99 │
+│ Bank Survival Rate           │   0.922368 │      3.32333 │        4.57 │
+│ Diverting Fraction           │   0.333333 │      9.67335 │        9.26 │
+│ Liquidity Multiplier         │        0.0 │              │             │
+├──────────────────────────────┼────────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │    1.43042 │              │             │
+│ Asset-to-Debt Ratio (Supply) │        1.5 │              │             │
+│ Difference                   │ -0.0695841 │              │             │
+├──────────────────────────────┼────────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │    3.32333 │              │             │
+│ Leverage Ratio (Supply)      │        3.0 │              │             │
+│ Difference                   │   0.323334 │              │             │
+└──────────────────────────────┴────────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.925 │      41.4265 │       40.14 │
+│ Wage Garnishment Rate        │      0.36 │      1.08903 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │      3.77434 │        4.57 │
+│ Diverting Fraction           │  0.333333 │      10.1941 │        9.26 │
+│ Liquidity Multiplier         │ 0.0159268 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.36045 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.36045 │              │             │
+│ Difference                   │  -1.08e-6 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   3.77434 │              │             │
+│ Leverage Ratio (Supply)      │   3.77433 │              │             │
+│ Difference                   │   8.33e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.926 │       42.197 │       40.14 │
+│ Wage Garnishment Rate        │      0.36 │      1.08294 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │      3.77897 │        4.57 │
+│ Diverting Fraction           │  0.333333 │      9.70054 │        9.26 │
+│ Liquidity Multiplier         │       0.0 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.35985 │              │             │
+│ Asset-to-Debt Ratio (Supply) │       1.5 │              │             │
+│ Difference                   │ -0.140155 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   3.77897 │              │             │
+│ Leverage Ratio (Supply)      │       3.0 │              │             │
+│ Difference                   │  0.778972 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.926 │      40.0897 │       40.14 │
+│ Wage Garnishment Rate        │     0.355 │      1.07894 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │      4.89761 │        4.57 │
+│ Diverting Fraction           │  0.333333 │      10.4218 │        9.26 │
+│ Liquidity Multiplier         │ 0.0300789 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.25657 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.25657 │              │             │
+│ Difference                   │   -3.0e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.89761 │              │             │
+│ Leverage Ratio (Supply)      │    4.8976 │              │             │
+│ Difference                   │   4.55e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.927 │      39.7775 │       40.14 │
+│ Wage Garnishment Rate        │      0.36 │      1.06369 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │      6.00565 │        4.57 │
+│ Diverting Fraction           │  0.333333 │      10.4431 │        9.26 │
+│ Liquidity Multiplier         │ 0.0388524 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.19977 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.19977 │              │             │
+│ Difference                   │   -2.2e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   6.00565 │              │             │
+│ Leverage Ratio (Supply)      │   6.00564 │              │             │
+│ Difference                   │   5.61e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.927 │      40.1697 │       40.14 │
+│ Wage Garnishment Rate        │     0.365 │      1.06244 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │      5.77401 │        4.57 │
+│ Diverting Fraction           │  0.333333 │       10.428 │        9.26 │
+│ Liquidity Multiplier         │ 0.0372966 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.20947 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.20947 │              │             │
+│ Difference                   │   -3.6e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   5.77401 │              │             │
+│ Leverage Ratio (Supply)      │     5.774 │              │             │
+│ Difference                   │   8.29e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.927 │      40.5435 │       40.14 │
+│ Wage Garnishment Rate        │      0.37 │      1.05505 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │       5.5383 │        4.57 │
+│ Diverting Fraction           │  0.333333 │      10.4087 │        9.26 │
+│ Liquidity Multiplier         │ 0.0355801 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.22035 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.22035 │              │             │
+│ Difference                   │    1.5e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │    5.5383 │              │             │
+│ Leverage Ratio (Supply)      │   5.53831 │              │             │
+│ Difference                   │  -3.01e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.927 │      41.3011 │       40.14 │
+│ Wage Garnishment Rate        │      0.38 │      1.04568 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │      5.10568 │        4.57 │
+│ Diverting Fraction           │  0.333333 │      10.3626 │        9.26 │
+│ Liquidity Multiplier         │ 0.0320168 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.24357 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.24357 │              │             │
+│ Difference                   │    1.5e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   5.10568 │              │             │
+│ Leverage Ratio (Supply)      │   5.10568 │              │             │
+│ Difference                   │  -2.45e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.927 │      41.5662 │       40.14 │
+│ Wage Garnishment Rate        │     0.381 │      1.04996 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │      4.84346 │        4.57 │
+│ Diverting Fraction           │   0.30303 │      10.2271 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0247388 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.26018 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.26018 │              │             │
+│ Difference                   │   -2.4e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.84346 │              │             │
+│ Leverage Ratio (Supply)      │   4.84346 │              │             │
+│ Difference                   │   3.61e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬────────────┬──────────────┬─────────────┐
+│ Name                         │      Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼────────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │      0.927 │      42.9979 │       40.14 │
+│ Wage Garnishment Rate        │      0.381 │      1.05274 │        0.99 │
+│ Bank Survival Rate           │   0.960596 │      4.26214 │        4.57 │
+│ Diverting Fraction           │    0.30303 │       9.8567 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.00889512 │              │             │
+├──────────────────────────────┼────────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │    1.30655 │              │             │
+│ Asset-to-Debt Ratio (Supply) │    1.30655 │              │             │
+│ Difference                   │     4.9e-7 │              │             │
+├──────────────────────────────┼────────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │    4.26214 │              │             │
+│ Leverage Ratio (Supply)      │    4.26214 │              │             │
+│ Difference                   │   -5.17e-6 │              │             │
+└──────────────────────────────┴────────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9275 │      41.8693 │       40.14 │
+│ Wage Garnishment Rate        │     0.381 │      1.04733 │        0.99 │
+│ Bank Survival Rate           │  0.960596 │      4.76947 │        4.57 │
+│ Diverting Fraction           │   0.30303 │      9.89973 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0121403 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.26529 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.26529 │              │             │
+│ Difference                   │   -1.1e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.76947 │              │             │
+│ Leverage Ratio (Supply)      │   4.76946 │              │             │
+│ Difference                   │   1.52e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9275 │      41.5594 │       40.14 │
+│ Wage Garnishment Rate        │     0.381 │      1.04692 │        0.99 │
+│ Bank Survival Rate           │  0.960596 │       4.8973 │        4.57 │
+│ Diverting Fraction           │  0.333333 │      10.0056 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0152658 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.25659 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.25659 │              │             │
+│ Difference                   │    6.6e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │    4.8973 │              │             │
+│ Leverage Ratio (Supply)      │   4.89731 │              │             │
+│ Difference                   │  -9.99e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.927 │      40.9766 │       40.14 │
+│ Wage Garnishment Rate        │     0.375 │      1.05062 │        0.99 │
+│ Bank Survival Rate           │  0.960596 │      4.64535 │        4.57 │
+│ Diverting Fraction           │  0.357143 │      10.0518 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0156531 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.27432 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.27432 │              │             │
+│ Difference                   │   -2.3e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.64535 │              │             │
+│ Leverage Ratio (Supply)      │   4.64534 │              │             │
+│ Difference                   │    3.1e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │     0.927 │      42.3278 │       40.14 │
+│ Wage Garnishment Rate        │     0.375 │      1.05546 │        0.99 │
+│ Bank Survival Rate           │  0.960596 │      4.06393 │        4.57 │
+│ Diverting Fraction           │  0.357143 │      9.66464 │ 10.93-12.84 │
+│ Liquidity Multiplier         │       0.0 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.32638 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.55556 │              │             │
+│ Difference                   │ -0.229177 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.06393 │              │             │
+│ Leverage Ratio (Supply)      │       2.8 │              │             │
+│ Difference                   │   1.26393 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9285 │       40.769 │       40.14 │
+│ Wage Garnishment Rate        │      0.39 │     0.997825 │        0.99 │
+│ Bank Survival Rate           │  0.960596 │      4.68628 │        4.57 │
+│ Diverting Fraction           │  0.357143 │      10.0174 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0158606 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.27128 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.27128 │              │             │
+│ Difference                   │   -2.2e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.68628 │              │             │
+│ Leverage Ratio (Supply)      │   4.68628 │              │             │
+│ Difference                   │    3.0e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9285 │      40.0009 │       40.14 │
+│ Wage Garnishment Rate        │      0.39 │     0.979061 │        0.99 │
+│ Bank Survival Rate           │  0.922368 │      5.54877 │        4.57 │
+│ Diverting Fraction           │  0.357143 │      10.4155 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0384575 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.21984 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.21984 │              │             │
+│ Difference                   │   -6.0e-8 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   5.54877 │              │             │
+│ Leverage Ratio (Supply)      │   5.54877 │              │             │
+│ Difference                   │   1.19e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9285 │      40.8857 │       40.14 │
+│ Wage Garnishment Rate        │      0.39 │      0.99885 │        0.99 │
+│ Bank Survival Rate           │     0.965 │      4.60843 │        4.57 │
+│ Diverting Fraction           │  0.357143 │      9.92406 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0137346 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.27713 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.27713 │              │             │
+│ Difference                   │    2.7e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.60843 │              │             │
+│ Leverage Ratio (Supply)      │   4.60843 │              │             │
+│ Difference                   │  -3.55e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9285 │       40.823 │       40.14 │
+│ Wage Garnishment Rate        │      0.39 │     0.998521 │        0.99 │
+│ Bank Survival Rate           │     0.965 │      4.64161 │        4.57 │
+│ Diverting Fraction           │   0.37037 │      9.94246 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0146407 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │    1.2746 │              │             │
+│ Asset-to-Debt Ratio (Supply) │    1.2746 │              │             │
+│ Difference                   │   -6.4e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.64161 │              │             │
+│ Leverage Ratio (Supply)      │    4.6416 │              │             │
+│ Difference                   │   8.52e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9284 │      40.8767 │       40.14 │
+│ Wage Garnishment Rate        │      0.39 │     0.999125 │        0.99 │
+│ Bank Survival Rate           │     0.965 │      4.58072 │        4.57 │
+│ Diverting Fraction           │  0.384615 │      9.95808 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0151342 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.27927 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.27927 │              │             │
+│ Difference                   │    3.7e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.58072 │              │             │
+│ Leverage Ratio (Supply)      │   4.58072 │              │             │
+│ Difference                   │  -4.69e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+┌──────────────────────────────┬──────────┬──────────────┬─────────────┐
+│ Name                         │    Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼──────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │   0.9284 │      40.6229 │       40.14 │
+│ Wage Garnishment Rate        │    0.387 │     0.998565 │        0.99 │
+│ Bank Survival Rate           │    0.965 │      4.65164 │        4.57 │
+│ Diverting Fraction           │ 0.384615 │       10.017 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.015437 │              │             │
+├──────────────────────────────┼──────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │  1.27385 │              │             │
+│ Asset-to-Debt Ratio (Supply) │  1.27385 │              │             │
+│ Difference                   │   6.3e-7 │              │             │
+├──────────────────────────────┼──────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │  4.65164 │              │             │
+│ Leverage Ratio (Supply)      │  4.65164 │              │             │
+│ Difference                   │ -8.37e-6 │              │             │
+└──────────────────────────────┴──────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9284 │      40.6923 │       40.14 │
+│ Wage Garnishment Rate        │     0.387 │      1.00066 │        0.99 │
+│ Bank Survival Rate           │     0.968 │      4.59921 │        4.57 │
+│ Diverting Fraction           │  0.384615 │      9.93705 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0139099 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.27784 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.27784 │              │             │
+│ Difference                   │   -7.5e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.59921 │              │             │
+│ Leverage Ratio (Supply)      │    4.5992 │              │             │
+│ Difference                   │   9.68e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9284 │      40.6927 │       40.14 │
+│ Wage Garnishment Rate        │     0.387 │      1.00067 │        0.99 │
+│ Bank Survival Rate           │     0.968 │        4.599 │        4.57 │
+│ Diverting Fraction           │    0.3845 │      9.93693 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0139037 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │   1.27785 │              │             │
+│ Asset-to-Debt Ratio (Supply) │   1.27785 │              │             │
+│ Difference                   │    2.9e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │     4.599 │              │             │
+│ Leverage Ratio (Supply)      │     4.599 │              │             │
+│ Difference                   │  -3.79e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9284 │      40.6957 │       40.14 │
+│ Wage Garnishment Rate        │     0.387 │      1.00074 │        0.99 │
+│ Bank Survival Rate           │     0.968 │      4.59714 │        4.57 │
+│ Diverting Fraction           │    0.3835 │      9.93588 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0138491 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │     1.278 │              │             │
+│ Asset-to-Debt Ratio (Supply) │     1.278 │              │             │
+│ Difference                   │   -7.6e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.59714 │              │             │
+│ Leverage Ratio (Supply)      │   4.59713 │              │             │
+│ Difference                   │   9.79e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+┌──────────────────────────────┬───────────┬──────────────┬─────────────┐
+│ Name                         │     Value │ Model Moment │ Data Moment │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Effective Discount Factor    │    0.9284 │      40.7422 │       40.14 │
+│ Wage Garnishment Rate        │     0.387 │      1.00132 │        0.99 │
+│ Bank Survival Rate           │     0.968 │      4.57525 │        4.57 │
+│ Diverting Fraction           │     0.375 │      9.92637 │ 10.93-12.84 │
+│ Liquidity Multiplier         │ 0.0133489 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Asset-to-Debt Ratio (Demand) │    1.2797 │              │             │
+│ Asset-to-Debt Ratio (Supply) │    1.2797 │              │             │
+│ Difference                   │   -7.6e-7 │              │             │
+├──────────────────────────────┼───────────┼──────────────┼─────────────┤
+│ Leverage Ratio (Demand)      │   4.57525 │              │             │
+│ Leverage Ratio (Supply)      │   4.57524 │              │             │
+│ Difference                   │    9.7e-6 │              │             │
+└──────────────────────────────┴───────────┴──────────────┴─────────────┘
+
+# parameters = parameters_function(β = 0.9284, η = 0.3870, ψ = 0.9680, θ = 0.3720, a_max=800.0, a_size_pos=101, a_size_neg=201, a_degree=3);
+parameters = parameters_function();
+variables = variables_function(parameters; λ=0.013490515480940612, load_init=false);
+slow_updating = 1.0;
+ED_KL_to_D_ratio_min, ED_leverage_ratio_min, crit_V_min, crit_μ_min = solve_economy_function!(variables, parameters; slow_updating=slow_updating);
+V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.R, variables.q, variables.rbl, variables.μ;
+@save "results_int.jld2" V V_d V_nd V_pos R q rbl μ;
+# variables_λ_lower, variables, flag, crit_V, crit_μ = optimal_multiplier_function(parameters; slow_updating=slow_updating);
+# variables.aggregate_prices.λ
+
+function parameters_function(; 
+    β::Real=0.9284,               # discount factor (households) 
+    ρ::Real=0.9750,               # survival rate 
+    # r_f::Real=0.04,               # risk-free rate # 1.04*ρ-1.0 
+    r_f::Real=1.04/ρ-1.0,         # risk-free rate # 1.04*ρ-1.0 
+    β_f::Real=1.0 / (1.0 + r_f),  # discount factor (bank) 
+    τ::Real=0.00,                 # transaction cost 
+    # τ::Real=0.04,                 # transaction cost 
+    σ::Real=2.00,                 # CRRA coefficient 
+    δ::Real=0.08,                 # depreciation rate 
+    α::Real=0.34,                 # capital share 
+    ψ::Real=0.9680,               # exogenous retention ratio # 1.0 - 1.0 / 20.0 
+    θ::Real=0.3720,               # diverting fraction # 1.0 / 3.0 
+    p_h::Real=1.0 / 6.0,          # prob. of history erased 
+    η::Real=0.3870,               # wage garnishment rate 
+    ξ::Real=0.00,                 # stigma utility filing cost 
+    κ::Real=697 / 33176,          # out-of-pocket monetary filing cost 
+    e_1_σ::Real=0.448,            # s.d. of permanent endowment shock 
+    e_1_size::Integer=2,          # number of permanent endowment shock 
+    e_2_ρ::Real=0.957,            # AR(1) of persistent endowment shock 
+    e_2_σ::Real=0.129,            # s.d. of persistent endowment shock 
+    e_2_size::Integer=3,          # number of persistent endowment shock 
+    e_3_σ::Real=0.351,            # s.d. of transitory endowment shock 
+    e_3_size::Integer=3,          # number of transitory endowment shock 
+    ν_size::Integer=3,            # number of expenditure shock 
+    a_min::Real=-5.0,             # min of asset holding 
+    a_max::Real=800.0,            # max of asset holding 
+    a_size_neg::Integer=501,      # number of grid of negative asset holding for VFI 
+    a_size_pos::Integer=101,      # number of grid of positive asset holding for VFI 
+    a_degree::Integer=3,          # curvature of the positive asset gridpoints 
+    μ_scale::Integer=1            # scale for the asset holding gridpoints for distribution 
+) 
+

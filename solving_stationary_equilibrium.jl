@@ -2,7 +2,7 @@
 # Solve stationary equlibrium #
 #=============================#
 
-function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real=0.0)
+function adda_cooper(N::Int64, ρ::Float64, σ::Float64; μ::Float64=0.0)
     """
     Approximation of an autoregression process with a Markov chain proposed by Adda and Cooper (2003)
     """
@@ -21,7 +21,7 @@ function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real=0.0)
     else
         for i = 1:N, j = 1:N
             f(u) = exp(-(u - μ)^2.0 / (2.0 * σ_ϵ^2.0)) * (cdf(Normal(), (ϵ[j+1] - μ * (1.0 - ρ) - ρ * u) / σ) - cdf(Normal(), (ϵ[j] - μ * (1.0 - ρ) - ρ * u) / σ))
-            integral, err = quadgk(u -> f(u), ϵ[i], ϵ[i+1])
+            integral = quadgk(u -> f(u), ϵ[i], ϵ[i+1])[1]
             Π[i, j] = (N / sqrt(2.0 * π * σ_ϵ^2.0)) * integral
         end
     end
@@ -29,36 +29,36 @@ function adda_cooper(N::Integer, ρ::Real, σ::Real; μ::Real=0.0)
 end
 
 function parameters_function(;
-    β::Real=0.955,                # discount factor (households)
-    ρ::Real=0.975,                # survival rate
-    r_f::Real=0.04,               # risk-free rate # 1.04*ρ-1.0
-    # r_f::Real=1.04/ρ-1.0,         # risk-free rate # 1.04*ρ-1.0
-    β_f::Real=1.0 / (1.0 + r_f),  # discount factor (bank)
-    # τ::Real=0.00,                 # transaction cost
-    τ::Real=0.04,                 # transaction cost
-    σ::Real=2.00,                 # CRRA coefficient
-    δ::Real=0.08,                 # depreciation rate
-    α::Real=0.33,                 # capital share
-    ψ::Real=0.972^4,              # exogenous retention ratio # 1.0 - 1.0 / 20.0
-    θ::Real=1.0 / (4.57 * 0.75),  # diverting fraction # 1.0 / 3.0
-    p_h::Real=1.0 / 6.0,          # prob. of history erased
-    η::Real=0.40,                 # wage garnishment rate
-    ξ::Real=0.00,                 # stigma utility filing cost
-    κ::Real=697 / 33176,          # out-of-pocket monetary filing cost
-    e_1_σ::Real=0.448,            # s.d. of permanent endowment shock
-    e_1_size::Integer=2,          # number of permanent endowment shock
-    e_2_ρ::Real=0.957,            # AR(1) of persistent endowment shock
-    e_2_σ::Real=0.129,            # s.d. of persistent endowment shock
-    e_2_size::Integer=3,          # number of persistent endowment shock
-    e_3_σ::Real=0.351,            # s.d. of transitory endowment shock
-    e_3_size::Integer=3,          # number of transitory endowment shock
-    ν_size::Integer=3,            # number of expenditure shock
-    a_min::Real=-5.0,             # min of asset holding
-    a_max::Real=800.0,            # max of asset holding
-    a_size_neg::Integer=501,      # number of grid of negative asset holding for VFI
-    a_size_pos::Integer=101,      # number of grid of positive asset holding for VFI
-    a_degree::Integer=3,          # curvature of the positive asset gridpoints
-    μ_scale::Integer=1            # scale for the asset holding gridpoints for distribution
+    β::Float64=0.955,                # discount factor (households)
+    ρ::Float64=0.975,                # survival rate
+    r_f::Float64=0.04,               # risk-free rate # 1.04*ρ-1.0
+    # r_f::Float64=1.04/ρ-1.0,         # risk-free rate # 1.04*ρ-1.0
+    β_f::Float64=1.0 / (1.0 + r_f),  # discount factor (bank)
+    # τ::Float64=0.00,                 # transaction cost
+    τ::Float64=0.04,                 # transaction cost
+    σ::Float64=2.00,                 # CRRA coefficient
+    δ::Float64=0.08,                 # depreciation rate
+    α::Float64=0.33,                 # capital share
+    ψ::Float64=0.972^4,              # exogenous retention ratio # 1.0 - 1.0 / 20.0
+    θ::Float64=1.0 / (4.57 * 0.75),  # diverting fraction # 1.0 / 3.0
+    p_h::Float64=1.0 / 6.0,          # prob. of history erased
+    η::Float64=0.40,                 # wage garnishment rate
+    ξ::Float64=0.00,                 # stigma utility filing cost
+    κ::Float64=697 / 33176,          # out-of-pocket monetary filing cost
+    e_1_σ::Float64=0.448,            # s.d. of permanent endowment shock
+    e_1_size::Int64=2,          # number of permanent endowment shock
+    e_2_ρ::Float64=0.957,            # AR(1) of persistent endowment shock
+    e_2_σ::Float64=0.129,            # s.d. of persistent endowment shock
+    e_2_size::Int64=3,          # number of persistent endowment shock
+    e_3_σ::Float64=0.351,            # s.d. of transitory endowment shock
+    e_3_size::Int64=3,          # number of transitory endowment shock
+    ν_size::Int64=3,            # number of expenditure shock
+    a_min::Float64=-5.0,             # min of asset holding
+    a_max::Float64=800.0,            # max of asset holding
+    a_size_neg::Int64=501,      # number of grid of negative asset holding for VFI
+    a_size_pos::Int64=101,      # number of grid of positive asset holding for VFI
+    a_degree::Int64=3,          # curvature of the positive asset gridpoints
+    μ_scale::Int64=1            # scale for the asset holding gridpoints for distribution
 )
     """
     contruct an immutable object containg all paramters
@@ -200,36 +200,36 @@ mutable struct Mutable_Aggregate_Prices
     """
     construct a type for mutable aggregate prices
     """
-    λ::Real
-    ξ_λ::Real
-    Λ_λ::Real
-    leverage_ratio_λ::Real
-    KL_to_D_ratio_λ::Real
-    ι_λ::Real
-    r_k_λ::Real
-    K_λ::Real
-    w_λ::Real
+    λ::Float64
+    ξ_λ::Float64
+    Λ_λ::Float64
+    leverage_ratio_λ::Float64
+    KL_to_D_ratio_λ::Float64
+    ι_λ::Float64
+    r_k_λ::Float64
+    K_λ::Float64
+    w_λ::Float64
 end
 
 mutable struct Mutable_Aggregate_Variables
     """
     construct a type for mutable aggregate variables
     """
-    K::Real
-    L::Real
-    L_adj::Real
-    D::Real
-    N::Real
-    profit::Real
-    ω::Real
-    leverage_ratio::Real
-    KL_to_D_ratio::Real
-    debt_to_earning_ratio::Real
-    share_of_filers::Real
-    share_of_involuntary_filers::Real
-    share_in_debts::Real
-    avg_loan_rate::Real
-    avg_loan_rate_pw::Real
+    K::Float64
+    L::Float64
+    L_adj::Float64
+    D::Float64
+    N::Float64
+    profit::Float64
+    ω::Float64
+    leverage_ratio::Float64
+    KL_to_D_ratio::Float64
+    debt_to_earning_ratio::Float64
+    share_of_filers::Float64
+    share_of_involuntary_filers::Float64
+    share_in_debts::Float64
+    avg_loan_rate::Float64
+    avg_loan_rate_pw::Float64
 end
 
 mutable struct Mutable_Variables
@@ -254,7 +254,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid_length::Integer=120, obj_range::Integer=1)
+function min_bounds_function(obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
     """
     compute bounds for minimization
     """
@@ -276,17 +276,16 @@ function min_bounds_function(obj::Function, grid_min::Real, grid_max::Real; grid
     return lb, ub
 end
 
-function zero_bounds_function(V_d::Real, V_nd::Array{Float64,1}, a_grid::Array{Float64,1})
+function zero_bounds_function(V_d::Float64, V_nd::Vector{Float64}, a_grid::Vector{Float64})
     """
     compute bounds for (zero) root finding
     """
-
-    @inbounds lb = a_grid[minimum(findall(V_nd .> V_d))]
-    @inbounds ub = a_grid[maximum(findall(V_nd .< V_d))]
+    @inbounds lb = a_grid[findlast(V_nd .< V_d)]
+    @inbounds ub = a_grid[findfirst(V_nd .> V_d)]
     return lb, ub
 end
 
-function utility_function(c::Real, γ::Real)
+function utility_function(c::Float64, γ::Float64)
     """
     compute utility of CRRA utility function with coefficient γ
     """
@@ -298,7 +297,7 @@ function utility_function(c::Real, γ::Real)
     end
 end
 
-function log_function(threshold_e::Real)
+function log_function(threshold_e::Float64)
     """
     adjusted log funciton where assigning -Inf to negative domain
     """
@@ -310,7 +309,7 @@ function log_function(threshold_e::Real)
     end
 end
 
-function threshold_function(V_d::Array{Float64,4}, V_nd::Array{Float64,5}, w::Real, parameters::NamedTuple)
+function threshold_function(V_d::Array{Float64,4}, V_nd::Array{Float64,5}, w::Float64, parameters::NamedTuple)
     """
     update default thresholds
     """
@@ -360,7 +359,7 @@ function threshold_function(V_d::Array{Float64,4}, V_nd::Array{Float64,5}, w::Re
     return threshold_a, threshold_e_2
 end
 
-function repayment_function(e_1_i::Integer, e_2_i::Integer, e_3_p_i::Integer, a_p::Real, threshold_e_2::Real, w::Real, parameters::NamedTuple; wage_garnishment::Bool=true)
+function repayment_function(e_1_i::Int64, e_2_i::Int64, e_3_p_i::Int64, a_p::Float64, threshold_e_2::Float64, w::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
     """
     evaluate repayment analytically with and without wage garnishment
     """
@@ -394,7 +393,7 @@ function repayment_function(e_1_i::Integer, e_2_i::Integer, e_3_p_i::Integer, a_
     return total_amount
 end
 
-function aggregate_prices_λ_funtion(parameters::NamedTuple; λ::Real)
+function aggregate_prices_λ_funtion(parameters::NamedTuple; λ::Float64)
     """
     compute aggregate prices for given incentive multiplier λ
     """
@@ -412,7 +411,7 @@ function aggregate_prices_λ_funtion(parameters::NamedTuple; λ::Real)
     return ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ
 end
 
-function variables_function(parameters::NamedTuple; λ::Real, load_init::Bool=false)
+function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool=false)
     """
     construct a mutable object containing endogenous variables
     """
@@ -495,7 +494,7 @@ function variables_function(parameters::NamedTuple; λ::Real, load_init::Bool=fa
     return variables
 end
 
-function variables_function_update!(variables::Mutable_Variables, parameters::NamedTuple; λ::Real)
+function variables_function_update!(variables::Mutable_Variables, parameters::NamedTuple; λ::Float64)
     """
     construct a mutable object containing endogenous variables
     """
@@ -505,7 +504,7 @@ function variables_function_update!(variables::Mutable_Variables, parameters::Na
     variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
-function EV_function(e_1_i::Integer, e_2_i::Integer, V_p::Array{Float64,5}, parameters::NamedTuple)
+function EV_function(e_1_i::Int64, e_2_i::Int64, V_p::Array{Float64,5}, parameters::NamedTuple)
     """
     construct expected value function
     """
@@ -536,9 +535,9 @@ function value_and_policy_function(
     V_pos_p::Array{Float64,5},
     q::Array{Float64,3},
     rbl::Array{Float64,3},
-    w::Real,
+    w::Float64,
     parameters::NamedTuple;
-    slow_updating::Real=1.0
+    slow_updating::Float64=1.0
 )
     """
     one-step update of value and policy functions
@@ -647,7 +646,7 @@ function value_and_policy_function(
     return V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, policy_pos_d
 end
 
-function pricing_and_rbl_function(threshold_e_2::Array{Float64,4}, w::Real, ι::Real, parameters::NamedTuple)
+function pricing_and_rbl_function(threshold_e_2::Array{Float64,4}, w::Float64, ι::Float64, parameters::NamedTuple)
     """
     update pricing function and borrowing risky limit
     """
@@ -688,7 +687,7 @@ function pricing_and_rbl_function(threshold_e_2::Array{Float64,4}, w::Real, ι::
     return R, q, rbl
 end
 
-function solve_value_and_pricing_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Real=1E-8, iter_max::Integer=1000, slow_updating::Real=1.0)
+function solve_value_and_pricing_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Float64=1E-8, iter_max::Int64=1000, slow_updating::Float64=1.0)
     """
     solve household and banking problems using one-loop algorithm
     """
@@ -834,7 +833,7 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
     return μ
 end
 
-function solve_stationary_distribution_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Real=1E-8, iter_max::Integer=2000)
+function solve_stationary_distribution_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Float64=1E-8, iter_max::Int64=2000)
     """
     solve stationary distribution
     """
@@ -877,9 +876,9 @@ function solve_aggregate_variable_function(
     q::Array{Float64,3},
     rbl::Array{Float64,3},
     μ::Array{Float64,6},
-    K::Real,
-    w::Real,
-    ι::Real,
+    K::Float64,
+    w::Float64,
+    ι::Float64,
     parameters::NamedTuple,
 )
     """
@@ -1029,7 +1028,7 @@ function solve_aggregate_variable_across_HH_function(
     policy_pos_d::Array{Float64,5},
     q::Array{Float64,3},
     μ::Array{Float64,6},
-    w::Real,
+    w::Float64,
     parameters::NamedTuple,
 )
     """
@@ -1144,7 +1143,7 @@ function solve_aggregate_variable_across_HH_function(
     return debt_to_earning_ratio, debt_to_earning_ratio_permanent_low, debt_to_earning_ratio_permanent_high, share_of_filers, share_of_filers_permanent_low, share_of_filers_permanent_high, share_in_debts, share_in_debts_permanent_low, share_in_debts_permanent_high, avg_loan_rate, avg_loan_rate_permanent_low, avg_loan_rate_permanent_high
 end
 
-function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Real=1E-6, tol_μ::Real=1E-8, slow_updating::Real=1.0)
+function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Float64=1E-6, tol_μ::Float64=1E-8, slow_updating::Float64=1.0)
     """
     solve the economy with given liquidity multiplier ι
     """
@@ -1182,7 +1181,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     return ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ
 end
 
-function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Real=-Inf, λ_max_adhoc::Real=Inf, tol::Real=1E-5, iter_max::Real=200, slow_updating::Real=1.0)
+function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float64=-Inf, λ_max_adhoc::Float64=Inf, tol::Float64=1E-5, iter_max::Float64=200, slow_updating::Float64=1.0)
     """
     solve for optimal liquidity multiplier
     """

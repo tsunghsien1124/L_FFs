@@ -49,14 +49,14 @@ function parameters_function(;
     e_1_size::Int64=2,          # number of permanent endowment shock
     e_2_ρ::Float64=0.957,            # AR(1) of persistent endowment shock
     e_2_σ::Float64=0.129,            # s.d. of persistent endowment shock
-    e_2_size::Int64=3,          # number of persistent endowment shock
+    e_2_size::Int64=5,          # number of persistent endowment shock
     e_3_σ::Float64=0.351,            # s.d. of transitory endowment shock
     e_3_size::Int64=3,          # number of transitory endowment shock
     ν_size::Int64=3,            # number of expenditure shock
     a_min::Float64=-5.0,             # min of asset holding
     a_max::Float64=800.0,            # max of asset holding
-    a_size_neg::Int64=501,      # number of grid of negative asset holding for VFI
-    a_size_pos::Int64=101,      # number of grid of positive asset holding for VFI
+    a_size_neg::Int64=101,      # number of grid of negative asset holding for VFI
+    a_size_pos::Int64=51,      # number of grid of positive asset holding for VFI
     a_degree::Int64=3,          # curvature of the positive asset gridpoints
     μ_scale::Int64=1            # scale for the asset holding gridpoints for distribution
 )
@@ -129,7 +129,7 @@ function parameters_function(;
     a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) / (a_size_pos - 1)) .^ a_degree) * a_max
     a_grid = cat(a_grid_neg[1:(end-1)], a_grid_pos, dims=1)
     a_size = length(a_grid)
-    a_ind_zero = findall(iszero, a_grid)[]
+    a_ind_zero = a_size_neg
 
     # asset holding grid for μ
     a_size_neg_μ = a_size_neg * μ_scale

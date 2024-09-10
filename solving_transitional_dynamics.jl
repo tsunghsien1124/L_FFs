@@ -6,34 +6,34 @@ mutable struct Mutable_Aggregate_Prices_T
     """
     construct a type for mutable aggregate prices of periods T
     """
-    λ::Array{Float64,1}
-    ξ_λ::Array{Float64,1}
-    Λ_λ::Array{Float64,1}
-    leverage_ratio_λ::Array{Float64,1}
-    KL_to_D_ratio_λ::Array{Float64,1}
-    ι_λ::Array{Float64,1}
-    r_k_λ::Array{Float64,1}
-    K_p_λ::Array{Float64,1}
-    w_λ::Array{Float64,1}
-    z_path::Array{Float64,1}
+    λ::Vector{Float64}
+    ξ_λ::Vector{Float64}
+    Λ_λ::Vector{Float64}
+    leverage_ratio_λ::Vector{Float64}
+    KL_to_D_ratio_λ::Vector{Float64}
+    ι_λ::Vector{Float64}
+    r_k_λ::Vector{Float64}
+    K_p_λ::Vector{Float64}
+    w_λ::Vector{Float64}
+    z_path::Vector{Float64}
 end
 
 mutable struct Mutable_Aggregate_Variables_T
     """
     construct a type for mutable aggregate variables of periods T
     """
-    K_p::Array{Float64,1}
-    L_p::Array{Float64,1}
-    D_p::Array{Float64,1}
-    N::Array{Float64,1}
-    leverage_ratio::Array{Float64,1}
-    KL_to_D_ratio::Array{Float64,1}
-    debt_to_earning_ratio::Array{Float64,1}
-    share_of_filers::Array{Float64,1}
-    share_of_involuntary_filers::Array{Float64,1}
-    share_in_debts::Array{Float64,1}
-    avg_loan_rate::Array{Float64,1}
-    avg_loan_rate_pw::Array{Float64,1}
+    K_p::Vector{Float64}
+    L_p::Vector{Float64}
+    D_p::Vector{Float64}
+    N::Vector{Float64}
+    leverage_ratio::Vector{Float64}
+    KL_to_D_ratio::Vector{Float64}
+    debt_to_earning_ratio::Vector{Float64}
+    share_of_filers::Vector{Float64}
+    share_of_involuntary_filers::Vector{Float64}
+    share_in_debts::Vector{Float64}
+    avg_loan_rate::Vector{Float64}
+    avg_loan_rate_pw::Vector{Float64}
 end
 
 mutable struct Mutable_Variables_T
@@ -58,7 +58,7 @@ mutable struct Mutable_Variables_T
     μ::Array{Float64,7}
 end
 
-function aggregate_price_update(leverage_ratio_λ::Array{Float64,1}, z_path::Array{Float64,1}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple)
+function aggregate_price_update(leverage_ratio_λ::Vector{Float64}, z_path::Vector{Float64}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple)
     """
     update aggregate prices given a series of leverage ratio
     """
@@ -130,7 +130,7 @@ function aggregate_price_update(leverage_ratio_λ::Array{Float64,1}, z_path::Arr
     return λ, ξ_λ, Λ_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ
 end
 
-function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer = 80, T_degree::Real = 1.0, z_path::Array{Float64,1} = ones(T_size+2))
+function variables_T_function(variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer = 80, T_degree::Real = 1.0, z_path::Vector{Float64} = ones(T_size+2))
     """
     construct a mutable object containing endogenous variables of periods T
     """
@@ -267,7 +267,7 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     return variables_T
 end
 
-function variables_T_function(initial_transtion_path::Array{Float64,1}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer = 80, T_degree::Real = 1.0, z_path::Array{Float64,1} = ones(T_size+2))
+function variables_T_function(initial_transtion_path::Vector{Float64}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer = 80, T_degree::Real = 1.0, z_path::Vector{Float64} = ones(T_size+2))
     """
     construct a mutable object containing endogenous variables of periods T given initial guess
     """

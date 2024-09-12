@@ -95,9 +95,14 @@ function parameters_function(;
     # expenditure schock
     # ν_grid = zeros(ν_size)
     if ν_size == 3
-        ν_grid = [0.0, 0.3584239, 3.0]
-        ν_p_1 = 0.04438342
-        ν_p_2 = 0.0002092103
+        # ν_grid = [0.0, 0.3584239, 3.0]
+        # ν_p_1 = 0.04438342
+        # ν_p_2 = 0.0002092103
+        # ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
+
+        ν_grid = [0.0, 0.0, 0.0]
+        ν_p_1 = 0.0
+        ν_p_2 = 0.0
         ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
     elseif ν_size == 4
         ν_size = 3
@@ -140,6 +145,9 @@ function parameters_function(;
     a_grid_μ = cat(a_grid_neg_μ[1:(end-1)], a_grid_pos_μ, dims=1)
     a_size_μ = length(a_grid_μ)
     a_ind_zero_μ = findall(iszero, a_grid_μ)[]
+
+    # iterators
+    loop_V = collect(Iterators.product(1:ν_size, 1:e_3_size, 1:e_2_size, 1:e_1_size, 1:a_size))
 
     # return values
     return (
@@ -193,6 +201,7 @@ function parameters_function(;
         a_size_pos_μ=a_size_pos_μ,
         a_ind_zero_μ=a_ind_zero_μ,
         a_degree=a_degree,
+        loop_V=loop_V,
     )
 end
 
@@ -250,8 +259,8 @@ mutable struct Mutable_Variables
     E_V_pos::Array{Float64,3}
     policy_a::Array{Float64,5}
     policy_d::Array{Float64,5}
-    policy_pos_a::Array{Float64,5}
-    policy_pos_d::Array{Float64,5}
+    policy_a_pos::Array{Float64,5}
+    policy_d_pos::Array{Float64,5}
     threshold_a::Array{Float64,4}
     threshold_e_2::Array{Float64,4}
     μ::Array{Float64,6}
@@ -320,10 +329,6 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e_2::Array
     # unpack parameters
     @unpack a_size_neg, a_grid, e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid, ν_size, ν_grid = parameters
 
-    # construct containers
-    # threshold_a = zeros(e_1_size, e_2_size, e_3_size, ν_size)
-    # threshold_e_2 = zeros(a_size_neg, e_1_size, e_3_size, ν_size)
-
     # loop over states
     for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_1_i = 1:e_1_size
 
@@ -349,12 +354,12 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e_2::Array
         @inbounds @views thres_a_Non_Inf = findall(threshold_a[e_1_i, :, e_3_i, ν_i] .!= -Inf)
         @inbounds @views thres_a_grid_itp = -threshold_a[e_1_i, thres_a_Non_Inf, e_3_i, ν_i]
         earning_grid_itp = w * exp.(e_1_grid[e_1_i] .+ e_2_grid[thres_a_Non_Inf] .+ e_3_grid[e_3_i]) .- ν_grid[ν_i]
-        threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k=1, bc="extrapolate")
-        # threshold_earning_itp = Akima(thres_a_grid_itp, earning_grid_itp)
+        # threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k=1, bc="extrapolate")
+        threshold_earning_itp = Akima(thres_a_grid_itp, earning_grid_itp)
 
         Threads.@threads for a_i = 1:a_size_neg
             @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
-            e_2_thres = log_function(earning_thres / w) - e_1_grid[e_1_i] - e_3_grid[e_3_i]
+            e_2_thres = log_function((earning_thres + ν_grid[ν_i])/ w) - e_1_grid[e_1_i] - e_3_grid[e_3_i]
             @inbounds threshold_e_2[a_i, e_1_i, e_3_i, ν_i] = e_2_thres
         end
     end
@@ -478,7 +483,7 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
         V_d = zeros(e_1_size, e_2_size, e_3_size)
         u_c_d = zeros(e_1_size, e_2_size, e_3_size)
         for e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-            V[:,e_1_i, e_2_i, e_3_i,:] .= utility_function(w_λ * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]), σ)
+            # V[:,e_1_i, e_2_i, e_3_i,:] .= utility_function(w_λ * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]), σ)
             u_c_d[e_1_i, e_2_i, e_3_i] = utility_function((1.0 - η) * w_λ * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]) - κ, σ)
         end
         V_nd = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
@@ -495,13 +500,13 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
     end
     policy_a = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
     policy_d = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
-    policy_pos_d = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
-    policy_pos_a = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
+    policy_a_pos = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
+    policy_d_pos = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
     threshold_a = zeros(e_1_size, e_2_size, e_3_size, ν_size)
     threshold_e_2 = zeros(a_size_neg, e_1_size, e_3_size, ν_size)
 
     # return outputs
-    variables = Mutable_Variables(aggregate_prices, aggregate_variables, R, q, rbl, V, E_V, V_d, u_c_d, V_nd, V_pos, E_V_pos, policy_a, policy_d, policy_pos_a, policy_pos_d, threshold_a, threshold_e_2, μ)
+    variables = Mutable_Variables(aggregate_prices, aggregate_variables, R, q, rbl, V, E_V, V_d, u_c_d, V_nd, V_pos, E_V_pos, policy_a, policy_d, policy_a_pos, policy_d_pos, threshold_a, threshold_e_2, μ)
     return variables
 end
 
@@ -535,7 +540,7 @@ function EV_function(e_1_i::Int64, e_2_i::Int64, V_p::Array{Float64,5}, paramete
     # repalce NaN with -Inf
     replace!(EV, NaN => -Inf)
 
-    # return value
+    # return results
     return EV
 end
 
@@ -563,21 +568,15 @@ function EV_function!(E_V::Array{Float64,3}, E_V_pos::Array{Float64,3}, V_p::Arr
     replace!(E_V, NaN => -Inf)
     replace!(E_V_pos, NaN => -Inf)
 
-    # return value
+    # return results
     return nothing
 end
 
 function value_and_policy_function!(
     variables::Mutable_Variables,
     V_p::Array{Float64,5},
-    # V_d_p::Array{Float64,3},
-    # V_nd_p::Array{Float64,5},
     V_pos_p::Array{Float64,5},
-    q::Array{Float64,3},
-    rbl::Array{Float64,3},
-    w::Float64,
-    parameters::NamedTuple;
-    slow_updating::Float64=1.0
+    parameters::NamedTuple
 )
     """
     one-step update of value and policy functions
@@ -589,102 +588,75 @@ function value_and_policy_function!(
     @unpack ν_size, ν_grid, ν_Γ = parameters
     @unpack ρ, β, σ, r_f = parameters
     @unpack p_h, η, κ, ξ = parameters
-
-    # construct containers
-    # V = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
-    # V_d = zeros(e_1_size, e_2_size, e_3_size)
-    # V_nd = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
-    # V_pos = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
-    # policy_a = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
-    # policy_d = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
-    # policy_pos_a = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
-    # policy_pos_d = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
+    @unpack loop_V = parameters
 
     # pre-compute the next-period discounted expected value funtions and defaulting value
     EV_function!(variables.E_V, variables.E_V_pos, V_p, V_pos_p, parameters)
     @inbounds @views variables.V_d .= variables.u_c_d .- ξ .+ reshape(variables.E_V_pos[1, :, :], (e_1_size, e_2_size, 1))
 
     # loop over all states
-    for ν_i = 1:ν_size, e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-
-        # extract unexpected expenses
-        @inbounds ν = ν_grid[ν_i]
-
-        # construct earning
-        @inbounds y = w * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i])
+    # Threads.@threads for (ν_i, e_3_i, e_2_i, e_1_i, a_i) in loop_V
+    for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
 
         # extract risky borrowing limit and maximum discounted borrowing amount
-        @inbounds @views rbl_a, rbl_qa = rbl[e_1_i, e_2_i, :]
+        @inbounds @views rbl_a, rbl_qa = variables.rbl[e_1_i, e_2_i, :]
 
-        # construct interpolated discounted borrowing amount functions
-        @inbounds @views qa = q[:, e_1_i, e_2_i] .* a_grid
+        # construct interpolated functions
+        @inbounds @views qa = variables.q[:, e_1_i, e_2_i] .* a_grid
         qa_function_itp = Akima(a_grid, qa)
-
-        # compute the next-period discounted expected value funtions and interpolated functions
-        V_hat = ρ * β * EV_function(e_1_i, e_2_i, V_p, parameters)
-        V_hat_pos = ρ * β * EV_function(e_1_i, e_2_i, V_pos_p, parameters)
+        @inbounds @views V_hat = variables.E_V[:, e_1_i, e_2_i]
+        @inbounds @views V_hat_pos = variables.E_V_pos[:, e_1_i, e_2_i]
         V_hat_itp = Akima(a_grid, V_hat)
         V_hat_pos_itp = Akima(a_grid_pos, (p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos))
 
-        # compute non-defaulting value
-        Threads.@threads for a_i = 1:a_size
+        for ν_i = 1:ν_size, e_3_i = 1:e_3_size, a_i = 1:a_size
 
-            # cash on hand
-            @inbounds a = a_grid[a_i]
-            CoH = y + a - ν
+            # constrcut cash on hand
+            @inbounds @views CoH = variables.aggregate_prices.w_λ * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]) + a_grid[a_i] - ν_grid[ν_i]
 
-            # compute non-defaulting value
-            if (CoH - rbl_qa) >= 0.0
+            # good credit history
+            if (CoH - rbl_qa) > 0.0
+                # constrained optimization
                 object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
-                lb, ub = min_bounds_function(object_nd, rbl_a - eps(), CoH + eps())
-                res_nd = optimize(object_nd, lb, ub)
-                @inbounds V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)
-                @inbounds policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_nd)
+                res_nd = optimize(object_nd, rbl_a, CoH)
+                @inbounds variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)
+                if variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] >= variables.V_d[e_1_i, e_2_i, e_3_i]
+                    @inbounds variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
+                    @inbounds variables.policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_nd)
+                    @inbounds variables.policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
+                else
+                    @inbounds variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = variables.V_d[e_1_i, e_2_i, e_3_i]
+                    @inbounds variables.policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
+                    @inbounds variables.policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
+                end
             else
-                # involuntary default
-                @inbounds V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
-            end
-
-            # compute value with good credit history
-            V_max = max(V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i], V_d[e_1_i, e_2_i, e_3_i])
-            if V_max == V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
-                @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
-                @inbounds policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
-            else
-                @inbounds V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i]
-                @inbounds policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
-                # @inbounds policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
+                @inbounds variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
+                @inbounds variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = variables.V_d[e_1_i, e_2_i, e_3_i]
+                @inbounds variables.policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
+                @inbounds variables.policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
             end
 
             # bad credit history
             if a_i >= a_ind_zero
                 a_pos_i = a_i - a_ind_zero + 1
-                if CoH <= 0.0
-                    @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = V_d[e_1_i, e_2_i, e_3_i]
-                    @inbounds policy_pos_d[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
-                    # @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Inf
-                else
+                if CoH > 0.0
                     object_pos(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
-                    lb, ub = min_bounds_function(object_pos, 0.0, CoH + eps())
-                    res_pos = optimize(object_pos, lb, ub)
-                    @inbounds V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
-                    @inbounds policy_pos_d[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
-                    @inbounds policy_pos_a[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
+                    res_pos = optimize(object_pos, 0.0, CoH)
+                    @inbounds variables.V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
+                    @inbounds variables.policy_a_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
+                    @inbounds variables.policy_d_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
+                else
+                    CoH <= 0.0
+                    @inbounds variables.V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = variables.V_d[e_1_i, e_2_i, e_3_i]
+                    @inbounds variables.policy_a_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
+                    @inbounds variables.policy_d_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 1.0
                 end
             end
         end
     end
 
-    # slow updating
-    if slow_updating != 1.0
-        V = slow_updating * V + (1.0 - slow_updating) * V_p
-        V_d = slow_updating * V_d + (1.0 - slow_updating) * V_d_p
-        V_nd = slow_updating * V_nd + (1.0 - slow_updating) * V_nd_p
-        V_pos = slow_updating * V_pos + (1.0 - slow_updating) * V_pos_p
-    end
-
     # return results
-    return V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, policy_pos_d
+    return nothing
 end
 
 function pricing_and_rbl_function(threshold_e_2::Array{Float64,4}, w::Float64, ι::Float64, parameters::NamedTuple)
@@ -740,8 +712,6 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
 
     # construct containers
     V_p = similar(variables.V)
-    # V_d_p = similar(variables.V_d)
-    # V_nd_p = similar(variables.V_nd)
     V_pos_p = similar(variables.V_pos)
     q_p = similar(variables.q)
 
@@ -749,14 +719,11 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
 
         # copy previous values
         copyto!(V_p, variables.V)
-        # copyto!(V_d_p, variables.V_d)
-        # copyto!(V_nd_p, variables.V_nd)
         copyto!(V_pos_p, variables.V_pos)
         copyto!(q_p, variables.q)
 
         # value and policy functions
-        variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.policy_a, variables.policy_d, variables.policy_pos_a, variables.policy_pos_d =
-            value_and_policy_function(V_p, V_d_p, V_nd_p, V_pos_p, variables.q, variables.rbl, variables.aggregate_prices.w_λ, parameters; slow_updating=slow_updating)
+        value_and_policy_function!(variables, V_p, V_pos_p, parameters)
 
         # default thresholds
         threshold_function!(variables.threshold_a, variables.threshold_e_2, variables.V_d, variables.V_nd, variables.aggregate_prices.w_λ, parameters)

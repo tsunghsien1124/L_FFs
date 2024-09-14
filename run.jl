@@ -8,6 +8,7 @@ using QuadGK
 using JLD2: @save, @load
 using LinearAlgebra
 using Optim
+# using BlackBoxOptim
 using Parameters: @unpack
 using PrettyTables
 using ProgressMeter
@@ -22,12 +23,12 @@ using DataFrames
 using Measures
 using BenchmarkTools, Profile
 using Polyester
+using Interpolations
 
 #==================#
 # Import functions #
 #==================#
-# include("solving_stationary_equilibrium.jl")
-include("solving_stationary_equilibrium_opt.jl")
+include("solving_stationary_equilibrium.jl")
 include("solving_transitional_dynamics.jl")
 # include("simulation.jl")
 
@@ -38,6 +39,8 @@ parameters = parameters_function();
 variables = variables_function(parameters; λ=0.04244494091796878, load_init=false);
 slow_updating = 1.0;
 @btime crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
+
+@profview crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
 
 
 @time ED_KL_to_D_ratio_min, ED_leverage_ratio_min, crit_V_min, crit_μ_min = solve_economy_function!(variables, parameters; slow_updating=slow_updating);

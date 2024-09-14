@@ -148,6 +148,7 @@ function parameters_function(;
 
     # iterators
     loop_V = collect(Iterators.product(1:ν_size, 1:e_3_size, 1:e_2_size, 1:e_1_size, 1:a_size))
+    loop_EV = collect(Iterators.product(1:e_2_size, 1:e_1_size, 1:a_size))
 
     # return values
     return (
@@ -202,6 +203,7 @@ function parameters_function(;
         a_ind_zero_μ=a_ind_zero_μ,
         a_degree=a_degree,
         loop_V=loop_V,
+        loop_EV=loop_EV,
     )
 end
 
@@ -359,7 +361,7 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e_2::Array
 
         Threads.@threads for a_i = 1:a_size_neg
             @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
-            e_2_thres = log_function((earning_thres + ν_grid[ν_i])/ w) - e_1_grid[e_1_i] - e_3_grid[e_3_i]
+            e_2_thres = log_function((earning_thres + ν_grid[ν_i]) / w) - e_1_grid[e_1_i] - e_3_grid[e_3_i]
             @inbounds threshold_e_2[a_i, e_1_i, e_3_i, ν_i] = e_2_thres
         end
     end
@@ -520,29 +522,57 @@ function variables_function_update!(variables::Mutable_Variables, parameters::Na
     variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
-function EV_function(e_1_i::Int64, e_2_i::Int64, V_p::Array{Float64,5}, parameters::NamedTuple)
-    """
-    construct expected value function
-    """
+# function EV_function(e_1_i::Int64, e_2_i::Int64, V_p::Array{Float64,5}, parameters::NamedTuple)
+#     """
+#     construct expected value function
+#     """
 
-    # unpack parameters
-    @unpack e_2_size, e_2_Γ, e_3_size, e_3_Γ, ν_size, ν_Γ = parameters
+#     # unpack parameters
+#     @unpack e_2_size, e_2_Γ, e_3_size, e_3_Γ, ν_size, ν_Γ = parameters
 
-    # construct container
-    a_size_ = size(V_p)[1]
-    EV = zeros(a_size_)
+#     # construct container
+#     a_size_ = size(V_p)[1]
+#     EV = zeros(a_size_)
 
-    # update expected value
-    for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size
-        @inbounds @views EV += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * V_p[:, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
-    end
+#     # update expected value
+#     for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size
+#         @inbounds @views EV += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * V_p[:, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
+#     end
 
-    # repalce NaN with -Inf
-    replace!(EV, NaN => -Inf)
+#     # repalce NaN with -Inf
+#     replace!(EV, NaN => -Inf)
 
-    # return results
-    return EV
-end
+#     # return results
+#     return EV
+# end
+
+# function EV_function!(E_V::Array{Float64,3}, E_V_pos::Array{Float64,3}, V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, parameters::NamedTuple)
+#     """
+#     construct expected value functions
+#     """
+
+#     # unpack parameters
+#     @unpack e_1_size, e_2_size, e_2_Γ, e_3_size, e_3_Γ, ν_size, ν_Γ, a_size, a_size_pos, ρ, β = parameters
+
+#     # reshape all objects
+#     e_1_Γ = reshape(Matrix{Float64}(I, e_1_size, e_1_size), (1, e_1_size, 1, 1, 1, e_1_size, 1))
+#     e_2_Γ = reshape(transpose(e_2_Γ), (1, 1, e_2_size, 1, 1, 1, e_2_size))
+#     e_3_Γ = reshape(e_3_Γ, (1, 1, 1, e_3_size, 1, 1, 1))
+#     ν_Γ = reshape(ν_Γ, (1, 1, 1, 1, ν_size, 1, 1))
+#     V_p_res = reshape(V_p, (a_size, e_1_size, e_2_size, e_3_size, ν_size, 1, 1))
+#     V_pos_p_res = reshape(V_pos_p, (a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, 1, 1))
+
+#     # update expected value
+#     E_V .= ρ .* β .* dropdims(sum(e_1_Γ .* e_2_Γ .* e_3_Γ .* ν_Γ .* V_p_res, dims=(2, 3, 4, 5)), dims=(2, 3, 4, 5))
+#     E_V_pos .= ρ .* β .* dropdims(sum(e_1_Γ .* e_2_Γ .* e_3_Γ .* ν_Γ .* V_pos_p_res, dims=(2, 3, 4, 5)), dims=(2, 3, 4, 5))
+
+#     # replace NaN with -Inf
+#     replace!(E_V, NaN => -Inf)
+#     replace!(E_V_pos, NaN => -Inf)
+
+#     # return results
+#     return nothing
+# end
 
 function EV_function!(E_V::Array{Float64,3}, E_V_pos::Array{Float64,3}, V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, parameters::NamedTuple)
     """
@@ -550,19 +580,25 @@ function EV_function!(E_V::Array{Float64,3}, E_V_pos::Array{Float64,3}, V_p::Arr
     """
 
     # unpack parameters
-    @unpack e_1_size, e_2_size, e_2_Γ, e_3_size, e_3_Γ, ν_size, ν_Γ, a_size, a_size_pos, ρ, β = parameters
+    @unpack e_1_size, e_2_size, e_2_Γ, e_3_size, e_3_Γ, ν_size, ν_Γ, a_size, a_size_pos, a_ind_zero, ρ, β, loop_EV = parameters
 
-    # reshape all objects
-    e_1_Γ = reshape(Matrix{Float64}(I, e_1_size, e_1_size), (1, e_1_size, 1, 1, 1, e_1_size, 1))
-    e_2_Γ = reshape(transpose(e_2_Γ), (1, 1, e_2_size, 1, 1, 1, e_2_size))
-    e_3_Γ = reshape(e_3_Γ, (1, 1, 1, e_3_size, 1, 1, 1))
-    ν_Γ = reshape(ν_Γ, (1, 1, 1, 1, ν_size, 1, 1))
-    V_p_res = reshape(V_p, (a_size, e_1_size, e_2_size, e_3_size, ν_size, 1, 1))
-    V_pos_p_res = reshape(V_pos_p, (a_size_pos, e_1_size, e_2_size, e_3_size, ν_size, 1, 1))
-
-    # update expected value
-    E_V .= ρ .* β .* dropdims(sum(e_1_Γ .* e_2_Γ .* e_3_Γ .* ν_Γ .* V_p_res, dims=(2, 3, 4, 5)), dims=(2, 3, 4, 5))
-    E_V_pos .= ρ .* β .* dropdims(sum(e_1_Γ .* e_2_Γ .* e_3_Γ .* ν_Γ .* V_pos_p_res, dims=(2, 3, 4, 5)), dims=(2, 3, 4, 5))
+    # update expected value 
+    @batch for (e_2_i, e_1_i, a_p_i) in loop_EV
+        if a_p_i < a_ind_zero
+            @inbounds E_V[a_p_i, e_1_i, e_2_i] = 0.0
+            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size
+                @inbounds E_V[a_p_i, e_1_i, e_2_i] += ρ * β * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * V_p[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
+            end
+        else
+            @inbounds E_V[a_p_i, e_1_i, e_2_i] = 0.0
+            a_p_i_pos = a_p_i - a_ind_zero + 1
+            @inbounds E_V_pos[a_p_i_pos, e_1_i, e_2_i] = 0.0
+            for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size
+                @inbounds E_V[a_p_i, e_1_i, e_2_i] += ρ * β * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * V_p[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
+                @inbounds E_V_pos[a_p_i_pos, e_1_i, e_2_i] += ρ * β * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * V_pos_p[a_p_i_pos, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
+            end
+        end
+    end
 
     # replace NaN with -Inf
     replace!(E_V, NaN => -Inf)
@@ -616,7 +652,6 @@ function value_and_policy_function!(
 
             # good credit history
             if (CoH - rbl_qa) > 0.0
-                # constrained optimization
                 object_nd(a_p) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
                 res_nd = optimize(object_nd, rbl_a, CoH)
                 @inbounds variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)

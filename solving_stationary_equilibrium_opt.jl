@@ -359,7 +359,8 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e_2::Array
         # threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k=1, bc="extrapolate")
         threshold_earning_itp = Akima(thres_a_grid_itp, earning_grid_itp)
 
-        Threads.@threads for a_i = 1:a_size_neg
+        # Threads.@threads 
+        for a_i = 1:a_size_neg
             @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
             e_2_thres = log_function((earning_thres + ν_grid[ν_i]) / w) - e_1_grid[e_1_i] - e_3_grid[e_3_i]
             @inbounds threshold_e_2[a_i, e_1_i, e_3_i, ν_i] = e_2_thres
@@ -583,7 +584,9 @@ function EV_function!(E_V::Array{Float64,3}, E_V_pos::Array{Float64,3}, V_p::Arr
     @unpack e_1_size, e_2_size, e_2_Γ, e_3_size, e_3_Γ, ν_size, ν_Γ, a_size, a_size_pos, a_ind_zero, ρ, β, loop_EV = parameters
 
     # update expected value 
-    @batch for (e_2_i, e_1_i, a_p_i) in loop_EV
+    # @batch 
+    # Threads.@threads 
+    for (e_2_i, e_1_i, a_p_i) in loop_EV
         if a_p_i < a_ind_zero
             @inbounds E_V[a_p_i, e_1_i, e_2_i] = 0.0
             for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size, e_2_p_i = 1:e_2_size

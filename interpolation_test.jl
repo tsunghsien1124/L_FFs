@@ -77,3 +77,19 @@ using BenchmarkTools, Interpolations, FLOWMath
 @btime itp_test_4(100)
 
 @profview itp_test_4(100)
+
+
+using Interpolations
+
+mutable struct itp_collection
+    y1_itp::Interpolations.Extrapolation{Float64,1,Interpolations.GriddedInterpolation{Float64,1,Vector{Float64},Gridded{Linear{Throw{OnGrid}}},Tuple{Vector{Float64}}},Gridded{Linear{Throw{OnGrid}}},Line{Nothing}}
+    y2_itp::Interpolations.Extrapolation{Float64,1,Interpolations.GriddedInterpolation{Float64,1,Vector{Float64},Gridded{Linear{Throw{OnGrid}}},Tuple{Vector{Float64}}},Gridded{Linear{Throw{OnGrid}}},Line{Nothing}}
+    # y3_itp::Interpolations.Extrapolation{UndefInitializer()}
+end
+
+x = sort(rand(200))
+y1 = 2 .* x
+y2 = x .^ 2
+# y3 = (x .- 1.0) .^ 3.0 .+ 0.5 .* x .^ 0.5
+
+ITP = itp_collection(linear_interpolation(x, y1, extrapolation_bc=Line()), linear_interpolation(x, y2, extrapolation_bc=Line()))

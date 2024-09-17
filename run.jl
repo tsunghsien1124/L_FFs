@@ -52,11 +52,11 @@ V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd,
 #================#
 # Checking plots #
 #================#
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,:,1], color=[:red :blue :black], label=:none)
-plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,:,2], color=[:red :blue :black], label=:none, linestyle=:dash)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 1, :], color=[:red :blue :black], label=:none)
+plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 2, :], color=[:red :blue :black], label=:none, linestyle=:dash)
 
-scatter(parameters.a_grid_neg[90:end], variables.q[90:parameters.a_ind_zero,2,1] .* parameters.a_grid_neg[90:end], color=[:red :blue :black], label=:none)
-plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,1,:] .* parameters.a_grid_neg, color=[:red :blue :black], label=:none, linestyle=:dash)
+plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black], label=:none)
+plot!(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 1, :] .* parameters.a_grid_neg, color=[:red :blue :black], label=:none, linestyle=:dash)
 
 #============================================#
 # Solve transitional dynamics - Filing costs #
@@ -67,14 +67,14 @@ plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,1,:] .* paramet
 slow_updating = 1.0;
 
 # old economy - low κ
-parameters_κ_1 = parameters_function(κ = κ_1);
+parameters_κ_1 = parameters_function(κ=κ_1);
 # variables_λ_lower_κ_1, variables_κ_1, flag_κ_1, crit_V_κ_1, crit_μ_κ_1 = optimal_multiplier_function(parameters_κ_1; slow_updating=slow_updating);
 # λ_κ_1 = variables_κ_1.aggregate_prices.λ # 0.04244494091796878
 variables_κ_1 = variables_function(parameters_κ_1; λ=0.04244494091796878, load_init=false);
 ED_KL_to_D_ratio_min_κ_1, ED_leverage_ratio_min_κ_1, crit_V_min_κ_1, crit_μ_min_κ_1 = solve_economy_function!(variables_κ_1, parameters_κ_1; slow_updating=slow_updating);
 
 # new economy - high κ
-parameters_κ_2 = parameters_function(κ = κ_2);
+parameters_κ_2 = parameters_function(κ=κ_2);
 # variables_λ_lower_κ_2, variables_κ_2, flag_κ_2, crit_V_κ_2, crit_μ_κ_2 = optimal_multiplier_function(parameters_κ_2; slow_updating=slow_updating);
 # λ_κ_2 = variables_κ_2.aggregate_prices.λ # 0.02893077099609377
 variables_κ_2 = variables_function(parameters_κ_2; λ=0.02893077099609377, load_init=false);
@@ -91,9 +91,9 @@ initial_z = ones(T_size + 2);
 # from κ_1 to κ_2
 if isfile(pwd() * "\\results\\jld2\\transition_path_κ.jld2")
     @load pwd() * "\\results\\jld2\\transition_path_κ.jld2" transition_path_κ
-    variables_T_κ = variables_T_function(transition_path_κ, variables_κ_1, variables_κ_2, parameters_κ_2; T_size=T_size, T_degree=T_degree);
+    variables_T_κ = variables_T_function(transition_path_κ, variables_κ_1, variables_κ_2, parameters_κ_2; T_size=T_size, T_degree=T_degree)
 else
-    variables_T_κ = variables_T_function(variables_κ_1, variables_κ_2, parameters_κ_2; T_size=T_size, T_degree=T_degree);
+    variables_T_κ = variables_T_function(variables_κ_1, variables_κ_2, parameters_κ_2; T_size=T_size, T_degree=T_degree)
 end
 transitional_dynamic_λ_function!(variables_T_κ, variables_κ_1, variables_κ_2, parameters_κ_2; tol=tol, iter_max=iter_max, slow_updating=slow_updating_transitional_dynamics)
 transition_path_κ = variables_T_κ.aggregate_prices.leverage_ratio_λ
@@ -101,7 +101,7 @@ transition_path_κ = variables_T_κ.aggregate_prices.leverage_ratio_λ
 plot_transition_path_κ = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Period")
 plot_transition_path_κ = plot!(transition_path_κ, linecolor=:blue, linewidth=3, markershapes=:circle, markercolor=:blue, markersize=6, markerstrokecolor=:blue, label=:none)
 plot_transition_path_κ
-savefig(plot_transition_path_κ,  pwd() * "\\results\\figures\\plot_transition_path_κ.pdf")
+savefig(plot_transition_path_κ, pwd() * "\\results\\figures\\plot_transition_path_κ.pdf")
 
 transition_path_κ_N = variables_T_κ.aggregate_variables.N
 plot_transition_path_κ_N = plot(size=(800, 500), box=:on, legend=:bottomright, xtickfont=font(18, "Computer Modern", :black), ytickfont=font(18, "Computer Modern", :black), titlefont=font(18, "Computer Modern", :black), guidefont=font(18, "Computer Modern", :black), legendfont=font(18, "Computer Modern", :black), margin=4mm, ylabel="", xlabel="Period")
@@ -118,14 +118,14 @@ p_h_2 = 1.0 / 10.0;
 slow_updating = 1.0;
 
 # old economy - shorter p_h
-parameters_p_h_1 = parameters_function(p_h = p_h_1);
+parameters_p_h_1 = parameters_function(p_h=p_h_1);
 # variables_λ_lower_p_h_1, variables_p_h_1, flag_p_h_1, crit_V_p_h_1, crit_μ_p_h_1 = optimal_multiplier_function(parameters_p_h_1; slow_updating=slow_updating);
 # λ_p_h_1 = variables_p_h_1.aggregate_prices.λ # 0.04244494091796878
 variables_p_h_1 = variables_function(parameters_p_h_1; λ=0.04244494091796878, load_init=false);
 ED_KL_to_D_ratio_min_p_h_1, ED_leverage_ratio_min_p_h_1, crit_V_min_p_h_1, crit_μ_min_p_h_1 = solve_economy_function!(variables_p_h_1, parameters_p_h_1; slow_updating=slow_updating);
 
 # new economy - longer p_h
-parameters_p_h_2 = parameters_function(p_h = p_h_2);
+parameters_p_h_2 = parameters_function(p_h=p_h_2);
 # variables_λ_lower_p_h_2, variables_p_h_2, flag_p_h_2, crit_V_p_h_2, crit_μ_p_h_2 = optimal_multiplier_function(parameters_p_h_2; slow_updating=slow_updating);
 # λ_p_h_2 = variables_p_h_2.aggregate_prices.λ # 0.04315687817382817
 variables_p_h_2 = variables_function(parameters_p_h_2; λ=0.04315687817382817, load_init=false);
@@ -142,9 +142,9 @@ initial_z = ones(T_size + 2);
 # from p_h_1 to p_h_2
 if isfile(pwd() * "\\results\\jld2\\transition_path_p_h.jld2")
     @load pwd() * "\\results\\jld2\\transition_path_p_h.jld2" transition_path_p_h
-    variables_T_p_h = variables_T_function(transition_path_p_h, variables_p_h_1, variables_p_h_2, parameters_p_h_2; T_size=T_size, T_degree=T_degree);
+    variables_T_p_h = variables_T_function(transition_path_p_h, variables_p_h_1, variables_p_h_2, parameters_p_h_2; T_size=T_size, T_degree=T_degree)
 else
-    variables_T_p_h = variables_T_function(variables_p_h_1, variables_p_h_2, parameters_p_h_2; T_size=T_size, T_degree=T_degree);
+    variables_T_p_h = variables_T_function(variables_p_h_1, variables_p_h_2, parameters_p_h_2; T_size=T_size, T_degree=T_degree)
 end
 transitional_dynamic_λ_function!(variables_T_p_h, variables_p_h_1, variables_p_h_2, parameters_p_h_2; tol=tol, iter_max=iter_max, slow_updating=slow_updating_transitional_dynamics)
 transition_path_p_h = variables_T_p_h.aggregate_prices.leverage_ratio_λ
@@ -163,21 +163,21 @@ savefig(plot_transition_path_p_h, pwd() * "\\results\\figures\\plot_transition_p
 slow_updating = 1.0;
 
 # old economy - pre BAPCPA
-parameters_BAPCPA_1 = parameters_function(κ = κ_1, p_h = p_h_1);
+parameters_BAPCPA_1 = parameters_function(κ=κ_1, p_h=p_h_1);
 # variables_λ_lower_BAPCPA_1, variables_BAPCPA_1, flag_BAPCPA_1, crit_V_BAPCPA_1, crit_μ_BAPCPA_1 = optimal_multiplier_function(parameters_BAPCPA_1; slow_updating=slow_updating);
 # λ_BAPCPA_1 = variables_BAPCPA_1.aggregate_prices.λ # 0.04244494091796878
 variables_BAPCPA_1 = variables_function(parameters_BAPCPA_1; λ=0.04244494091796878, load_init=false);
 ED_KL_to_D_ratio_min_BAPCPA_1, ED_leverage_ratio_min_BAPCPA_1, crit_V_min_BAPCPA_1, crit_μ_min_BAPCPA_1 = solve_economy_function!(variables_BAPCPA_1, parameters_BAPCPA_1; slow_updating=slow_updating);
 
 # new economy - post BAPCPA
-parameters_BAPCPA_2 = parameters_function(κ = κ_2, p_h = p_h_2);
+parameters_BAPCPA_2 = parameters_function(κ=κ_2, p_h=p_h_2);
 # variables_λ_lower_BAPCPA_2, variables_BAPCPA_2, flag_BAPCPA_2, crit_V_BAPCPA_2, crit_μ_BAPCPA_2 = optimal_multiplier_function(parameters_BAPCPA_2; slow_updating=slow_updating);
 # λ_BAPCPA_2 = variables_BAPCPA_2.aggregate_prices.λ # 0.03357268615722659
 variables_BAPCPA_2 = variables_function(parameters_BAPCPA_2; λ=0.03357268615722659, load_init=false);
 ED_KL_to_D_ratio_min_BAPCPA_2, ED_leverage_ratio_min_BAPCPA_2, crit_V_min_BAPCPA_2, crit_μ_min_BAPCPA_2 = solve_economy_function!(variables_BAPCPA_2, parameters_BAPCPA_2; slow_updating=slow_updating);
 
 # new economy - post BAPCPA (low ν)
-parameters_BAPCPA_2_low_ν = parameters_function(κ = κ_2, p_h = p_h_2, ν_size = 4);
+parameters_BAPCPA_2_low_ν = parameters_function(κ=κ_2, p_h=p_h_2, ν_size=4);
 # variables_λ_lower_BAPCPA_2_low_ν, variables_BAPCPA_2_low_ν, flag_BAPCPA_2_low_ν, crit_V_BAPCPA_2_low_ν, crit_μ_BAPCPA_2_low_ν = optimal_multiplier_function(parameters_BAPCPA_2_low_ν; slow_updating=slow_updating);
 # λ_BAPCPA_2_low_ν = variables_BAPCPA_2_low_ν.aggregate_prices.λ # 0.03253384753417972
 variables_BAPCPA_2_low_ν = variables_function(parameters_BAPCPA_2_low_ν; λ=0.03253384753417972, load_init=false);
@@ -191,7 +191,7 @@ ED_KL_to_D_ratio_min_BAPCPA_2_low_ν, ED_leverage_ratio_min_BAPCPA_2_low_ν, cri
 # ED_KL_to_D_ratio_min_BAPCPA_2_low_ν_σ, ED_leverage_ratio_min_BAPCPA_2_low_ν_σ, crit_V_min_BAPCPA_2_low_ν_σ, crit_μ_min_BAPCPA_2_low_ν_σ = solve_economy_function!(variables_BAPCPA_2_low_ν_σ, parameters_BAPCPA_2_low_ν_σ; slow_updating=slow_updating);
 
 # new economy - post BAPCPA (no ν)
-parameters_BAPCPA_2_no_ν = parameters_function(κ = κ_2, p_h = p_h_2, ν_size = 5);
+parameters_BAPCPA_2_no_ν = parameters_function(κ=κ_2, p_h=p_h_2, ν_size=5);
 # variables_λ_lower_BAPCPA_2_no_ν, variables_BAPCPA_2_no_ν, flag_BAPCPA_2_no_ν, crit_V_BAPCPA_2_no_ν, crit_μ_BAPCPA_2_no_ν = optimal_multiplier_function(parameters_BAPCPA_2_no_ν; slow_updating=slow_updating);
 # λ_BAPCPA_2_no_ν = variables_BAPCPA_2_no_ν.aggregate_prices.λ # 0.03253384753417972
 variables_BAPCPA_2_no_ν = variables_function(parameters_BAPCPA_2_no_ν; λ=0.0, load_init=false);
@@ -208,9 +208,9 @@ initial_z = ones(T_size + 2);
 # from pre to post BAPCPA
 if isfile(pwd() * "\\results\\jld2\\transition_path_BAPCPA.jld2")
     @load pwd() * "\\results\\jld2\\transition_path_BAPCPA.jld2" transition_path_BAPCPA
-    variables_T_BAPCPA = variables_T_function(transition_path_BAPCPA, variables_BAPCPA_1, variables_BAPCPA_2, parameters_BAPCPA_2; T_size=T_size, T_degree=T_degree);
+    variables_T_BAPCPA = variables_T_function(transition_path_BAPCPA, variables_BAPCPA_1, variables_BAPCPA_2, parameters_BAPCPA_2; T_size=T_size, T_degree=T_degree)
 else
-    variables_T_BAPCPA = variables_T_function(variables_BAPCPA_1, variables_BAPCPA_2, parameters_BAPCPA_2; T_size=T_size, T_degree=T_degree);
+    variables_T_BAPCPA = variables_T_function(variables_BAPCPA_1, variables_BAPCPA_2, parameters_BAPCPA_2; T_size=T_size, T_degree=T_degree)
 end
 transitional_dynamic_λ_function!(variables_T_BAPCPA, variables_BAPCPA_1, variables_BAPCPA_2, parameters_BAPCPA_2; tol=tol, iter_max=iter_max, slow_updating=slow_updating_transitional_dynamics)
 transition_path_BAPCPA = variables_T_BAPCPA.aggregate_prices.leverage_ratio_λ
@@ -227,29 +227,29 @@ plot_transition_path_BAPCPA_N
 savefig(plot_transition_path_BAPCPA_N, pwd() * "\\results\\figures\\transition_path_BAPCPA_N.pdf")
 
 # CEV welfare
-welfare_CEV_BAPCPA_good_with_debt = 100 * sum(((variables_T_BAPCPA.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 2] ./ variables_BAPCPA_1.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
+welfare_CEV_BAPCPA_good_with_debt = 100 * sum(((variables_T_BAPCPA.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 2] ./ variables_BAPCPA_1.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
 # W_old_good_with_debt = sum(variables_BAPCPA_1.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :] .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
 # W_new_good_with_debt = sum(variables_T_BAPCPA.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 2] .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
 # welfare_CEV_BAPCPA_good_with_debt = 100 * ((W_new_good_with_debt / W_old_good_with_debt)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
 
-welfare_CEV_BAPCPA_good_with_savings = 100 * sum(((variables_T_BAPCPA.V[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 2] ./ variables_BAPCPA_1.V[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 1])
+welfare_CEV_BAPCPA_good_with_savings = 100 * sum(((variables_T_BAPCPA.V[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 2] ./ variables_BAPCPA_1.V[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 1])
 # W_old_good_without_debt = sum(variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 1])
 # W_new_good_without_debt = sum(variables_T_BAPCPA.V[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 1])
 # welfare_CEV_BAPCPA_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
 
-welfare_CEV_BAPCPA_good_without_asset = 100 * sum(((variables_T_BAPCPA.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 2] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
+welfare_CEV_BAPCPA_good_without_asset = 100 * sum(((variables_T_BAPCPA.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 2] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
 
-welfare_CEV_BAPCPA_good = 100 * sum(((variables_T_BAPCPA.V[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[:, :, :, :, :, 1])
+welfare_CEV_BAPCPA_good = 100 * sum(((variables_T_BAPCPA.V[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[:, :, :, :, :, 1])
 # W_old_good = W_old_good_with_debt + W_old_good_without_debt
 # W_new_good = W_new_good_with_debt + W_new_good_without_debt
 # welfare_CEV_BAPCPA_good = 100 * ((W_new_good / W_old_good)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
 
-welfare_CEV_BAPCPA_bad = 100 * sum(((variables_T_BAPCPA.V_pos[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V_pos).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
+welfare_CEV_BAPCPA_bad = 100 * sum(((variables_T_BAPCPA.V_pos[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V_pos) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
 # W_old_bad = sum(variables_BAPCPA_1.V_pos[:, :, :, :, :] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
 # W_new_bad = sum(variables_T_BAPCPA.V_pos[:, :, :, :, :, 2] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
 # welfare_CEV_BAPCPA_bad = 100 * ((W_new_bad / W_old_bad)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
 
-welfare_CEV_BAPCPA = 100 * (sum(((variables_T_BAPCPA.V[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) + sum(((variables_T_BAPCPA.V_pos[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V_pos).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]))
+welfare_CEV_BAPCPA = 100 * (sum(((variables_T_BAPCPA.V[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) + sum(((variables_T_BAPCPA.V_pos[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V_pos) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]))
 # W_old = W_old_good + W_old_bad
 # W_new = W_new_good + W_new_bad
 # welfare_CEV_BAPCPA = 100 * ((W_new / W_old)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
@@ -270,9 +270,9 @@ welfare_favor_BAPCPA = 100 * (sum((variables_T_BAPCPA.V[:, :, :, :, :, 2] .> var
 # from pre to post BAPCPA (low ν)
 if isfile(pwd() * "\\results\\jld2\\transition_path_BAPCPA_low_ν.jld2")
     @load pwd() * "\\results\\jld2\\transition_path_BAPCPA_low_ν.jld2" transition_path_BAPCPA_low_ν
-    variables_T_BAPCPA_low_ν = variables_T_function(transition_path_BAPCPA_low_ν, variables_BAPCPA_1, variables_BAPCPA_2_low_ν, parameters_BAPCPA_2_low_ν; T_size=T_size, T_degree=T_degree);
+    variables_T_BAPCPA_low_ν = variables_T_function(transition_path_BAPCPA_low_ν, variables_BAPCPA_1, variables_BAPCPA_2_low_ν, parameters_BAPCPA_2_low_ν; T_size=T_size, T_degree=T_degree)
 else
-    variables_T_BAPCPA_low_ν = variables_T_function(variables_BAPCPA_1, variables_BAPCPA_2_low_ν, parameters_BAPCPA_2_low_ν; T_size=T_size, T_degree=T_degree);
+    variables_T_BAPCPA_low_ν = variables_T_function(variables_BAPCPA_1, variables_BAPCPA_2_low_ν, parameters_BAPCPA_2_low_ν; T_size=T_size, T_degree=T_degree)
 end
 transitional_dynamic_λ_function!(variables_T_BAPCPA_low_ν, variables_BAPCPA_1, variables_BAPCPA_2_low_ν, parameters_BAPCPA_2_low_ν; tol=tol, iter_max=iter_max, slow_updating=slow_updating_transitional_dynamics)
 transition_path_BAPCPA_low_ν = variables_T_BAPCPA_low_ν.aggregate_prices.leverage_ratio_λ
@@ -302,29 +302,29 @@ plot_transition_path_BAPCPA_comparison_N
 savefig(plot_transition_path_BAPCPA_comparison_N, pwd() * "\\results\\figures\\plot_transition_path_BAPCPA_comparison_N.pdf")
 
 # CEV welfare
-welfare_CEV_BAPCPA_low_ν_good_with_debt = 100 * sum(((variables_T_BAPCPA_low_ν.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 2] ./ variables_BAPCPA_1.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
+welfare_CEV_BAPCPA_low_ν_good_with_debt = 100 * sum(((variables_T_BAPCPA_low_ν.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 2] ./ variables_BAPCPA_1.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
 # W_old_good_with_debt = sum(variables_BAPCPA_1.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :] .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
 # W_new_good_with_debt = sum(variables_T_BAPCPA_low_ν.V[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 2] .* variables_BAPCPA_1.μ[1:(parameters_BAPCPA_1.a_ind_zero-1), :, :, :, :, 1])
 # welfare_CEV_BAPCPA_low_ν_good_with_debt = 100 * ((W_new_good_with_debt / W_old_good_with_debt)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
 
-welfare_CEV_BAPCPA_low_ν_good_with_savings = 100 * sum(((variables_T_BAPCPA_low_ν.V[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 2] ./ variables_BAPCPA_1.V[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 1])
+welfare_CEV_BAPCPA_low_ν_good_with_savings = 100 * sum(((variables_T_BAPCPA_low_ν.V[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 2] ./ variables_BAPCPA_1.V[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[(parameters_BAPCPA_1.a_ind_zero+1):end, :, :, :, :, 1])
 # W_old_good_without_debt = sum(variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 1])
 # W_new_good_without_debt = sum(variables_T_BAPCPA_low_ν.V[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 1])
 # welfare_CEV_BAPCPA_low_ν_good_without_debt = 100 * ((W_new_good_without_debt / W_old_good_without_debt)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
 
-welfare_CEV_BAPCPA_low_ν_good_without_asset = 100 * sum(((variables_T_BAPCPA_low_ν.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 2] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
+welfare_CEV_BAPCPA_low_ν_good_without_asset = 100 * sum(((variables_T_BAPCPA_low_ν.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 2] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
 
-welfare_CEV_BAPCPA_low_ν_good = 100 * sum(((variables_T_BAPCPA_low_ν.V[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[:, :, :, :, :, 1])
+welfare_CEV_BAPCPA_low_ν_good = 100 * sum(((variables_T_BAPCPA_low_ν.V[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[:, :, :, :, :, 1])
 # W_old_good = W_old_good_with_debt + W_old_good_without_debt
 # W_new_good = W_new_good_with_debt + W_new_good_without_debt
 # welfare_CEV_BAPCPA_low_ν_good = 100 * ((W_new_good / W_old_good)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
 
-welfare_CEV_BAPCPA_low_ν_bad = 100 * sum(((variables_T_BAPCPA_low_ν.V_pos[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V_pos).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
+welfare_CEV_BAPCPA_low_ν_bad = 100 * sum(((variables_T_BAPCPA_low_ν.V_pos[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V_pos) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
 # W_old_bad = sum(variables_BAPCPA_1.V_pos[:, :, :, :, :] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
 # W_new_bad = sum(variables_T_BAPCPA_low_ν.V_pos[:, :, :, :, :, 2] .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2])
 # welfare_CEV_BAPCPA_low_ν_bad = 100 * ((W_new_bad / W_old_bad)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
 
-welfare_CEV_BAPCPA_low_ν = 100 * (sum(((variables_T_BAPCPA_low_ν.V[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) + sum(((variables_T_BAPCPA_low_ν.V_pos[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V_pos).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]))
+welfare_CEV_BAPCPA_low_ν = 100 * (sum(((variables_T_BAPCPA_low_ν.V[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) + sum(((variables_T_BAPCPA_low_ν.V_pos[:, :, :, :, :, 2] ./ variables_BAPCPA_1.V_pos) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]))
 # W_old = W_old_good + W_old_bad
 # W_new = W_new_good + W_new_bad
 # welfare_CEV_BAPCPA_low_ν = 100 * ((W_new / W_old)^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) - 1.0)
@@ -343,7 +343,7 @@ welfare_favor_BAPCPA_low_ν_bad = 100 * sum((variables_T_BAPCPA_low_ν.V_pos[:, 
 welfare_favor_BAPCPA_low_ν = 100 * (sum((variables_T_BAPCPA_low_ν.V[:, :, :, :, :, 2] .> variables_BAPCPA_1.V) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) + sum((variables_T_BAPCPA_low_ν.V_pos[:, :, :, :, :, 2] .> variables_BAPCPA_1.V_pos) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]))
 
 # from pre to post BAPCPA (no ν)
-welfare_CEV_BAPCPA_no_ν = 100 * (sum(((variables_BAPCPA_2_no_ν.V ./ variables_BAPCPA_1.V).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) + sum(((variables_BAPCPA_2_no_ν.V_pos ./ variables_BAPCPA_1.V_pos).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]))
+welfare_CEV_BAPCPA_no_ν = 100 * (sum(((variables_BAPCPA_2_no_ν.V ./ variables_BAPCPA_1.V) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[:, :, :, :, :, 1]) + sum(((variables_BAPCPA_2_no_ν.V_pos ./ variables_BAPCPA_1.V_pos) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero:end, :, :, :, :, 2]))
 
 #===============#
 # Decomposition #
@@ -366,12 +366,12 @@ variables_BAPCPA_2_NFF_ι.aggregate_prices.ι_λ = variables_BAPCPA_1.aggregate_
 ED_KL_to_D_ratio_min_BAPCPA_2_NFF_ι, ED_leverage_ratio_min_BAPCPA_2_NFF_ι, crit_V_min_BAPCPA_2_NFF_ι, crit_μ_min_BAPCPA_2_NFF_ι = solve_economy_function!(variables_BAPCPA_2_NFF_ι, parameters_BAPCPA_2; slow_updating=slow_updating);
 
 # CEV welfare
-welfare_CEV_BAPCPA_newborn = 100 * sum(((variables_BAPCPA_2.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
+welfare_CEV_BAPCPA_newborn = 100 * sum(((variables_BAPCPA_2.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
 
-welfare_CEV_BAPCPA_low_ν_newborn = 100 * sum(((variables_BAPCPA_2_low_ν.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
+welfare_CEV_BAPCPA_low_ν_newborn = 100 * sum(((variables_BAPCPA_2_low_ν.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
 
-welfare_CEV_BAPCPA_NFF_newborn = 100 * sum(((variables_BAPCPA_2_NFF.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
+welfare_CEV_BAPCPA_NFF_newborn = 100 * sum(((variables_BAPCPA_2_NFF.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
 
-welfare_CEV_BAPCPA_NFF_w_newborn = 100 * sum(((variables_BAPCPA_2_NFF_w.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
+welfare_CEV_BAPCPA_NFF_w_newborn = 100 * sum(((variables_BAPCPA_2_NFF_w.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
 
-welfare_CEV_BAPCPA_NFF_ι_newborn = 100 * sum(((variables_BAPCPA_2_NFF_ι.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]).^(1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])
+welfare_CEV_BAPCPA_NFF_ι_newborn = 100 * sum(((variables_BAPCPA_2_NFF_ι.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :] ./ variables_BAPCPA_1.V[parameters_BAPCPA_1.a_ind_zero, :, :, :, :]) .^ (1.0 / (1.0 - parameters_BAPCPA_1.σ)) .- 1.0) .* variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1]) / sum(variables_BAPCPA_1.μ[parameters_BAPCPA_1.a_ind_zero, :, :, :, :, 1])

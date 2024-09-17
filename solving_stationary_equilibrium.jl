@@ -340,10 +340,10 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e_2::Array
         for e_2_i = 1:e_2_size
             @inbounds @views V_nd_Non_Inf = findall(V_nd[:, ν_i, e_3_i, e_2_i, e_1_i] .!= -Inf)
             @inbounds @views a_grid_itp = a_grid[V_nd_Non_Inf]
-            @inbounds @views V_nd_grid_itp = V_nd[V_nd_Non_Inf, e_1_i, e_2_i, e_3_i, ν_i]
+            @inbounds @views V_nd_grid_itp = V_nd[V_nd_Non_Inf, ν_i, e_3_i, e_2_i, e_1_i]
             V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
+            # V_nd_itp = linear_interpolation(a_grid_itp, V_nd_grid_itp, extrapolation_bc=Line())
             @inbounds V_diff_itp(a) = V_nd_itp(a) - V_d[e_3_i, e_2_i, e_1_i]
-
             if minimum(V_nd_grid_itp) > V_d[e_3_i, e_2_i, e_1_i]
                 @inbounds threshold_a[ν_i, e_3_i, e_2_i, e_1_i] = -Inf
             else
@@ -354,16 +354,16 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e_2::Array
 
         # defaulting thresholds in endowment (e)
         @inbounds @views thres_a_Non_Inf = findall(threshold_a[ν_i, e_3_i, :, e_1_i] .!= -Inf)
-        @inbounds @views thres_a_grid_itp = -threshold_a[e_1_i, thres_a_Non_Inf, e_3_i, ν_i]
+        @inbounds @views thres_a_grid_itp = -threshold_a[e_3_i, ν_i, thres_a_Non_Inf, e_1_i]
         earning_grid_itp = w * exp.(e_1_grid[e_1_i] .+ e_2_grid[thres_a_Non_Inf] .+ e_3_grid[e_3_i]) .- ν_grid[ν_i]
         # threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k=1, bc="extrapolate")
         threshold_earning_itp = Akima(thres_a_grid_itp, earning_grid_itp)
-
+        # threshold_earning_itp = linear_interpolation(thres_a_grid_itp, earning_grid_itp, extrapolation_bc=Line())
         # Threads.@threads 
         for a_i = 1:a_size_neg
             @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
             e_2_thres = log_function((earning_thres + ν_grid[ν_i]) / w) - e_1_grid[e_1_i] - e_3_grid[e_3_i]
-            @inbounds threshold_e_2[a_i, e_1_i, e_3_i, ν_i] = e_2_thres
+            @inbounds threshold_e_2[a_i, ν_i, e_3_i, e_1_i] = e_2_thres
         end
     end
 
@@ -464,18 +464,19 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
         for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size
             for a_p_i = 1:(a_size_neg-1)
                 @inbounds a_p = a_grid_neg[a_p_i]
-                for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size
+                for e_3_p_i = 1:e_3_size, ν_p_i = 1:ν_size
                     @inbounds threshold_e_2 = log_function(-a_p / w_λ) - e_1_grid[e_1_i] - e_3_grid[e_3_p_i]
                     @inbounds R[a_p_i, e_2_i, e_1_i] += e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_i, e_2_i, e_3_p_i, a_p, threshold_e_2, w_λ, parameters)
                 end
                 @inbounds q[a_p_i, e_2_i, e_1_i] = ρ * R[a_p_i, e_2_i, e_1_i] / ((-a_p) * (1.0 + r_f + τ + ι_λ))
             end
 
-            qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_2_i, e_1_i] .* a_grid_neg)
-            qa_funcion(a_p) = qa_funcion_itp(a_p)
-            @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
+            qa_function_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_2_i, e_1_i] .* a_grid_neg)
+            # qa_function_itp = linear_interpolation(a_grid_neg, q[1:a_ind_zero, e_2_i, e_1_i] .* a_grid_neg, extrapolation_bc=Line())
+            qa_function(a_p) = qa_function_itp(a_p)
+            @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid[1], 0.0)
             # @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid_neg, a_grid[1], 0.0)
-            res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
+            res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
             @inbounds rbl[1, e_2_i, e_1_i] = Optim.minimizer(res_rbl)
             @inbounds rbl[2, e_2_i, e_1_i] = Optim.minimum(res_rbl)
         end
@@ -532,7 +533,7 @@ function E_V_function!(E_V::Array{Float64,3}, E_V_pos::Array{Float64,3}, V_p::Ar
     @unpack e_1_size, e_2_size, e_2_Γ, e_3_size, e_3_Γ, ν_size, ν_Γ, a_size, a_size_pos, a_ind_zero, ρ, β = parameters
 
     # update expected value 
-    for a_p_i = 1:a_size, e_2_i = 1:e_2_szie, e_1_i = 1:e_1_size
+    for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, a_p_i = 1:a_size
         if a_p_i < a_ind_zero
             @inbounds E_V[a_p_i, e_2_i, e_1_i] = 0.0
             for e_2_p_i = 1:e_2_size, e_3_p_i = 1:e_3_size, ν_p_i = 1:ν_size
@@ -685,20 +686,23 @@ function pricing_and_rbl_function!(R::Array{Float64,3}, q::Array{Float64,3}, rbl
     # loop over states
     for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size
         for a_p_i = 1:(a_size_neg-1)
+            @inbounds R[a_p_i, e_2_i, e_1_i] = 0.0
+            @inbounds q[a_p_i, e_2_i, e_1_i] = 0.0
             @inbounds a_p = a_grid[a_p_i]
             for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size
-                @inbounds R[a_p_i, e_1_i, e_2_i] += e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_i, e_2_i, e_3_p_i, a_p, threshold_e_2[a_p_i, e_1_i, e_3_p_i, ν_p_i], w, parameters)
+                @inbounds R[a_p_i, e_2_i, e_1_i] += e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_i, e_2_i, e_3_p_i, a_p, threshold_e_2[a_p_i, ν_p_i, e_3_p_i, e_1_i], w, parameters)
             end
-            @inbounds q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + r_f + τ + ι))
+            @inbounds q[a_p_i, e_2_i, e_1_i] = ρ * R[a_p_i, e_2_i, e_1_i] / ((-a_p) * (1.0 + r_f + τ + ι))
         end
 
         # risky borrowing limit and maximum discounted borrwoing amount
-        qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
+        qa_function_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_2_i, e_1_i] .* a_grid_neg)
+        # qa_function_itp = linear_interpolation(a_grid_neg, q[1:a_ind_zero, e_2_i, e_1_i] .* a_grid_neg, extrapolation_bc=Line())
         # qa_funcion_itp = Spline1D(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg; k = 1, bc = "extrapolate")
-        qa_funcion(a_p) = qa_funcion_itp(a_p)
-        @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
+        qa_function(a_p) = qa_function_itp(a_p)
+        @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid[1], 0.0)
         # @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid_neg, a_grid[1], 0.0)
-        res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
+        res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
         @inbounds rbl[1, e_2_i, e_1_i] = Optim.minimizer(res_rbl)
         @inbounds rbl[2, e_2_i, e_1_i] = Optim.minimum(res_rbl)
     end
@@ -736,7 +740,7 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         threshold_function!(variables.threshold_a, variables.threshold_e_2, variables.V_d, variables.V_nd, variables.aggregate_prices.w_λ, parameters)
 
         # pricing function and borrowing risky limit
-        variables.R, variables.q, variables.rbl = pricing_and_rbl_function(variables.threshold_e_2, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
+        pricing_and_rbl_function!(variables.R, variables.q, variables.rbl, variables.threshold_e_2, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
         # check convergence
         V_crit = norm(variables.V .- V_p, Inf)

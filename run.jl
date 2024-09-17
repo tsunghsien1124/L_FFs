@@ -52,8 +52,8 @@ V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd,
 #================#
 # Checking plots #
 #================#
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,2,:], color=[:red :blue :black], label=:none)
-plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,1,:], color=[:red :blue :black], label=:none, linestyle=:dash)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,:,1], color=[:red :blue :black], label=:none)
+plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,:,2], color=[:red :blue :black], label=:none, linestyle=:dash)
 
 scatter(parameters.a_grid_neg[90:end], variables.q[90:parameters.a_ind_zero,2,1] .* parameters.a_grid_neg[90:end], color=[:red :blue :black], label=:none)
 plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero,1,:] .* parameters.a_grid_neg, color=[:red :blue :black], label=:none, linestyle=:dash)

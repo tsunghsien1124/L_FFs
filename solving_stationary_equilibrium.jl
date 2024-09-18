@@ -665,7 +665,7 @@ function value_and_policy_function!(
             if (CoH - rbl_qa) > 0.0
                 res_nd = optimize(a_p -> object_nd(a_p, CoH), rbl_a, CoH)
                 @inbounds variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)
-                if variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] >= variables.V_d[e_1_i, e_2_i, e_3_i]
+                @inbounds if variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] >= variables.V_d[e_1_i, e_2_i, e_3_i]
                     @inbounds variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
                     @inbounds variables.policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_nd)
                     @inbounds variables.policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0

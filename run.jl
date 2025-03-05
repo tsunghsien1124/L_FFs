@@ -28,7 +28,7 @@ using Interpolations
 #==================#
 # Import functions #
 #==================#
-include("solving_stationary_equilibrium.jl")
+include("solving_stationary_equilibrium_new.jl")
 include("solving_transitional_dynamics.jl")
 # include("simulation.jl")
 
@@ -38,7 +38,7 @@ include("solving_transitional_dynamics.jl")
 parameters = parameters_function();
 variables = variables_function(parameters; λ=0.04244494091796878, load_init=false);
 slow_updating = 1.0;
-@btime crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
+crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
 
 
 @profview crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);

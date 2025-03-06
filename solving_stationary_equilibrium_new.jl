@@ -431,7 +431,7 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
         V_d = zeros(e_1_size, e_2_size, e_3_size)
         u_c_d = zeros(e_1_size, e_2_size, e_3_size)
         for e_3_i = 1:e_3_size, e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-            u_c_d[e_1_i, e_2_i, e_3_i] = utility_function((1.0 - η) * w_λ * exp(e_1_grid[e_1_i] + e_2_grid[e_2_i] + e_3_grid[e_3_i]) - κ, σ)
+            u_c_d[e_1_i, e_2_i, e_3_i] = utility_function((1.0 - η) * w_λ * e_1_grid[e_1_i] * e_2_grid[e_2_i] * e_3_grid[e_3_i] - κ, σ)
         end
         V_nd = zeros(a_size, e_1_size, e_2_size, e_3_size, ν_size)
         V_pos = zeros(a_size_pos, e_1_size, e_2_size, e_3_size, ν_size)
@@ -641,7 +641,7 @@ function pricing_and_rbl_function!(R::Array{Float64,3}, q::Array{Float64,3}, rbl
         for (ν_p_i, e_3_p_i, e_2_p_i) in loop_q_p
             e_p = e_1_grid[e_1_i] * e_2_grid[e_2_p_i] * e_3_grid[e_3_p_i]
             ν_p = ν_grid[ν_p_i]
-            R[a_p_i, e_1_i, e_2_i] += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * (1.0 - variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] + η * w * e_p / (ν_p-a_p))
+            R[a_p_i, e_1_i, e_2_i] += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * (1.0 - variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] + variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] * η * w * e_p / (ν_p-a_p))
         end
         q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / (1.0 + r_f + τ + ι)
     end

@@ -52,11 +52,20 @@ V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd,
 #================#
 # Checking plots #
 #================#
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 1, :], color=[:red :blue :black], label=:none)
-plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 2, :], color=[:red :blue :black], label=:none, linestyle=:dash)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 1, :], color=[:red :blue :black :green :pink], label=:none)
+plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 2, :], color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
 
-plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black], label=:none)
-plot!(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 1, :] .* parameters.a_grid_neg, color=[:red :blue :black], label=:none, linestyle=:dash)
+plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
+plot!(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 1, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
+
+plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
+scatter!(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
+
+plot(parameters.a_grid[200:531], variables.V[200:531, 2, :, 2, 1], label=:none)
+
+plot(parameters.a_grid[200:500], variables.V[200:500, 2, :, 2, 1], label=:none)
+
+plot(parameters.a_grid_pos[1:20], variables.V_pos[1:20,2,:,2,1])
 
 #============================================#
 # Solve transitional dynamics - Filing costs #

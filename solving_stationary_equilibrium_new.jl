@@ -49,11 +49,11 @@ function parameters_function(;
     e_1_size::Int64=2,               # number of permanent endowment shock
     e_2_ρ::Float64=0.957,            # AR(1) of persistent endowment shock
     e_2_σ::Float64=0.129,            # s.d. of persistent endowment shock
-    e_2_size::Int64=5,               # number of persistent endowment shock
+    e_2_size::Int64=9,              # number of pesistent endowment shock
     e_3_σ::Float64=0.351,            # s.d. of transitory endowment shock
     e_3_size::Int64=3,               # number of transitory endowment shock
     ν_size::Int64=3,                 # number of expenditure shock
-    a_min::Float64=-5.0,             # min of asset holding
+    a_min::Float64=-6.0,             # min of asset holding
     a_max::Float64=800.0,            # max of asset holding
     a_size_neg::Int64=501,           # number of grid of negative asset holding for VFI
     a_size_pos::Int64=101,           # number of grid of positive asset holding for VFI
@@ -74,12 +74,12 @@ function parameters_function(;
     G_e_1 = e_1_Γ
 
     # persistent endowment shock
-    e_2_MC = tauchen(e_2_size, e_2_ρ, e_2_σ, 0.0, 3)
+    # e_2_MC = tauchen(e_2_size, e_2_ρ, e_2_σ, 0.0, 3)
     # e_2_MC = rouwenhorst(e_2_size, e_2_ρ, e_2_σ, 0.0)
-    e_2_Γ = e_2_MC.p
-    e_2_grid = collect(e_2_MC.state_values)
+    # e_2_Γ = e_2_MC.p
+    # e_2_grid = collect(e_2_MC.state_values)
+    e_2_grid, e_2_Γ = adda_cooper(e_2_size, e_2_ρ, e_2_σ)
     e_2_grid = exp.(e_2_grid)
-    # e_2_grid, e_2_Γ = adda_cooper(e_2_size, e_2_ρ, e_2_σ)
     G_e_2 = stationary_distributions(MarkovChain(e_2_Γ, e_2_grid))[1]
     # G_e_2 = [1.0, 0.0, 0.0]
 
@@ -154,7 +154,7 @@ function parameters_function(;
     loop_V = collect(Iterators.product(1:ν_size, 1:e_3_size, 1:a_size))
     loop_EV = collect(Iterators.product(1:e_2_size, 1:e_1_size, 1:a_size))
     loop_EV_d = collect(Iterators.product(1:e_3_size, 1:e_2_size, 1:e_1_size))
-    loop_q = collect(Iterators.product(1:e_2_size, 1:e_1_size, 1:a_size_neg))
+    loop_q = collect(Iterators.product(1:e_2_size, 1:e_1_size, 1:(a_size_neg-1)))
     loop_q_p = collect(Iterators.product(1:ν_size, 1:e_3_size, 1:e_2_size))
     loop_rbl = collect(Iterators.product(1:e_2_size, 1:e_1_size))
 
@@ -421,7 +421,7 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
     if load_init == false
 
         # define repayment probability, pricing function, and risky borrowing limit
-        R = zeros(a_size_neg, e_1_size, e_2_size)
+        R = ones(a_size_neg, e_1_size, e_2_size)
         q = ones(a_size, e_1_size, e_2_size) .* ρ ./ (1.0 + r_f)
         rbl = zeros(e_1_size, e_2_size, 2)
 
@@ -539,9 +539,9 @@ function value_and_policy_function!(
     V_d_function!(variables.V_d, variables.u_c_d, variables.E_V_pos, parameters)
 
     # create interpolation containers
-    # qa_function_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
-    # V_hat_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
-    # V_hat_pos_itp = linear_interpolation(a_grid_pos, a_grid_pos, extrapolation_bc=Line())
+    qa_function_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
+    V_hat_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
+    V_hat_pos_itp = linear_interpolation(a_grid_pos, a_grid_pos, extrapolation_bc=Line())
 
     # loop over all states
     # Threads.@threads for (ν_i, e_3_i, e_2_i, e_1_i, a_i) in loop_V
@@ -555,20 +555,20 @@ function value_and_policy_function!(
 
         # construct interpolated functions
         @views qa = variables.q[:, e_1_i, e_2_i] .* a_grid
-        qa_function_itp = Akima(a_grid, qa)
+        # qa_function_itp = Akima(a_grid, qa)
         # qa_function_itp = linear_interpolation(a_grid, qa, extrapolation_bc=Line())
-        # @views qa_function_itp.itp.coefs[:] = qa
+        @views qa_function_itp.itp.coefs[:] = qa
 
         @views V_hat = variables.E_V[:, e_1_i, e_2_i]
         @views V_hat_pos = variables.E_V_pos[:, e_1_i, e_2_i]
-        V_hat_itp = Akima(a_grid, V_hat)
+        # V_hat_itp = Akima(a_grid, V_hat)
         # V_hat_itp = linear_interpolation(a_grid, V_hat, extrapolation_bc=Line())
-        # @views V_hat_itp.itp.coefs[:] = V_hat
+        @views V_hat_itp.itp.coefs[:] = V_hat
 
         @views V_hat_pos_ = p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos
-        V_hat_pos_itp = Akima(a_grid_pos, V_hat_pos_)
+        # V_hat_pos_itp = Akima(a_grid_pos, V_hat_pos_)
         # V_hat_pos_itp = linear_interpolation(a_grid_pos, V_hat_pos_, extrapolation_bc=Line())
-        # @views V_hat_pos_itp.itp.coefs[:] = V_hat_pos_
+        @views V_hat_pos_itp.itp.coefs[:] = V_hat_pos_
 
         # define objective functions
         object_nd(a_p, CoH) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
@@ -582,7 +582,8 @@ function value_and_policy_function!(
 
             # good credit history
             if (CoH - rbl_qa) > 0.0
-                res_nd = optimize(a_p -> object_nd(a_p, CoH), rbl_a, CoH)
+                object_nd_(a_p) = object_nd(a_p, CoH)
+                res_nd = optimize(a_p -> object_nd_(a_p), rbl_a, CoH, GoldenSection())
                 variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)
                 if variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] >= variables.V_d[e_1_i, e_2_i, e_3_i]
                     variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
@@ -604,7 +605,8 @@ function value_and_policy_function!(
             if a_i >= a_ind_zero
                 a_pos_i = a_i - a_ind_zero + 1
                 if CoH > 0.0
-                    res_pos = optimize(a_p -> object_pos(a_p, CoH), 0.0, CoH)
+                    object_pos_(a_p) = object_pos(a_p, CoH)
+                    res_pos = optimize(a_p -> object_pos(a_p, CoH), 0.0, CoH, GoldenSection())
                     variables.V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
                     variables.policy_a_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
                     variables.policy_d_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
@@ -643,19 +645,23 @@ function pricing_and_rbl_function!(R::Array{Float64,3}, q::Array{Float64,3}, rbl
             ν_p = ν_grid[ν_p_i]
             R[a_p_i, e_1_i, e_2_i] += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * (1.0 - variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] + variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] * η * w * e_p / (ν_p-a_p))
         end
-        q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / (1.0 + r_f + τ + ι)
     end
+    clamp!(R, 0.0, 1.0)
+    q[1:a_size_neg,:,:] .= ρ .* R ./ (1.0 + r_f + τ + ι)
 
     for (e_2_i, e_1_i) in loop_rbl
         # risky borrowing limit and maximum discounted borrwoing amount
-        qa_function_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
+        # qa_function_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
         # qa_function_itp = Spline1D(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg; k = 1, bc = "extrapolate")
-        qa_function(a_p) = qa_function_itp(a_p)
+        # qa_function(a_p) = qa_function_itp(a_p)
         # rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid_neg[1], 0.0)
         # res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
-        res_rbl = optimize(qa_function, a_grid_neg[1], 0.0)
-        rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
-        rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
+        # res_rbl = optimize(qa_function, a_grid_neg[1], 0.0, GoldenSection())
+        # rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
+        # rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
+        res_rbl = findmin(q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
+        rbl[e_1_i, e_2_i, 1] = a_grid_neg[res_rbl[2]]
+        rbl[e_1_i, e_2_i, 2] = res_rbl[1]
     end
 
     # return results
@@ -688,7 +694,7 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         value_and_policy_function!(variables, V_p, V_pos_p, parameters)
 
         # pricing function and borrowing risky limit
-        @btime pricing_and_rbl_function!(variables.R, variables.q, variables.rbl, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
+        pricing_and_rbl_function!(variables.R, variables.q, variables.rbl, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
 
         # check convergence
         V_crit = norm(variables.V .- V_p, Inf)

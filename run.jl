@@ -39,7 +39,7 @@ parameters = parameters_function();
 variables = variables_function(parameters; λ=0.04244494091796878, load_init=false);
 slow_updating = 1.0;
 crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
-
+crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=1E-6, iter_max=500)
 
 @profview crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
 

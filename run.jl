@@ -36,12 +36,11 @@ include("solving_transitional_dynamics.jl")
 # Solve stationary equilibrium #
 #==============================#
 parameters = parameters_function();
-variables = variables_function(parameters; λ=0.04244494091796878, load_init=false);
+variables = variables_function(parameters; λ=0.0, load_init=false);
 slow_updating = 1.0;
-crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
-crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=1E-6, iter_max=500)
-
-@profview crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
+# @btime crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
+# crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=1E-6, iter_max=500)
+solve_economy_function!(variables, parameters; slow_updating=slow_updating);
 
 @time ED_KL_to_D_ratio_min, ED_leverage_ratio_min, crit_V_min, crit_μ_min = solve_economy_function!(variables, parameters; slow_updating=slow_updating);
 V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.R, variables.q, variables.rbl, variables.μ;
@@ -57,6 +56,9 @@ plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 2, :], color=[
 
 plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
 plot!(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 1, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
+
+plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 1, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
+scatter!(variables.rbl[1,:,1], -variables.rbl[1,:,2], color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
 
 plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
 scatter!(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)

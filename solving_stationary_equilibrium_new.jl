@@ -29,7 +29,7 @@ function adda_cooper(N::Int64, ρ::Float64, σ::Float64; μ::Float64=0.0)
 end
 
 function parameters_function(;
-    β::Float64=0.955,                # discount factor (households)
+    β::Float64=0.920,                # discount factor (households)
     ρ::Float64=0.975,                # survival rate
     r_f::Float64=0.04,               # risk-free rate # 1.04*ρ-1.0
     # r_f::Float64=1.04/ρ-1.0,         # risk-free rate # 1.04*ρ-1.0
@@ -280,7 +280,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
+function min_bounds_function(obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=50, obj_range::Int64=1)
     """
     compute bounds for minimization
     """
@@ -301,24 +301,23 @@ function min_bounds_function(obj::Function, grid_min::Float64, grid_max::Float64
     return lb, ub
 end
 
-function min_bounds_function!(bb::Vector{Float64}, grid::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64}, obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
+function min_bounds_function!(obj::Function, lb_ub_int::Vector{Float64}; grid_length::Int64=50, obj_range::Int64=1)
     """
-    compute bounds for minimization
+    compute bounds for minimization without output
     """
 
-    grid .= range(grid_min, grid_max, length=grid_length)
-    grid_size = length(grid)
+    grid = range(lb_ub_int[1], lb_ub_int[2], length=grid_length)
     obj_grid = obj.(grid)
     obj_index = argmin(obj_grid)
     if obj_index < (1 + obj_range)
-        bb[1] = grid_min
-        bb[2] = grid[obj_index+obj_range]
-    elseif obj_index > (grid_size - obj_range)
-        bb[1] = grid[obj_index-obj_range]
-        bb[2] = grid_max
+        # grid_min = grid_min
+        lb_ub_int[2] = grid[obj_index+obj_range]
+    elseif obj_index > (grid_length - obj_range)
+        lb_ub_int[1] = grid[obj_index-obj_range]
+        # grid_max = grid_max
     else
-        bb[1] = grid[obj_index-obj_range]
-        bb[2] = grid[obj_index+obj_range]
+        lb_ub_int[1] = grid[obj_index-obj_range]
+        lb_ub_int[2] = grid[obj_index+obj_range]
     end
     return nothing
 end
@@ -544,6 +543,7 @@ function value_and_policy_function!(
     qa_function_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
     V_hat_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
     V_hat_pos_itp = linear_interpolation(a_grid_pos, a_grid_pos, extrapolation_bc=Line())
+    lb_ub_int = zeros(2)
 
     # loop over all states
     # Threads.@threads for (ν_i, e_3_i, e_2_i, e_1_i, a_i) in loop_V
@@ -580,12 +580,18 @@ function value_and_policy_function!(
         for (ν_i, e_3_i, a_i) in loop_V
 
             # constrcut cash on hand
-            @views CoH = variables.aggregate_prices.w_λ * e_12 * e_3_grid[e_3_i] + a_grid[a_i] - ν_grid[ν_i]
+            CoH = variables.aggregate_prices.w_λ * e_12 * e_3_grid[e_3_i] + a_grid[a_i] - ν_grid[ν_i]
 
             # good credit history
             if (CoH - rbl_qa) > 0.0
                 object_nd_(a_p) = object_nd(a_p, CoH)
-                res_nd = optimize(a_p -> object_nd_(a_p), rbl_a, CoH, GoldenSection())
+                if a_i >= a_ind_zero
+                    res_nd = optimize(a_p -> object_nd_(a_p), rbl_a, CoH, GoldenSection())
+                else
+                    lb_ub_int .= [rbl_a, CoH]
+                    min_bounds_function!(object_nd_, lb_ub_int)
+                    res_nd = optimize(a_p -> object_nd_(a_p), lb_ub_int[1], lb_ub_int[2], GoldenSection())
+                end
                 variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)
                 if variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] >= variables.V_d[e_1_i, e_2_i, e_3_i]
                     variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
@@ -608,7 +614,10 @@ function value_and_policy_function!(
                 a_pos_i = a_i - a_ind_zero + 1
                 if CoH > 0.0
                     object_pos_(a_p) = object_pos(a_p, CoH)
-                    res_pos = optimize(a_p -> object_pos(a_p, CoH), 0.0, CoH, GoldenSection())
+                    res_pos = optimize(a_p -> object_pos_(a_p), 0.0, CoH, GoldenSection())
+                    # lb_ub_int .= [0.0, CoH]
+                    # min_bounds_function!(object_pos_, lb_ub_int)
+                    # res_pos = optimize(a_p -> object_pos_(a_p), lb_ub_int[1], lb_ub_int[2], GoldenSection())
                     variables.V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
                     variables.policy_a_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
                     variables.policy_d_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
@@ -625,7 +634,7 @@ function value_and_policy_function!(
     return nothing
 end
 
-function pricing_and_rbl_function!(R::Array{Float64,3}, q::Array{Float64,3}, rbl::Array{Float64,3}, w::Float64, ι::Float64, parameters::NamedTuple)
+function pricing_and_rbl_function!(variables::Mutable_Variables, parameters::NamedTuple)
     """
     update pricing function and borrowing risky limit
     """
@@ -639,17 +648,16 @@ function pricing_and_rbl_function!(R::Array{Float64,3}, q::Array{Float64,3}, rbl
 
     # loop over states
     @batch for (e_2_i, e_1_i, a_p_i) in loop_q
-        R[a_p_i, e_1_i, e_2_i] = 0.0
-        # q[a_p_i, e_1_i, e_2_i] = 0.0
+        variables.R[a_p_i, e_1_i, e_2_i] = 0.0
         a_p = a_grid_neg[a_p_i]
         for (ν_p_i, e_3_p_i, e_2_p_i) in loop_q_p
             e_p = e_1_grid[e_1_i] * e_2_grid[e_2_p_i] * e_3_grid[e_3_p_i]
             ν_p = ν_grid[ν_p_i]
-            R[a_p_i, e_1_i, e_2_i] += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * (1.0 - variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] + variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] * η * w * e_p / (ν_p - a_p))
+            variables.R[a_p_i, e_1_i, e_2_i] += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * (1.0 - variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] + variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] * η * variables.aggregate_prices.w_λ * e_p / (ν_p - a_p))
         end
     end
-    clamp!(R, 0.0, 1.0)
-    q[1:a_size_neg, :, :] .= ρ .* R ./ (1.0 + r_f + τ + ι)
+    clamp!(variables.R, 0.0, 1.0)
+    variables.q[1:a_size_neg, :, :] .= ρ .* variables.R ./ (1.0 + r_f + τ + variables.aggregate_prices.ι_λ)
 
     for (e_2_i, e_1_i) in loop_rbl
         # risky borrowing limit and maximum discounted borrwoing amount
@@ -661,9 +669,9 @@ function pricing_and_rbl_function!(R::Array{Float64,3}, q::Array{Float64,3}, rbl
         # res_rbl = optimize(qa_function, a_grid_neg[1], 0.0, GoldenSection())
         # rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
         # rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
-        res_rbl = findmin(q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
-        rbl[e_1_i, e_2_i, 1] = a_grid_neg[res_rbl[2]]
-        rbl[e_1_i, e_2_i, 2] = res_rbl[1]
+        res_rbl = findmin(variables.q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
+        variables.rbl[e_1_i, e_2_i, 1] = a_grid_neg[res_rbl[2]]
+        variables.rbl[e_1_i, e_2_i, 2] = res_rbl[1]
     end
 
     # return results
@@ -696,7 +704,7 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         value_and_policy_function!(variables, V_p, V_pos_p, parameters)
 
         # pricing function and borrowing risky limit
-        pricing_and_rbl_function!(variables.R, variables.q, variables.rbl, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
+        pricing_and_rbl_function!(variables, parameters)
 
         # check convergence
         V_crit = norm(variables.V .- V_p, Inf)
@@ -745,7 +753,7 @@ function stationary_distribution_function!(variables::Mutable_Variables, μ_p::A
             a_p = clamp(policy_a_itp(a_μ), a_grid[1], a_grid[end])
             d_a_μ = policy_d_itp(a_μ)
 
-            # locate it on the original grid
+            # locate it on the original gridpoints
             a_p_lb = findall(a_grid_μ .<= a_p)[end]
             a_p_ub = findall(a_p .<= a_grid_μ)[1]
 
@@ -949,20 +957,22 @@ function solve_aggregate_variable_function!(
     # net worth
     variables.aggregate_variables.N = (variables.aggregate_variables.K + variables.aggregate_variables.L) - variables.aggregate_variables.D
 
-    # exogenous dividend policy
+    # realized profits
     # profit = (1.0 + r_f + ι) * K + (1.0 + τ + ι) * L - (1.0 + r_f) * D
     variables.aggregate_variables.profit = variables.aggregate_prices.ι_λ * (variables.aggregate_variables.K + variables.aggregate_variables.L) + (1.0 + r_f) * variables.aggregate_variables.N
+
+    # capital to new entrants
+    variables.aggregate_variables.ω = (variables.aggregate_variables.N - ψ * variables.aggregate_variables.profit) / (variables.aggregate_variables.K + variables.aggregate_variables.L)
     # ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
     # ω = N / (ψ * profit)
     # ω = (N - ψ * profit) / ((1.0 - ψ) * (K + L))
-    variables.aggregate_variables.ω = ( variables.aggregate_variables.N - ψ *  variables.aggregate_variables.profit) / ( variables.aggregate_variables.K +  variables.aggregate_variables.L)
     # ω = N - ψ * profit
 
     # leverage ratio
-    variables.aggregate_variables.leverage_ratio = ( variables.aggregate_variables.K +  variables.aggregate_variables.L) /  variables.aggregate_variables.N
+    variables.aggregate_variables.leverage_ratio = (variables.aggregate_variables.K + variables.aggregate_variables.L) / variables.aggregate_variables.N
 
     # capital-loan-to-deposit ratio
-    variables.aggregate_variables.KL_to_D_ratio = ( variables.aggregate_variables.K +  variables.aggregate_variables.L) /  variables.aggregate_variables.D
+    variables.aggregate_variables.KL_to_D_ratio = (variables.aggregate_variables.K + variables.aggregate_variables.L) / variables.aggregate_variables.D
 
     # debt-to-earning ratio
     # debt_to_earning_ratio = debt_to_earning_ratio_num / debt_to_earning_ratio_den
@@ -1114,7 +1124,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=tol_μ, iter_max=1000)
 
     # compute aggregate variables
-    variables.aggregate_variables = solve_aggregate_variable_function(variables.policy_a, variables.threshold_a, variables.policy_pos_a, variables.policy_pos_d, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
+    solve_aggregate_variable_function!(variables, parameters)
 
     # compute the difference between demand and supply sides
     ED_KL_to_D_ratio = variables.aggregate_variables.KL_to_D_ratio - variables.aggregate_prices.KL_to_D_ratio_λ

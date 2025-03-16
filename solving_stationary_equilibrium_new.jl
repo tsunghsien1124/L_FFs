@@ -2,6 +2,30 @@
 # Solve stationary equlibrium #
 #=============================#
 
+function gauss_hermite_discretization(n::Integer, μ::Float64, σ::Float64)
+    """
+    Discretizes a normal distribution N(μ, σ²) using Gauss-Hermite quadrature.
+    
+    Arguments:
+    μ  - Mean of the normal distribution.
+    σ  - Standard deviation of the normal distribution.
+    n  - Number of discrete points.
+
+    Returns:
+    A tuple (discrete_points, probabilities).
+    """
+    # Compute Gauss-Hermite nodes (z) and weights (w)
+    z, w = gausshermite(n)
+
+    # Transform nodes for a general Normal(μ, σ²)
+    discrete_points = μ .+ sqrt(2) * σ .* z
+
+    # Normalize weights (since Hermite quadrature is designed for exp(-x^2))
+    normalized_weights = w ./ sqrt(π)
+
+    return discrete_points, normalized_weights
+end
+
 function adda_cooper(N::Int64, ρ::Float64, σ::Float64; μ::Float64=0.0)
     """
     Approximation of an autoregression process with a Markov chain proposed by Adda and Cooper (2003)
@@ -34,8 +58,8 @@ function parameters_function(;
     r_f::Float64=0.04,               # risk-free rate # 1.04*ρ-1.0
     # r_f::Float64=1.04/ρ-1.0,         # risk-free rate # 1.04*ρ-1.0
     β_f::Float64=1.0 / (1.0 + r_f),  # discount factor (bank)
-    # τ::Float64=0.00,                 # transaction cost
-    τ::Float64=0.04,                 # transaction cost
+    τ::Float64=0.00,                 # transaction cost
+    # τ::Float64=0.04,                 # transaction cost
     σ::Float64=2.00,                 # CRRA coefficient
     δ::Float64=0.08,                 # depreciation rate
     α::Float64=0.33,                 # capital share
@@ -49,13 +73,13 @@ function parameters_function(;
     e_1_size::Int64=2,               # number of permanent endowment shock
     e_2_ρ::Float64=0.957,            # AR(1) of persistent endowment shock
     e_2_σ::Float64=0.129,            # s.d. of persistent endowment shock
-    e_2_size::Int64=9,              # number of pesistent endowment shock
+    e_2_size::Int64=7,              # number of pesistent endowment shock
     e_3_σ::Float64=0.351,            # s.d. of transitory endowment shock
     e_3_size::Int64=3,               # number of transitory endowment shock
     ν_size::Int64=3,                 # number of expenditure shock
-    a_min::Float64=-3.0,             # min of asset holding
+    a_min::Float64=-4.0,             # min of asset holding
     a_max::Float64=800.0,            # max of asset holding
-    a_size_neg::Int64=501,           # number of grid of negative asset holding for VFI
+    a_size_neg::Int64=801,           # number of grid of negative asset holding for VFI
     a_size_pos::Int64=101,           # number of grid of positive asset holding for VFI
     a_degree::Int64=3,               # curvature of positive asset gridpoints
     μ_scale::Int64=1                 # scale for the asset holding gridpoints for distribution
@@ -65,12 +89,9 @@ function parameters_function(;
     """
 
     # permanent endowment shock
-    e_1_grid, e_1_Γ = adda_cooper(e_1_size, 0.0, e_1_σ)
+    # e_1_grid, e_1_Γ = adda_cooper(e_1_size, 0.0, e_1_σ)
+    e_1_grid, e_1_Γ = gauss_hermite_discretization(e_1_size, 0.0, e_1_σ)
     e_1_grid = exp.(e_1_grid)
-    e_1_Γ = e_1_Γ[1, :]
-    # e_1_grid = [-e_1_σ, e_1_σ]
-    # e_1_Γ = Matrix(1.0I, e_1_size, e_1_size)
-    # G_e_1 = [1.0 / e_1_size for i = 1:e_1_size]
     G_e_1 = e_1_Γ
 
     # persistent endowment shock
@@ -84,52 +105,19 @@ function parameters_function(;
     # G_e_2 = [1.0, 0.0, 0.0]
 
     # transitory endowment shock
-    e_3_grid, e_3_Γ = adda_cooper(e_3_size, 0.0, e_3_σ)
+    # e_3_grid, e_3_Γ = adda_cooper(e_3_size, 0.0, e_3_σ)
+    e_3_grid, e_3_Γ = gauss_hermite_discretization(e_3_size, 0.0, e_3_σ)
     e_3_grid = exp.(e_3_grid)
-    e_3_Γ = e_3_Γ[1, :]
-    # e_3_bar = sqrt((3 / 2) * e_3_σ^2)
-    # e_3_grid = [-e_3_bar, 0.0, e_3_bar]
-    # e_3_Γ = [1.0 / e_3_size for i = 1:e_3_size]
-    G_e_3 = e_3_Γ # [0.0, 1.0, 0.0]
+    G_e_3 = e_3_Γ
 
     # aggregate labor endowment
     E = 1.0
 
     # expenditure schock
-    # ν_grid = zeros(ν_size)
-    if ν_size == 3
-        # ν_grid = [0.0, 0.3584239, 3.0]
-        # ν_p_1 = 0.04438342
-        # ν_p_2 = 0.0002092103
-        # ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-
-        ν_grid = [0.0, 0.0, 0.0]
-        ν_p_1 = 0.0
-        ν_p_2 = 0.0
-        ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-    elseif ν_size == 4
-        ν_size = 3
-        ν_grid = [0.0, 0.3584239, 3.0]
-        ν_p_1 = 0.04438342
-        ν_p_2 = 0.0
-        ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-    elseif ν_size == 5
-        ν_size = 3
-        ν_grid = [0.0, 0.3584239, 3.0]
-        ν_p_1 = 0.0
-        ν_p_2 = 0.0
-        ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-    elseif ν_size == 6
-        ν_size = 3
-        ν_grid = [0.0, 0.3584239, 3.0]
-        ν_p_1 = 0.04438342 * 0.9
-        ν_p_2 = 0.0
-        ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-    else
-        ν_grid = [0.0, 0.3584239]
-        ν_p = 0.04705877
-        ν_Γ = [1.0 - ν_p, ν_p]
-    end
+    ν_grid = [0.0000000, 0.2654197, 0.5845315]
+    ν_p_1 = 0.02512171
+    ν_p_2 = 0.03784821
+    ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
     G_ν = ν_Γ
 
     # asset holding grid for VFI
@@ -140,7 +128,7 @@ function parameters_function(;
     a_ind_zero = a_size_neg
 
     # asset holding grid for μ
-    a_size_neg_μ = a_size_neg * μ_scale
+    a_size_neg_μ = a_size_neg # * μ_scale
     a_size_pos_μ = a_size_pos * μ_scale
     a_grid_neg_μ = collect(range(a_min, 0.0, length=a_size_neg_μ))
     a_grid_pos_μ = collect(range(0.0, a_max, length=a_size_pos_μ))
@@ -280,7 +268,7 @@ mutable struct Mutable_Variables
     μ::Array{Float64,6}
 end
 
-function min_bounds_function(obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=50, obj_range::Int64=1)
+function min_bounds_function(obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=100, obj_range::Int64=1)
     """
     compute bounds for minimization
     """
@@ -301,7 +289,7 @@ function min_bounds_function(obj::Function, grid_min::Float64, grid_max::Float64
     return lb, ub
 end
 
-function min_bounds_function!(obj::Function, lb_ub_int::Vector{Float64}; grid_length::Int64=50, obj_range::Int64=1)
+function min_bounds_function!(obj::Function, lb_ub_int::Vector{Float64}; grid_length::Int64=100, obj_range::Int64=1)
     """
     compute bounds for minimization without output
     """
@@ -580,18 +568,19 @@ function value_and_policy_function!(
         for (ν_i, e_3_i, a_i) in loop_V
 
             # constrcut cash on hand
-            CoH = variables.aggregate_prices.w_λ * e_12 * e_3_grid[e_3_i] + a_grid[a_i] - ν_grid[ν_i]
+            a_adj = a_grid[a_i] - ν_grid[ν_i]
+            CoH = variables.aggregate_prices.w_λ * e_12 * e_3_grid[e_3_i] + a_adj
 
             # good credit history
             if (CoH - rbl_qa) > 0.0
                 object_nd_(a_p) = object_nd(a_p, CoH)
-                if a_i >= a_ind_zero
-                    res_nd = optimize(a_p -> object_nd_(a_p), rbl_a, CoH, GoldenSection())
-                else
-                    lb_ub_int .= [rbl_a, CoH]
-                    min_bounds_function!(object_nd_, lb_ub_int)
-                    res_nd = optimize(a_p -> object_nd_(a_p), lb_ub_int[1], lb_ub_int[2], GoldenSection())
-                end
+                # if a_adj > 0.0
+                #     res_nd = optimize(a_p -> object_nd_(a_p), rbl_a, CoH, GoldenSection())
+                # else
+                lb_ub_int .= [rbl_a, CoH]
+                min_bounds_function!(object_nd_, lb_ub_int)
+                res_nd = optimize(a_p -> object_nd_(a_p), lb_ub_int[1], lb_ub_int[2], GoldenSection())
+                # end
                 variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_nd)
                 if variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i] >= variables.V_d[e_1_i, e_2_i, e_3_i]
                     variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i] = variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i]
@@ -614,10 +603,13 @@ function value_and_policy_function!(
                 a_pos_i = a_i - a_ind_zero + 1
                 if CoH > 0.0
                     object_pos_(a_p) = object_pos(a_p, CoH)
-                    res_pos = optimize(a_p -> object_pos_(a_p), 0.0, CoH, GoldenSection())
-                    # lb_ub_int .= [0.0, CoH]
-                    # min_bounds_function!(object_pos_, lb_ub_int)
-                    # res_pos = optimize(a_p -> object_pos_(a_p), lb_ub_int[1], lb_ub_int[2], GoldenSection())
+                    # if a_adj > 0.0
+                    #     res_pos = optimize(a_p -> object_pos_(a_p), 0.0, CoH, GoldenSection())
+                    # else
+                    lb_ub_int .= [0.0, CoH]
+                    min_bounds_function!(object_pos_, lb_ub_int)
+                    res_pos = optimize(a_p -> object_pos_(a_p), lb_ub_int[1], lb_ub_int[2], GoldenSection())
+                    # end
                     variables.V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = -Optim.minimum(res_pos)
                     variables.policy_a_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = Optim.minimizer(res_pos)
                     variables.policy_d_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i] = 0.0
@@ -678,7 +670,7 @@ function pricing_and_rbl_function!(variables::Mutable_Variables, parameters::Nam
     return nothing
 end
 
-function solve_value_and_pricing_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Float64=1E-8, iter_max::Int64=1000, slow_updating::Float64=1.0)
+function solve_value_and_pricing_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Float64=1E-8, iter_max::Int64=1000, slow_updating::Float64=0.0)
     """
     solve household and banking problems using one-loop algorithm
     """
@@ -686,19 +678,23 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
     # initialize the iteration number and criterion
     search_iter = 0
     crit = Inf
-    prog = ProgressThresh(tol, "Solving household and banking problems (one-loop): ")
+    tol_adj = (1.0 - slow_updating) * tol
+    prog = ProgressThresh(tol_adj, "Solving household and banking problems (one-loop): ")
 
     # construct containers
     V_p = similar(variables.V)
     V_pos_p = similar(variables.V_pos)
     q_p = similar(variables.q)
+    copyto!(V_p, variables.V)
+    copyto!(V_pos_p, variables.V_pos)
+    copyto!(q_p, variables.q)
 
-    while crit > tol && search_iter < iter_max
+    while crit > tol_adj && search_iter < iter_max
 
         # copy previous values
-        copyto!(V_p, variables.V)
-        copyto!(V_pos_p, variables.V_pos)
-        copyto!(q_p, variables.q)
+        copyto!(V_p, V_p .* slow_updating .+ variables.V .* (1.0 .- slow_updating))
+        copyto!(V_pos_p, V_pos_p .* slow_updating .+ variables.V_pos .* (1.0 .- slow_updating))
+        copyto!(q_p, q_p .* slow_updating .+ variables.q .* (1.0 .- slow_updating))
 
         # value and policy functions
         value_and_policy_function!(variables, V_p, V_pos_p, parameters)
@@ -905,9 +901,6 @@ function solve_aggregate_variable_function!(
                 variables.aggregate_variables.share_of_involuntary_filers += variables.μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * d_a_μ
             end
 
-            # debt-to-earning ratio (num)
-            debt_to_earning_ratio_num += variables.μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ)
-
             # loans repaid
             variables.aggregate_variables.L_adj += variables.μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * ((-a_μ) * (1.0 - d_a_μ) + d_a_μ * η * we)
 
@@ -946,6 +939,9 @@ function solve_aggregate_variable_function!(
                     qa_pos_a_p = qa_function_itp(a_pos_p)
                     variables.aggregate_variables.D += variables.μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 2] * (1.0 - d_pos_a_μ) * qa_pos_a_p
                 end
+            else
+                # debt-to-earning ratio (num)
+                debt_to_earning_ratio_num += variables.μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ)
             end
 
             # debt-to-earning ratio (den)

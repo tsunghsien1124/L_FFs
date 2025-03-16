@@ -24,6 +24,7 @@ using Measures
 using BenchmarkTools, Profile
 using Polyester
 using Interpolations
+using FastGaussQuadrature
 
 #==================#
 # Import functions #
@@ -37,8 +38,8 @@ include("solving_transitional_dynamics.jl")
 #==============================#
 parameters = parameters_function();
 variables = variables_function(parameters; λ=0.0, load_init=false);
-slow_updating = 1.0;
-# @btime crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
+slow_updating = 0.7;
+# crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
 # crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=1E-6, iter_max=500)
 solve_economy_function!(variables, parameters; slow_updating=slow_updating);
 
@@ -51,14 +52,15 @@ V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd,
 #================#
 # Checking plots #
 #================#
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 1, :], color=[:red :blue :black :green :pink], label=:none)
-plot!(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 2, :], color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
+plot(parameters.a_grid_neg[500:end], variables.q[500:parameters.a_ind_zero, 1, :], label=:none)
+
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 2, :], color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
 
 plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
 plot!(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 1, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
 
-plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 1, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
-scatter!(variables.rbl[1,:,1], -variables.rbl[1,:,2], color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
+plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
+scatter!(variables.rbl[2,:,1], -variables.rbl[2,:,2], color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
 
 plot(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none)
 scatter!(parameters.a_grid_neg, -variables.q[1:parameters.a_ind_zero, 2, :] .* parameters.a_grid_neg, color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)

@@ -37,7 +37,7 @@ include("solving_transitional_dynamics.jl")
 # Solve stationary equilibrium #
 #==============================#
 parameters = parameters_function();
-variables = variables_function(parameters; λ=0.0, load_init=false);
+variables = variables_function(parameters; λ=0.05, load_init=false);
 slow_updating = 0.7;
 # crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
 # crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=1E-6, iter_max=500)
@@ -52,7 +52,7 @@ V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd,
 #================#
 # Checking plots #
 #================#
-plot(parameters.a_grid_neg[500:end], variables.q[500:parameters.a_ind_zero, 1, :], label=:none)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 1, :], label=:none)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, 2, :], color=[:red :blue :black :green :pink], label=:none, linestyle=:dash)
 

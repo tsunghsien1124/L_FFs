@@ -37,11 +37,12 @@ include("solving_transitional_dynamics.jl")
 # Solve stationary equilibrium #
 #==============================#
 parameters = parameters_function();
-variables = variables_function(parameters; λ=0.05, load_init=false);
+# variables = variables_function(parameters; λ=0.00, load_init=false);
 slow_updating = 0.7;
 # crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
 # crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=1E-6, iter_max=500)
-solve_economy_function!(variables, parameters; slow_updating=slow_updating);
+# ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ = solve_economy_function!(variables, parameters; slow_updating=slow_updating);
+variables_λ_min, variables_λ_optimal, λ_status, crit_V_optimal, crit_μ_optimal = optimal_multiplier_function(parameters; slow_updating=slow_updating);
 
 @time ED_KL_to_D_ratio_min, ED_leverage_ratio_min, crit_V_min, crit_μ_min = solve_economy_function!(variables, parameters; slow_updating=slow_updating);
 V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.R, variables.q, variables.rbl, variables.μ;

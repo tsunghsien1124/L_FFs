@@ -396,6 +396,163 @@ function variables_T_function(initial_transtion_path::Vector{Float64}, variables
     return variables_T
 end
 
+function pricing_and_rbl_function_T!(T::Integer, variables::Mutable_Variables_T, parameters::NamedTuple)
+    """
+    update pricing function and borrowing risky limit at time T
+    """
+
+    # unpack parameters
+    @unpack ρ, r_f, τ, η = parameters
+    @unpack a_ind_zero, a_size, a_grid, a_size_neg, a_grid_neg = parameters
+    @unpack e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ = parameters
+    @unpack ν_size, ν_Γ, ν_grid = parameters
+    @unpack loop_q, loop_q_p, loop_rbl = parameters
+
+    # loop over states
+    @batch for (e_2_i, e_1_i, a_p_i) in loop_q
+        variables.R[a_p_i, e_1_i, e_2_i, T] = 0.0
+        a_p = a_grid_neg[a_p_i]
+        for (ν_p_i, e_3_p_i, e_2_p_i) in loop_q_p
+            e_p = e_1_grid[e_1_i] * e_2_grid[e_2_p_i] * e_3_grid[e_3_p_i]
+            ν_p = ν_grid[ν_p_i]
+            variables.R[a_p_i, e_1_i, e_2_i, T] += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * (1.0 - variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, T+1] + variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i, T+1] * η * variables.aggregate_prices.w_λ[T+1] * e_p / (-a_p)) # (ν_p - a_p)
+        end
+    end
+    clamp!(variables.R[:, :, :, T], 0.0, 1.0)
+    variables.q[1:a_size_neg, :, :, T] .= ρ .* variables.R[:, :, :, T] ./ (1.0 + r_f + τ + variables.aggregate_prices.ι_λ[T])
+
+    # risky borrowing limit and maximum discounted borrwoing amount
+    for (e_2_i, e_1_i) in loop_rbl
+        res_rbl = findmin(variables.q[1:a_ind_zero, e_1_i, e_2_i, T] .* a_grid_neg)
+        variables.rbl[e_1_i, e_2_i, 1, T] = a_grid_neg[res_rbl[2]]
+        variables.rbl[e_1_i, e_2_i, 2, T] = res_rbl[1]
+    end
+
+    # return results
+    return nothing
+end
+
+function value_and_policy_function_T!(
+    T::Integer, 
+    variables_new::Mutable_Variables,
+    variables::Mutable_Variables_T,
+    parameters::NamedTuple
+)
+    """
+    one-step update of value and policy functions at time T
+    """
+
+    # unpack parameters
+    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero = parameters
+    @unpack e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ = parameters
+    @unpack ν_size, ν_grid, ν_Γ = parameters
+    @unpack ρ, β, σ, r_f = parameters
+    @unpack p_h, η, κ, ξ = parameters
+    @unpack loop_V = parameters
+
+    # pre-compute the next-period discounted expected value funtions and defaulting value
+    E_V_function!(variables.E_V[:,:,:,T], variables.E_V_pos[:,:,:,T], variables.V[:,:,:,:,:,T+1], variables.V_pos[:,:,:,:,:,T+1], parameters)
+    V_d_function!(variables.V_d[:,:,:,T], variables_new.u_c_d, variables.E_V_pos[:,:,:,T], parameters)
+
+    # create interpolation containers
+    qa_function_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
+    V_hat_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
+    V_hat_pos_itp = linear_interpolation(a_grid_pos, a_grid_pos, extrapolation_bc=Line())
+    lb_ub_int = zeros(2)
+
+    # loop over all states
+    # Threads.@threads for (ν_i, e_3_i, e_2_i, e_1_i, a_i) in loop_V
+    for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
+
+        # total permanent and persistent earnings
+        e_12 = e_1_grid[e_1_i] * e_2_grid[e_2_i]
+
+        # extract risky borrowing limit and maximum discounted borrowing amount
+        @views rbl_a, rbl_qa = variables.rbl[e_1_i, e_2_i, :, T]
+
+        # construct interpolated functions
+        @views qa = variables.q[:, e_1_i, e_2_i, T] .* a_grid
+        # qa_function_itp = Akima(a_grid, qa)
+        # qa_function_itp = linear_interpolation(a_grid, qa, extrapolation_bc=Line())
+        @views qa_function_itp.itp.coefs[:] = qa
+
+        @views V_hat = variables.E_V[:, e_1_i, e_2_i, T]
+        @views V_hat_pos = variables.E_V_pos[:, e_1_i, e_2_i, T]
+        # V_hat_itp = Akima(a_grid, V_hat)
+        # V_hat_itp = linear_interpolation(a_grid, V_hat, extrapolation_bc=Line())
+        @views V_hat_itp.itp.coefs[:] = V_hat
+
+        @views V_hat_pos_ = p_h * V_hat[a_ind_zero:end] + (1.0 - p_h) * V_hat_pos
+        # V_hat_pos_itp = Akima(a_grid_pos, V_hat_pos_)
+        # V_hat_pos_itp = linear_interpolation(a_grid_pos, V_hat_pos_, extrapolation_bc=Line())
+        @views V_hat_pos_itp.itp.coefs[:] = V_hat_pos_
+
+        # define objective functions
+        object_nd(a_p, CoH) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
+        object_pos(a_p, CoH) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
+
+        # for ν_i = 1:ν_size, e_3_i = 1:e_3_size, a_i = 1:a_size
+        for (ν_i, e_3_i, a_i) in loop_V
+
+            # constrcut cash on hand
+            a_adj = a_grid[a_i] - ν_grid[ν_i]
+            CoH = variables.aggregate_prices.w_λ * e_12 * e_3_grid[e_3_i] + a_adj
+
+            # good credit history
+            if (CoH - rbl_qa) > 0.0
+                object_nd_(a_p) = object_nd(a_p, CoH)
+                # if a_adj > 0.0
+                #     res_nd = optimize(a_p -> object_nd_(a_p), rbl_a, CoH, GoldenSection())
+                # else
+                lb_ub_int .= [rbl_a, CoH]
+                min_bounds_function!(object_nd_, lb_ub_int)
+                res_nd = optimize(a_p -> object_nd_(a_p), lb_ub_int[1], lb_ub_int[2], GoldenSection())
+                # end
+                variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = -Optim.minimum(res_nd)
+                if variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] >= variables.V_d[e_1_i, e_2_i, e_3_i, T]
+                    variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i, T]
+                    variables.policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = Optim.minimizer(res_nd)
+                    variables.policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = 0.0
+                else
+                    variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = variables.V_d[e_1_i, e_2_i, e_3_i, T]
+                    variables.policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = 0.0
+                    variables.policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = 1.0
+                end
+            else
+                variables.V_nd[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = -Inf
+                variables.V[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = variables.V_d[e_1_i, e_2_i, e_3_i, T]
+                variables.policy_a[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = 0.0
+                variables.policy_d[a_i, e_1_i, e_2_i, e_3_i, ν_i, T] = 1.0
+            end
+
+            # bad credit history
+            if a_i >= a_ind_zero
+                a_pos_i = a_i - a_ind_zero + 1
+                if CoH > 0.0
+                    object_pos_(a_p) = object_pos(a_p, CoH)
+                    # if a_adj > 0.0
+                    #     res_pos = optimize(a_p -> object_pos_(a_p), 0.0, CoH, GoldenSection())
+                    # else
+                    lb_ub_int .= [0.0, CoH]
+                    min_bounds_function!(object_pos_, lb_ub_int)
+                    res_pos = optimize(a_p -> object_pos_(a_p), lb_ub_int[1], lb_ub_int[2], GoldenSection())
+                    # end
+                    variables.V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i, T] = -Optim.minimum(res_pos)
+                    variables.policy_a_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i, T] = Optim.minimizer(res_pos)
+                    variables.policy_d_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i, T] = 0.0
+                else
+                    variables.V_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i, T] = variables.V_d[e_1_i, e_2_i, e_3_i, T]
+                    variables.policy_a_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i, T] = 0.0
+                    variables.policy_d_pos[a_pos_i, e_1_i, e_2_i, e_3_i, ν_i, T] = 1.0
+                end
+            end
+        end
+    end
+
+    # return results
+    return nothing
+end
+
 function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; tol::Real = 1E-2, iter_max::Real = 500, slow_updating::Real = 1.0, figure_track::Bool = false)
     """
     solve transitional dynamics of periods T from initial to new steady states
@@ -428,9 +585,6 @@ function transitional_dynamic_λ_function!(variables_T::Mutable_Variables_T, var
             
             # value and policy functions
             variables_T.V[:,:,:,:,:,T_i], variables_T.V_d[:,:,:,:,T_i], variables_T.V_nd[:,:,:,:,:,T_i], variables_T.V_pos[:,:,:,:,:,T_i], variables_T.policy_a[:,:,:,:,:,T_i], variables_T.policy_d[:,:,:,:,:,T_i], variables_T.policy_pos_a[:,:,:,:,:,T_i], variables_T.policy_pos_d[:,:,:,:,:,T_i] = value_and_policy_function(variables_T.V[:,:,:,:,:,T_i+1], variables_T.V_d[:,:,:,:,T_i+1], variables_T.V_nd[:,:,:,:,:,T_i+1], variables_T.V_pos[:,:,:,:,:,T_i+1], variables_T.q[:,:,:,T_i], variables_T.rbl[:,:,:,T_i], variables_T.aggregate_prices.w_λ[T_i], parameters_new)
-
-            # default thresholds
-            variables_T.threshold_a[:,:,:,:,T_i], variables_T.threshold_e_2[:,:,:,:,T_i] = threshold_function(variables_T.V_d[:,:,:,:,T_i], variables_T.V_nd[:,:,:,:,:,T_i], variables_T.aggregate_prices.w_λ[T_i], parameters_new)
 
         end
 

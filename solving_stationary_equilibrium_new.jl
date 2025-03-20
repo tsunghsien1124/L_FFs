@@ -53,7 +53,7 @@ function adda_cooper(N::Int64, ρ::Float64, σ::Float64; μ::Float64=0.0)
 end
 
 function parameters_function(;
-    β::Float64=0.920,                # discount factor (households)
+    β::Float64=0.935,                # discount factor (households)
     ρ::Float64=0.975,                # survival rate
     r_f::Float64=0.04,               # risk-free rate # 1.04*ρ-1.0
     # r_f::Float64=1.04/ρ-1.0,         # risk-free rate # 1.04*ρ-1.0
@@ -66,7 +66,7 @@ function parameters_function(;
     ψ::Float64=0.972^4,              # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Float64=1.0 / (4.57 * 0.75),  # diverting fraction # 1.0 / 3.0
     p_h::Float64=1.0 / 6.0,          # prob. of history erased
-    η::Float64=0.40,                 # wage garnishment rate
+    η::Float64=0.37,                 # wage garnishment rate
     ξ::Float64=0.00,                 # stigma utility filing cost
     κ::Float64=697 / 33176,          # out-of-pocket monetary filing cost
     e_1_σ::Float64=0.448,            # s.d. of permanent endowment shock
@@ -320,40 +320,6 @@ function utility_function(c::Float64, γ::Float64)
     else
         return -Inf
     end
-end
-
-function repayment_function(e_1_i::Int64, e_2_i::Int64, e_3_p_i::Int64, a_p::Float64, threshold_e_2::Float64, w::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
-    """
-    evaluate repayment recovery rate with wage garnishment
-    """
-
-    # unpack parameters
-    @unpack e_1_grid, e_2_grid, e_3_grid, e_2_ρ, e_2_σ, η = parameters
-
-    # permanent and transitory components
-    e_1 = e_1_grid[e_1_i]
-    e_3 = e_3_grid[e_3_p_i]
-
-    # compute expected repayment amount
-    e_2_μ = e_2_ρ * e_2_grid[e_2_i]
-
-    # (1) not default
-    # default_prob = cdf(Normal(e_2_μ, e_2_σ), threshold_e_2)
-    # amount_repay = -a_p * (1.0 - default_prob)
-
-    # (2) default and reclaiming wage garnishment is enabled
-    amount_default = 0.0
-    if wage_garnishment == true
-        default_adjusted_prob = cdf(Normal(e_2_μ + e_2_σ^2.0, e_2_σ), threshold_e_2)
-        amount_default = η * w * exp(e_1 + e_3) * exp(e_2_μ + e_2_σ^2.0 / 2.0) * default_adjusted_prob
-        amount_repay = -a_p * (1.0 - default_adjusted_prob)
-    end
-
-    # (3) total amount collected by banks
-    total_amount = amount_repay + amount_default
-    total_amount = clamp(total_amount, 0, -a_p)
-
-    return total_amount
 end
 
 function aggregate_prices_λ_funtion(parameters::NamedTuple; λ::Float64)
@@ -651,16 +617,8 @@ function pricing_and_rbl_function!(variables::Mutable_Variables, parameters::Nam
     clamp!(variables.R, 0.0, 1.0)
     variables.q[1:a_size_neg, :, :] .= ρ .* variables.R ./ (1.0 + r_f + τ + variables.aggregate_prices.ι_λ)
 
+    # risky borrowing limit and maximum discounted borrwoing amount
     for (e_2_i, e_1_i) in loop_rbl
-        # risky borrowing limit and maximum discounted borrwoing amount
-        # qa_function_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
-        # qa_function_itp = Spline1D(a_grid_neg, q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg; k = 1, bc = "extrapolate")
-        # qa_function(a_p) = qa_function_itp(a_p)
-        # rbl_lb, rbl_ub = min_bounds_function(qa_function, a_grid_neg[1], 0.0)
-        # res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
-        # res_rbl = optimize(qa_function, a_grid_neg[1], 0.0, GoldenSection())
-        # rbl[e_1_i, e_2_i, 1] = Optim.minimizer(res_rbl)
-        # rbl[e_1_i, e_2_i, 2] = Optim.minimum(res_rbl)
         res_rbl = findmin(variables.q[1:a_ind_zero, e_1_i, e_2_i] .* a_grid_neg)
         variables.rbl[e_1_i, e_2_i, 1] = a_grid_neg[res_rbl[2]]
         variables.rbl[e_1_i, e_2_i, 2] = res_rbl[1]
@@ -862,6 +820,22 @@ function solve_aggregate_variable_function!(
     # unpack parameters
     @unpack e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid, ν_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ, r_f, τ, ψ, η, loop_μ = parameters
 
+    # initialize
+    variables.aggregate_variables.L = 0.0
+    variables.aggregate_variables.L_adj = 0.0
+    variables.aggregate_variables.D = 0.0
+    variables.aggregate_variables.N = 0.0
+    variables.aggregate_variables.profit = 0.0
+    variables.aggregate_variables.ω = 0.0
+    variables.aggregate_variables.leverage_ratio = 0.0
+    variables.aggregate_variables.KL_to_D_ratio = 0.0
+    variables.aggregate_variables.debt_to_earning_ratio = 0.0
+    variables.aggregate_variables.share_of_filers = 0.0
+    variables.aggregate_variables.share_of_involuntary_filers = 0.0
+    variables.aggregate_variables.share_in_debts = 0.0
+    variables.aggregate_variables.avg_loan_rate = 0.0
+    variables.aggregate_variables.avg_loan_rate_pw = 0.0
+
     # containers
     avg_loan_rate_num, avg_loan_rate_den = 0.0, 0.0
     avg_loan_rate_pw_num, avg_loan_rate_pw_den = 0.0, 0.0
@@ -986,127 +960,127 @@ function solve_aggregate_variable_function!(
     return nothing
 end
 
-function solve_aggregate_variable_across_HH_function(
-    policy_a::Array{Float64,5},
-    policy_d::Array{Float64,5},
-    policy_pos_a::Array{Float64,5},
-    policy_pos_d::Array{Float64,5},
-    q::Array{Float64,3},
-    μ::Array{Float64,6},
-    w::Float64,
-    parameters::NamedTuple,
-)
-    """
-    compute equlibrium aggregate variables
-    """
+# function solve_aggregate_variable_across_HH_function(
+#     policy_a::Array{Float64,5},
+#     policy_d::Array{Float64,5},
+#     policy_pos_a::Array{Float64,5},
+#     policy_pos_d::Array{Float64,5},
+#     q::Array{Float64,3},
+#     μ::Array{Float64,6},
+#     w::Float64,
+#     parameters::NamedTuple,
+# )
+#     """
+#     compute equlibrium aggregate variables
+#     """
 
-    # unpack parameters
-    @unpack e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid, ν_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ, r_f, τ, ψ, η = parameters
+#     # unpack parameters
+#     @unpack e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid, ν_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ, r_f, τ, ψ, η = parameters
 
-    # initialize container
-    debt_to_earning_ratio = 0.0
-    debt_to_earning_ratio_permanent_low = 0.0
-    debt_to_earning_ratio_permanent_high = 0.0
+#     # initialize container
+#     debt_to_earning_ratio = 0.0
+#     debt_to_earning_ratio_permanent_low = 0.0
+#     debt_to_earning_ratio_permanent_high = 0.0
 
-    debt_to_earning_ratio_num = 0.0
-    debt_to_earning_ratio_num_permanent_low = 0.0
-    debt_to_earning_ratio_num_permanent_high = 0.0
+#     debt_to_earning_ratio_num = 0.0
+#     debt_to_earning_ratio_num_permanent_low = 0.0
+#     debt_to_earning_ratio_num_permanent_high = 0.0
 
-    share_of_filers = 0.0
-    share_of_filers_permanent_low = 0.0
-    share_of_filers_permanent_high = 0.0
+#     share_of_filers = 0.0
+#     share_of_filers_permanent_low = 0.0
+#     share_of_filers_permanent_high = 0.0
 
-    share_in_debts = 0.0
-    share_in_debts_permanent_low = 0.0
-    share_in_debts_permanent_high = 0.0
+#     share_in_debts = 0.0
+#     share_in_debts_permanent_low = 0.0
+#     share_in_debts_permanent_high = 0.0
 
-    avg_loan_rate = 0.0
-    avg_loan_rate_num = 0.0
-    avg_loan_rate_den = 0.0
+#     avg_loan_rate = 0.0
+#     avg_loan_rate_num = 0.0
+#     avg_loan_rate_den = 0.0
 
-    avg_loan_rate_permanent_low = 0.0
-    avg_loan_rate_num_permanent_low = 0.0
-    avg_loan_rate_den_permanent_low = 0.0
+#     avg_loan_rate_permanent_low = 0.0
+#     avg_loan_rate_num_permanent_low = 0.0
+#     avg_loan_rate_den_permanent_low = 0.0
 
-    avg_loan_rate_permanent_high = 0.0
-    avg_loan_rate_num_permanent_high = 0.0
-    avg_loan_rate_den_permanent_high = 0.0
+#     avg_loan_rate_permanent_high = 0.0
+#     avg_loan_rate_num_permanent_high = 0.0
+#     avg_loan_rate_den_permanent_high = 0.0
 
-    # total loans, deposits, share of filers, nad debt-to-earning ratio
-    for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size, ν_i = 1:ν_size
+#     # total loans, deposits, share of filers, nad debt-to-earning ratio
+#     for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size, ν_i = 1:ν_size
 
-        # interpolated decision rules
-        @views policy_a_Non_Inf = findall(policy_a[:, e_1_i, e_2_i, e_3_i, ν_i] .!= -Inf)
-        policy_a_itp = Akima(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf, e_1_i, e_2_i, e_3_i, ν_i])
-        policy_d_itp = Akima(a_grid, policy_d[:, e_1_i, e_2_i, e_3_i, ν_i])
-        policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i])
-        policy_pos_d_itp = Akima(a_grid_pos, policy_pos_d[:, e_1_i, e_2_i, e_3_i, ν_i])
+#         # interpolated decision rules
+#         @views policy_a_Non_Inf = findall(policy_a[:, e_1_i, e_2_i, e_3_i, ν_i] .!= -Inf)
+#         policy_a_itp = Akima(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf, e_1_i, e_2_i, e_3_i, ν_i])
+#         policy_d_itp = Akima(a_grid, policy_d[:, e_1_i, e_2_i, e_3_i, ν_i])
+#         policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e_1_i, e_2_i, e_3_i, ν_i])
+#         policy_pos_d_itp = Akima(a_grid_pos, policy_pos_d[:, e_1_i, e_2_i, e_3_i, ν_i])
 
-        # interpolated discounted borrowing amount
-        @views q_e = q[:, e_1_i, e_2_i]
-        q_function_itp = Akima(a_grid, q_e)
+#         # interpolated discounted borrowing amount
+#         @views q_e = q[:, e_1_i, e_2_i]
+#         q_function_itp = Akima(a_grid, q_e)
 
-        # loop over the dimension of asset holding
-        for a_μ_i = 1:a_size_μ
+#         # loop over the dimension of asset holding
+#         for a_μ_i = 1:a_size_μ
 
-            # extract wealth and compute asset choice
-            a_μ = a_grid_μ[a_μ_i]
-            a_p = clamp(policy_a_itp(a_μ), a_grid[1], a_grid[end])
+#             # extract wealth and compute asset choice
+#             a_μ = a_grid_μ[a_μ_i]
+#             a_p = clamp(policy_a_itp(a_μ), a_grid[1], a_grid[end])
 
-            if a_p < 0.0
-                # average loan rate
-                avg_loan_rate_num += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
-                avg_loan_rate_den += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
-                if (e_1_i == 1) && (e_2_i == 2)
-                    avg_loan_rate_num_permanent_low += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
-                    avg_loan_rate_den_permanent_low += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
-                end
-                if (e_1_i == 2) && (e_2_i == 2)
-                    avg_loan_rate_num_permanent_high += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
-                    avg_loan_rate_den_permanent_high += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
-                end
-            end
+#             if a_p < 0.0
+#                 # average loan rate
+#                 avg_loan_rate_num += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
+#                 avg_loan_rate_den += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
+#                 if (e_1_i == 1) && (e_2_i == 2)
+#                     avg_loan_rate_num_permanent_low += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
+#                     avg_loan_rate_den_permanent_low += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
+#                 end
+#                 if (e_1_i == 2) && (e_2_i == 2)
+#                     avg_loan_rate_num_permanent_high += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
+#                     avg_loan_rate_den_permanent_high += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
+#                 end
+#             end
 
-            if a_μ < 0.0
-                # share of filers
-                share_of_filers += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * policy_d_itp(a_μ))
-                if (e_1_i == 1) && (e_2_i == 2)
-                    share_of_filers_permanent_low += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * policy_d_itp(a_μ)) / sum(μ[:, e_1_i, e_2_i, :, :, :])
-                end
-                if (e_1_i == 2) && (e_2_i == 2)
-                    share_of_filers_permanent_high += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * policy_d_itp(a_μ)) / sum(μ[:, e_1_i, e_2_i, :, :, :])
-                end
+#             if a_μ < 0.0
+#                 # share of filers
+#                 share_of_filers += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * policy_d_itp(a_μ))
+#                 if (e_1_i == 1) && (e_2_i == 2)
+#                     share_of_filers_permanent_low += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * policy_d_itp(a_μ)) / sum(μ[:, e_1_i, e_2_i, :, :, :])
+#                 end
+#                 if (e_1_i == 2) && (e_2_i == 2)
+#                     share_of_filers_permanent_high += (μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * policy_d_itp(a_μ)) / sum(μ[:, e_1_i, e_2_i, :, :, :])
+#                 end
 
-                # debt-to-earning ratio
-                debt_to_earning_ratio_num += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ)
-                if (e_1_i == 1) && (e_2_i == 2)
-                    debt_to_earning_ratio_num_permanent_low += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ) / sum(μ[:, e_1_i, e_2_i, :, :, :])
-                end
-                if (e_1_i == 2) && (e_2_i == 2)
-                    debt_to_earning_ratio_num_permanent_high += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ) / sum(μ[:, e_1_i, e_2_i, :, :, :])
-                end
-            end
-        end
-    end
+#                 # debt-to-earning ratio
+#                 debt_to_earning_ratio_num += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ)
+#                 if (e_1_i == 1) && (e_2_i == 2)
+#                     debt_to_earning_ratio_num_permanent_low += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ) / sum(μ[:, e_1_i, e_2_i, :, :, :])
+#                 end
+#                 if (e_1_i == 2) && (e_2_i == 2)
+#                     debt_to_earning_ratio_num_permanent_high += μ[a_μ_i, e_1_i, e_2_i, e_3_i, ν_i, 1] * (-a_μ) / sum(μ[:, e_1_i, e_2_i, :, :, :])
+#                 end
+#             end
+#         end
+#     end
 
-    # debt-to-earning ratio
-    debt_to_earning_ratio = debt_to_earning_ratio_num / w
-    debt_to_earning_ratio_permanent_low = debt_to_earning_ratio_num_permanent_low / (w * exp(e_1_grid[1]))
-    debt_to_earning_ratio_permanent_high = debt_to_earning_ratio_num_permanent_high / (w * exp(e_1_grid[2]))
+#     # debt-to-earning ratio
+#     debt_to_earning_ratio = debt_to_earning_ratio_num / w
+#     debt_to_earning_ratio_permanent_low = debt_to_earning_ratio_num_permanent_low / (w * exp(e_1_grid[1]))
+#     debt_to_earning_ratio_permanent_high = debt_to_earning_ratio_num_permanent_high / (w * exp(e_1_grid[2]))
 
-    # average loan rate
-    avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
-    avg_loan_rate_permanent_low = avg_loan_rate_num_permanent_low / avg_loan_rate_den_permanent_low
-    avg_loan_rate_permanent_high = avg_loan_rate_num_permanent_high / avg_loan_rate_den_permanent_high
+#     # average loan rate
+#     avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
+#     avg_loan_rate_permanent_low = avg_loan_rate_num_permanent_low / avg_loan_rate_den_permanent_low
+#     avg_loan_rate_permanent_high = avg_loan_rate_num_permanent_high / avg_loan_rate_den_permanent_high
 
-    # share in debt
-    share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, :, :, 1])
-    share_in_debts_permanent_low = sum(μ[1:(a_ind_zero_μ-1), 1, 2, :, :, 1]) ./ sum(μ[:, 1, 2, :, :, :])
-    share_in_debts_permanent_high = sum(μ[1:(a_ind_zero_μ-1), 2, 2, :, :, 1]) ./ sum(μ[:, 2, 2, :, :, :])
+#     # share in debt
+#     share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, :, :, 1])
+#     share_in_debts_permanent_low = sum(μ[1:(a_ind_zero_μ-1), 1, 2, :, :, 1]) ./ sum(μ[:, 1, 2, :, :, :])
+#     share_in_debts_permanent_high = sum(μ[1:(a_ind_zero_μ-1), 2, 2, :, :, 1]) ./ sum(μ[:, 2, 2, :, :, :])
 
-    # return results
-    return debt_to_earning_ratio, debt_to_earning_ratio_permanent_low, debt_to_earning_ratio_permanent_high, share_of_filers, share_of_filers_permanent_low, share_of_filers_permanent_high, share_in_debts, share_in_debts_permanent_low, share_in_debts_permanent_high, avg_loan_rate, avg_loan_rate_permanent_low, avg_loan_rate_permanent_high
-end
+#     # return results
+#     return debt_to_earning_ratio, debt_to_earning_ratio_permanent_low, debt_to_earning_ratio_permanent_high, share_of_filers, share_of_filers_permanent_low, share_of_filers_permanent_high, share_in_debts, share_in_debts_permanent_low, share_in_debts_permanent_high, avg_loan_rate, avg_loan_rate_permanent_low, avg_loan_rate_permanent_high
+# end
 
 function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Float64=1E-6, tol_μ::Float64=1E-8, slow_updating::Float64=1.0)
     """
@@ -1114,7 +1088,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     """
 
     # solve household and banking problems
-    crit_V = solve_value_and_pricing_function!(variables, parameters; tol=tol_h, iter_max=500, slow_updating=slow_updating)
+    crit_V = solve_value_and_pricing_function!(variables, parameters; tol=tol_h, iter_max=1000, slow_updating=slow_updating)
 
     # solve the cross-sectional distribution
     crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=tol_μ, iter_max=1000)
@@ -1146,7 +1120,7 @@ function solve_economy_function!(variables::Mutable_Variables, parameters::Named
     return ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ
 end
 
-function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float64=-Inf, λ_max_adhoc::Float64=Inf, tol::Float64=1E-5, iter_max::Float64=200, slow_updating::Float64=1.0)
+function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float64=-Inf, λ_max_adhoc::Float64=Inf, tol::Float64=1E-5, iter_max::Int64=200, slow_updating::Float64=1.0)
     """
     solve for optimal liquidity multiplier
     """
@@ -1179,9 +1153,9 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float
     λ_optimal = 0.0
     crit_V_optimal = 0.0
     crit_μ_optimal = 0.0
-    variables_λ_optimal = []
     λ_lower = max(λ_min_adhoc, λ_min)
     λ_upper = min(λ_max_adhoc, λ_max)
+    variables_λ_optimal = []
 
     # solve equlibrium multiplier by bisection
     while crit > tol && search_iter < iter_max

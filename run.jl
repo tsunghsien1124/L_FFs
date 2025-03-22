@@ -37,12 +37,15 @@ include("solving_transitional_dynamics.jl")
 # Solve stationary equilibrium #
 #==============================#
 parameters = parameters_function();
-# variables = variables_function(parameters; λ=0.00, load_init=false);
+variables = variables_function(parameters; λ=0.00, load_init=false);
 slow_updating = 0.7;
-# crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, iter_max=500, slow_updating=slow_updating);
+crit_V = solve_value_and_pricing_function!(variables, parameters; tol=1E-6, slow_updating=slow_updating);
 # crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=1E-6, iter_max=500)
 # ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ = solve_economy_function!(variables, parameters; slow_updating=slow_updating);
-variables_λ_min, variables_λ_optimal, λ_status, crit_V_optimal, crit_μ_optimal = optimal_multiplier_function(parameters; slow_updating=slow_updating);
+# variables_λ_min, variables_λ_optimal, λ_status, crit_V_optimal, crit_μ_optimal = optimal_multiplier_function(parameters; slow_updating=slow_updating);
+
+# variables_λ_optimal.aggregate_prices.λ = 0.03229456921386721
+
 
 @time ED_KL_to_D_ratio_min, ED_leverage_ratio_min, crit_V_min, crit_μ_min = solve_economy_function!(variables, parameters; slow_updating=slow_updating);
 V, V_d, V_nd, V_pos, R, q, rbl, μ = variables.V, variables.V_d, variables.V_nd, variables.V_pos, variables.R, variables.q, variables.rbl, variables.μ;
@@ -174,20 +177,22 @@ savefig(plot_transition_path_p_h, pwd() * "\\results\\figures\\plot_transition_p
 # cases
 κ_1, p_h_1 = 697 / 33176, 1.0 / 6.0;
 κ_2, p_h_2 = 975 / 33176, 1.0 / 10.0;
-slow_updating = 1.0;
+slow_updating = 0.0;
 
 # old economy - pre BAPCPA
 parameters_BAPCPA_1 = parameters_function(κ=κ_1, p_h=p_h_1);
 # variables_λ_lower_BAPCPA_1, variables_BAPCPA_1, flag_BAPCPA_1, crit_V_BAPCPA_1, crit_μ_BAPCPA_1 = optimal_multiplier_function(parameters_BAPCPA_1; slow_updating=slow_updating);
-# λ_BAPCPA_1 = variables_BAPCPA_1.aggregate_prices.λ # 0.04244494091796878
-variables_BAPCPA_1 = variables_function(parameters_BAPCPA_1; λ=0.04244494091796878, load_init=false);
+# λ_BAPCPA_1 = variables_BAPCPA_1.aggregate_prices.λ # 0.03229456921386721
+variables_BAPCPA_1 = variables_function(parameters_BAPCPA_1; λ=0.0, load_init=false);
+# variables_BAPCPA_1 = variables_function(parameters_BAPCPA_1; λ=0.03229456921386721, load_init=false);
 ED_KL_to_D_ratio_min_BAPCPA_1, ED_leverage_ratio_min_BAPCPA_1, crit_V_min_BAPCPA_1, crit_μ_min_BAPCPA_1 = solve_economy_function!(variables_BAPCPA_1, parameters_BAPCPA_1; slow_updating=slow_updating);
 
 # new economy - post BAPCPA
 parameters_BAPCPA_2 = parameters_function(κ=κ_2, p_h=p_h_2);
 # variables_λ_lower_BAPCPA_2, variables_BAPCPA_2, flag_BAPCPA_2, crit_V_BAPCPA_2, crit_μ_BAPCPA_2 = optimal_multiplier_function(parameters_BAPCPA_2; slow_updating=slow_updating);
-# λ_BAPCPA_2 = variables_BAPCPA_2.aggregate_prices.λ # 0.03357268615722659
-variables_BAPCPA_2 = variables_function(parameters_BAPCPA_2; λ=0.03357268615722659, load_init=false);
+# λ_BAPCPA_2 = variables_BAPCPA_2.aggregate_prices.λ # 0.03383176391601565
+variables_BAPCPA_2 = variables_function(parameters_BAPCPA_2; λ=0.0, load_init=false);
+# variables_BAPCPA_2 = variables_function(parameters_BAPCPA_2; λ=0.03383176391601565, load_init=false);
 ED_KL_to_D_ratio_min_BAPCPA_2, ED_leverage_ratio_min_BAPCPA_2, crit_V_min_BAPCPA_2, crit_μ_min_BAPCPA_2 = solve_economy_function!(variables_BAPCPA_2, parameters_BAPCPA_2; slow_updating=slow_updating);
 
 # new economy - post BAPCPA (low ν)

@@ -77,9 +77,9 @@ function parameters_function(;
     e_3_σ::Float64=0.351,            # s.d. of transitory endowment shock
     e_3_size::Int64=3,               # number of transitory endowment shock
     ν_size::Int64=3,                 # number of expenditure shock
-    a_min::Float64=-3.0,             # min of asset holding
+    a_min::Float64=-2.0,             # min of asset holding
     a_max::Float64=800.0,            # max of asset holding
-    a_size_neg::Int64=601,           # number of grid of negative asset holding for VFI
+    a_size_neg::Int64=801,           # number of grid of negative asset holding for VFI
     a_size_pos::Int64=101,           # number of grid of positive asset holding for VFI
     a_degree::Int64=3,               # curvature of positive asset gridpoints
     μ_scale::Int64=1                 # scale for the asset holding gridpoints for distribution
@@ -114,6 +114,7 @@ function parameters_function(;
     E = 1.0
 
     # expenditure schock
+    # ν_grid = zeros(ν_size)
     ν_grid = [0.0000000, 0.2654197, 0.5845315]
     ν_p_1 = 0.02512171
     ν_p_2 = 0.03784821
@@ -611,7 +612,7 @@ function pricing_and_rbl_function!(variables::Mutable_Variables, parameters::Nam
         for (ν_p_i, e_3_p_i, e_2_p_i) in loop_q_p
             e_p = e_1_grid[e_1_i] * e_2_grid[e_2_p_i] * e_3_grid[e_3_p_i]
             ν_p = ν_grid[ν_p_i]
-            variables.R[a_p_i, e_1_i, e_2_i] += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * (1.0 - variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] + variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] * η * variables.aggregate_prices.w_λ * e_p / (-a_p)) # (ν_p - a_p)
+            variables.R[a_p_i, e_1_i, e_2_i] += e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * (1.0 - variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] + variables.policy_d[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i] * η * variables.aggregate_prices.w_λ * e_p / (ν_p - a_p)) # (- a_p)
         end
     end
     clamp!(variables.R, 0.0, 1.0)

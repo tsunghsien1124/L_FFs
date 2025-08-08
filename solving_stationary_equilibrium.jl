@@ -46,19 +46,19 @@ function parameters_function(;
     ξ::Float64=0.00,                 # stigma utility filing cost
     κ::Float64=697 / 33176,          # out-of-pocket monetary filing cost
     e_1_σ::Float64=0.448,            # s.d. of permanent endowment shock
-    e_1_size::Int64=2,          # number of permanent endowment shock
+    e_1_size::Int64=2,               # number of permanent endowment shock
     e_2_ρ::Float64=0.957,            # AR(1) of persistent endowment shock
     e_2_σ::Float64=0.129,            # s.d. of persistent endowment shock
-    e_2_size::Int64=5,          # number of persistent endowment shock
+    e_2_size::Int64=5,               # number of persistent endowment shock
     e_3_σ::Float64=0.351,            # s.d. of transitory endowment shock
-    e_3_size::Int64=3,          # number of transitory endowment shock
-    ν_size::Int64=3,            # number of expenditure shock
+    e_3_size::Int64=3,               # number of transitory endowment shock
+    ν_size::Int64=2,                 # number of preference shock
     a_min::Float64=-5.0,             # min of asset holding
     a_max::Float64=800.0,            # max of asset holding
-    a_size_neg::Int64=501,      # number of grid of negative asset holding for VFI
-    a_size_pos::Int64=101,      # number of grid of positive asset holding for VFI
-    a_degree::Int64=3,          # curvature of the positive asset gridpoints
-    μ_scale::Int64=1            # scale for the asset holding gridpoints for distribution
+    a_size_neg::Int64=501,           # number of grid of negative asset holding for VFI
+    a_size_pos::Int64=101,           # number of grid of positive asset holding for VFI
+    a_degree::Int64=3,               # curvature of the positive asset gridpoints
+    μ_scale::Int64=1                 # scale for the asset holding gridpoints for distribution
 )
     """
     contruct an immutable object containg all paramters
@@ -92,42 +92,18 @@ function parameters_function(;
     # aggregate labor endowment
     E = 1.0
 
-    # expenditure schock
-    # ν_grid = zeros(ν_size)
-    if ν_size == 3
-        # ν_grid = [0.0, 0.3584239, 3.0]
-        # ν_p_1 = 0.04438342
-        # ν_p_2 = 0.0002092103
-        # ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-
-        ν_grid = [0.0, 0.0, 0.0]
-        ν_p_1 = 0.0
-        ν_p_2 = 0.0
-        ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-    elseif ν_size == 4
-        ν_size = 3
-        ν_grid = [0.0, 0.3584239, 3.0]
-        ν_p_1 = 0.04438342
-        ν_p_2 = 0.0
-        ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-    elseif ν_size == 5
-        ν_size = 3
-        ν_grid = [0.0, 0.3584239, 3.0]
-        ν_p_1 = 0.0
-        ν_p_2 = 0.0
-        ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-    elseif ν_size == 6
-        ν_size = 3
-        ν_grid = [0.0, 0.3584239, 3.0]
-        ν_p_1 = 0.04438342 * 0.9
-        ν_p_2 = 0.0
-        ν_Γ = [1.0 - ν_p_1 - ν_p_2, ν_p_1, ν_p_2]
-    else
-        ν_grid = [0.0, 0.3584239]
-        ν_p = 0.04705877
-        ν_Γ = [1.0 - ν_p, ν_p]
-    end
+    # preference schock
+    ν_grid = ones(ν_size)
+    ν_p_1 = 0.98
+    ν_Γ = [ν_p_1, 1.0 - ν_p_1]
     G_ν = ν_Γ
+
+    # dsicounted aggregate shock transition
+    E_Γ_all = zeros(e_2_size, ν_size, e_2_size, e_3_size, ν_size)
+    ρβν = ρ * β * ν_grid
+    for e_2_i in 1:e_2_size, ν_i in 1:ν_size, e_2_p_i in 1:e_2_size, e_3_p_i in 1:e_3_size, ν_p_i in 1:ν_size
+        E_Γ_all[e_2_i, ν_i, e_2_p_i, e_3_p_i, ν_p_i] = ρβν[ν_i] * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i]
+    end
 
     # asset holding grid for VFI
     a_grid_neg = collect(range(a_min, 0.0, length=a_size_neg))
@@ -585,15 +561,15 @@ function E_V_function!(variables::Mutable_Variables, parameters::NamedTuple)
     Construct expected value functions `E_V` and `E_V_pos`.
 
     For each state (e₁, e₂, a′), compute:
-        - E_V[a′, e₁, e₂]: full expected value over all shocks and future states
-        - E_V_pos[a′, e₁, e₂]: expected value conditional on a′ ≥ 0
+        - E_V[a′, e₁, e₂, ν]: full expected value over all shocks and future states
+        - E_V_pos[a′, e₁, e₂, ν]: expected value conditional on a′ ≥ 0
 
     Arguments:
         variables  :: Mutable_Variables
               - V_p      :: 5D value function (a′, e₁, e₂′, e₃′, ν′)
               - V_pos_p  :: 5D value function (positive assets only)
-              - E_V      :: 3D output array (a′, e₁, e₂)
-              - E_V_pos  :: 3D output array (positive assets only)
+              - E_V      :: 4D output array (a′, e₁, e₂, ν)
+              - E_V_pos  :: 4D output array (positive assets only)
 
         parameters :: NamedTuple
               - Grid sizes and index info: e_1_size, e_2_size, e_3_size, ν_size, a_size, a_size_pos, a_ind_zero
@@ -603,42 +579,24 @@ function E_V_function!(variables::Mutable_Variables, parameters::NamedTuple)
     """
 
     # Unpack parameters
-    @unpack e_1_size, e_2_size, e_2_Γ, e_3_size, e_3_Γ,
-    ν_size, ν_Γ, a_size, a_size_pos, a_ind_zero, ρ, β, loop_EV = parameters
-
-    # Precompute constant
-    ρβ = ρ * β
+    @unpack e_1_size, e_2_size, e_3_size, ν_size, a_size, a_size_pos, a_ind_zero, E_Γ_all, loop_EV = parameters
 
     # Loop over state tuples (e₂_i, e₁_i, a′_i)
-    for (e_2_i, e_1_i, a_p_i) in loop_EV
+    for (ν_i, e_2_i, e_1_i, a_p_i) in loop_EV
+
+        variables.E_V[a_p_i, e_1_i, e_2_i] = 0.0
+
+        for ν_p_i in 1:ν_size, e_3_p_i in 1:e_3_size, e_2_p_i in 1:e_2_size
+            variables.E_V[a_p_i, e_1_i, e_2_i, ν_i] += E_Γ_all[e_2_i, ν_i, e_2_p_i, e_3_p_i, ν_p_i] *
+                                                       variables.V_p[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
+        end
 
         if a_p_i < a_ind_zero
-            # Case: negative asset
-            variables.E_V[a_p_i, e_1_i, e_2_i] = 0.0
-
-            for ν_p_i in 1:ν_size, e_3_p_i in 1:e_3_size, e_2_p_i in 1:e_2_size
-                variables.E_V[a_p_i, e_1_i, e_2_i] += ρβ *
-                                                      e_2_Γ[e_2_i, e_2_p_i] *
-                                                      e_3_Γ[e_3_p_i] *
-                                                      ν_Γ[ν_p_i] *
-                                                      variables.V_p[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
-            end
-
-        else
-            # Case: non-negative asset
             a_p_i_pos = a_p_i - a_ind_zero + 1
-
-            variables.E_V[a_p_i, e_1_i, e_2_i] = 0.0
             variables.E_V_pos[a_p_i_pos, e_1_i, e_2_i] = 0.0
-
             for ν_p_i in 1:ν_size, e_3_p_i in 1:e_3_size, e_2_p_i in 1:e_2_size
-                weight = ρβ * e_2_Γ[e_2_i, e_2_p_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i]
-
-                variables.E_V[a_p_i, e_1_i, e_2_i] += weight *
-                                                      variables.V_p[a_p_i, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
-
-                variables.E_V_pos[a_p_i_pos, e_1_i, e_2_i] += weight *
-                                                              variables.V_pos_p[a_p_i_pos, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
+                variables.E_V_pos[a_p_i_pos, e_1_i, e_2_i, ν_i] += E_Γ_all[e_2_i, ν_i, e_2_p_i, e_3_p_i, ν_p_i] *
+                                                                   variables.V_pos_p[a_p_i_pos, e_1_i, e_2_p_i, e_3_p_i, ν_p_i]
             end
         end
     end

@@ -25,6 +25,7 @@ using BenchmarkTools, Profile
 using Polyester
 using Interpolations
 using FastGaussQuadrature
+using LoopVectorization
 
 #==================#
 # Import functions #

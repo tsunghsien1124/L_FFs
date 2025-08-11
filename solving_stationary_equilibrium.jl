@@ -53,12 +53,13 @@ function parameters_function(;
     e_3_σ::Float64=0.351,            # s.d. of transitory endowment shock
     e_3_size::Int64=3,               # number of transitory endowment shock
     ν_size::Int64=2,                 # number of preference shock
-    a_min::Float64=-5.0,             # min of asset holding
+    # a_min::Float64=-5.0,             # min of asset holding
     a_max::Float64=800.0,            # max of asset holding
     a_size_neg::Int64=501,           # number of grid of negative asset holding for VFI
     a_size_pos::Int64=101,           # number of grid of positive asset holding for VFI
     a_degree::Int64=3,               # curvature of the positive asset gridpoints
-    μ_scale::Int64=1                 # scale for the asset holding gridpoints for distribution
+    μ_scale::Int64=1,                # scale for the asset holding gridpoints for distribution
+    λ::Float64=0.0                   # multiplier
 )
     """
     contruct an immutable object containg all paramters
@@ -116,6 +117,16 @@ function parameters_function(;
     a_size_μ = length(a_grid_μ)
     a_ind_zero_μ = findall(iszero, a_grid_μ)[]
 
+    # aggregate prices 
+    ξ_λ = (1.0 - ψ) / (1.0 - λ - ψ)
+    Λ_λ = β_f * (1.0 - ψ + ψ * ξ_λ)
+    LR_λ = ξ_λ / θ
+    KL2D_λ = LR_λ / (LR_λ - 1.0)
+    ι_λ = λ * θ / Λ_λ
+    r_k_λ = r_f + ι_λ
+    K_λ = E * ((r_k_λ + δ) / α)^(1.0 / (α - 1.0))
+    w_λ = (1.0 - α) * (K_λ / E)^α
+
     # iterators
     loop_V = collect(Iterators.product(1:ν_size, 1:e_3_size, 1:e_2_size, 1:e_1_size, 1:a_size))
     loop_EV = collect(Iterators.product(1:e_1_size, 1:e_2_size, 1:ν_size, 1:a_size))
@@ -125,6 +136,25 @@ function parameters_function(;
     ρβν = ρ * β * ν_grid
     for e_2_i in 1:e_2_size, ν_i in 1:ν_size, e_2_p_i in 1:e_2_size, ν_p_i in 1:ν_size, e_3_p_i in 1:e_3_size
         Γ[e_3_p_i, ν_p_i, e_2_p_i, ν_i, e_2_i] = ρβν[ν_i] * e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * e_2_Γ[e_2_i, e_2_p_i]
+    end
+    Γ_e3_ν = zeros(e_3_size, ν_size)
+    for ν_p_i in 1:ν_size, e_3_p_i in 1:e_3_size
+        Γ_e3_ν[e_3_p_i, ν_p_i] = e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i]
+    end
+
+    # precomputation of handy scalars and matrices
+    R_bar = ρ ./ ((-a_grid_neg) .* (1.0 + r_f + τ + ι_λ))
+    q_bar = ρ / (1.0 + r_f)
+    W = zeros(e_3_size, e_2_size, e_1_size)
+    WA = zeros(a_size, e_3_size, e_2_size, e_1_size)
+    u_d = zeros(e_3_size, e_2_size, e_1_size)
+    for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size
+        e_1 = e_1_grid[e_1_i]
+        e_2 = e_2_grid[e_2_i]
+        e_3 = e_3_grid[e_3_i]
+        W[e_3_i, e_2_i, e_1_i] = w_λ * exp(e_1 + e_2 + e_3)
+        WA[:, e_3_i, e_2_i, e_1_i] .= W[e_3_i, e_2_i, e_1_i] .+ a_grid
+        u_d[e_3_i, e_2_i, e_1_i] = utility_function((1.0 - η) * W[e_3_i, e_2_i, e_1_i] - κ, σ)
     end
 
     # return values
@@ -179,9 +209,24 @@ function parameters_function(;
         a_size_pos_μ=a_size_pos_μ,
         a_ind_zero_μ=a_ind_zero_μ,
         a_degree=a_degree,
+        λ=λ,
+        ξ_λ=ξ_λ, 
+        Λ_λ=Λ_λ, 
+        LR_λ=LR_λ,
+        KL2D_λ=KL2D_λ, 
+        ι_λ=ι_λ, 
+        r_k_λ=r_k_λ, 
+        K_λ=K_λ, 
+        w_λ=w_λ,
         loop_V=loop_V,
         loop_EV=loop_EV,
         Γ=Γ,
+        Γ_e3_ν=Γ_e3_ν,
+        R_bar=R_bar,
+        q_bar=q_bar,
+        W=W,
+        WA=WA,
+        u_d=u_d,
     )
 end
 
@@ -328,39 +373,6 @@ function repayment_function(e_1::Float64, e_2::Float64, e_3_p::Float64, a_p::Flo
     return clamp(total_amount, 0, -a_p)
 end
 
-function aggregate_prices_λ_funtion(parameters::NamedTuple; λ::Float64)
-    """
-    compute aggregate prices for given incentive multiplier λ
-    """
-    @unpack ρ, α, ψ, β_f, θ, r_f, δ, E = parameters
-
-    ξ_λ = (1.0 - ψ) / (1.0 - λ - ψ)
-    Λ_λ = β_f * (1.0 - ψ + ψ * ξ_λ)
-    leverage_ratio_λ = ξ_λ / θ
-    KL_to_D_ratio_λ = leverage_ratio_λ / (leverage_ratio_λ - 1.0)
-    ι_λ = λ * θ / Λ_λ
-    r_k_λ = r_f + ι_λ
-    K_λ = E * ((r_k_λ + δ) / α)^(1.0 / (α - 1.0))
-    w_λ = (1.0 - α) * (K_λ / E)^α
-
-    return ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ
-end
-
-mutable struct Mutable_Aggregate_Prices
-    """
-    construct a type for mutable aggregate prices
-    """
-    λ::Float64
-    ξ_λ::Float64
-    Λ_λ::Float64
-    leverage_ratio_λ::Float64
-    KL_to_D_ratio_λ::Float64
-    ι_λ::Float64
-    r_k_λ::Float64
-    K_λ::Float64
-    w_λ::Float64
-end
-
 mutable struct Mutable_Aggregate_Variables
     """
     construct a type for mutable aggregate variables
@@ -386,7 +398,6 @@ mutable struct Mutable_Variables
     """
     construct a type for mutable variables
     """
-    aggregate_prices::Mutable_Aggregate_Prices
     aggregate_variables::Mutable_Aggregate_Variables
     W::Array{Float64,3}
     WA::Array{Float64,4}
@@ -401,7 +412,6 @@ mutable struct Mutable_Variables
     EV::Array{Float64,4}
     EV_pos::Array{Float64,4}
     EV_Ph::Array{Float64,4}
-    EV_pos_1_Ph::Array{Float64,4}
     policy_a::Array{Float64,5}
     policy_d::Array{Float64,5}
     policy_a_pos::Array{Float64,5}
@@ -420,10 +430,6 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
     @unpack e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_2_ρ, e_2_σ, e_3_size, e_3_grid, e_3_Γ = parameters
     @unpack ν_size, ν_Γ = parameters
     @unpack ρ, r_f, τ, η, κ, σ = parameters
-
-    # define aggregate prices
-    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ=λ)
-    aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 
     # define aggregate variables
     K = 0.0
@@ -444,18 +450,6 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
     aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     if load_init == false
-        W = zeros(e_3_size, e_2_size, e_1_size)
-        WA = zeros(a_size, e_3_size, e_2_size, e_1_size)
-        u_d = zeros(e_3_size, e_2_size, e_1_size)
-        for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size, e_3_i = 1:e_3_size
-            e_1 = e_1_grid[e_1_i]
-            e_2 = e_2_grid[e_2_i]
-            e_3 = e_3_grid[e_3_i]
-            W[e_3_i, e_2_i, e_1_i] = w_λ * exp(e_1 + e_2 + e_3)
-            WA[:, e_3_i, e_2_i, e_1_i] .= W[e_3_i, e_2_i, e_1_i] .+ a_grid
-            u_d[e_3_i, e_2_i, e_1_i] = utility_function((1.0 - η) * W[e_3_i, e_2_i, e_1_i] - κ, σ)
-        end
-
         R = zeros(a_size_neg, e_2_size, e_1_size)
         q = ones(a_size, e_2_size, e_1_size) .* ρ ./ (1.0 + r_f)
         rbl = zeros(2, e_2_size, e_1_size)
@@ -488,7 +482,6 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
         EV = zeros(a_size, ν_size, e_2_size, e_1_size)
         EV_pos = zeros(a_size_pos, ν_size, e_2_size, e_1_size)
         EV_Ph = zeros(a_size_pos, ν_size, e_2_size, e_1_size)
-        EV_pos_1_Ph = zeros(a_size_pos, ν_size, e_2_size, e_1_size)
 
         # define cross-sectional distribution
         μ = zeros(a_size_μ, e_1_size, e_2_size, e_3_size, ν_size, 2)
@@ -507,7 +500,7 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
     threshold_e_2 = zeros(a_size_neg, e_3_size, ν_size, e_1_size)
 
     # return outputs
-    variables = Mutable_Variables(aggregate_prices, aggregate_variables, W, WA, u_d, R, q, rbl, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph, EV_pos_1_Ph, policy_a, policy_d, policy_a_pos, threshold_a, threshold_e_2, μ)
+    variables = Mutable_Variables(aggregate_prices, aggregate_variables, W, WA, u_d, R, q, rbl, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph, policy_a, policy_d, policy_a_pos, threshold_a, threshold_e_2, μ)
     return variables
 end
 
@@ -563,7 +556,7 @@ function E_V_function!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variabl
     """
 
     # Unpack parameters
-    @unpack e_3_size, ν_size, e_2_size, e_1_size, a_size, a_size_pos, a_ind_zero, Γ, loop_EV = parameters
+    @unpack e_3_size, ν_size, e_2_size, e_1_size, a_size, a_size_pos, a_ind_zero, Ph, Γ, loop_EV = parameters
 
     # Loop over state tuples (e₂_i, e₁_i, a′_i)
     @inbounds @batch for (e_1_i, e_2_i, ν_i, a_p_i) in loop_EV
@@ -583,6 +576,7 @@ function E_V_function!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variabl
                 EV_pos_temp += Γ_temp[e_3_p_i, ν_p_i, e_2_p_i] * V_pos_p_temp[e_3_p_i, ν_p_i, e_2_p_i]
             end
             variables.EV_pos[a_pos_p_i, ν_i, e_2_i, e_1_i] = EV_pos_temp
+            variables.EV_Ph[a_pos_p_i, ν_i, e_2_i, e_1_i] = Ph * EV_temp + (1.0 - Ph) * EV_pos_temp
         end
     end
 
@@ -745,19 +739,19 @@ function pricing_and_rbl_function!(R::Array{Float64,3}, q::Array{Float64,3}, rbl
     # unpack parameters
     @unpack ρ, r_f, τ, η = parameters
     @unpack a_ind_zero, a_size, a_grid, a_size_neg, a_grid_neg = parameters
-    @unpack e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_3_size, e_3_grid, e_3_Γ = parameters
-    @unpack ν_size, ν_Γ = parameters
+    @unpack e_1_size, e_1_grid, e_2_size, e_2_grid, e_3_size, e_3_grid = parameters
+    @unpack ν_size, Γ_e3_ν = parameters
 
     # loop over states
-    for e_2_i = 1:e_2_size, e_1_i = 1:e_1_size
-        for a_p_i = 1:(a_size_neg-1)
-            @inbounds R[a_p_i, e_1_i, e_2_i] = 0.0
-            @inbounds q[a_p_i, e_1_i, e_2_i] = 0.0
-            @inbounds a_p = a_grid[a_p_i]
+    @inbounds @batch for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size
+        @inbounds @turbo for a_p_i = 1:(a_size_neg-1)
+            a_p = a_grid[a_p_i]
+            R_temp = 0.0
             for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size
-                @inbounds R[a_p_i, e_1_i, e_2_i] += e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1_i, e_2_i, e_3_p_i, a_p, threshold_e_2[a_p_i, e_1_i, e_3_p_i, ν_p_i], w, parameters)
+                R_temp += Γ_e3_ν[e_3_p_i, ν_p_i] * repayment_function(e_1_i, e_2_i, e_3_p_i, a_p, threshold_e_2[a_p_i, e_1_i, e_3_p_i, ν_p_i], w, parameters)
             end
-            @inbounds q[a_p_i, e_1_i, e_2_i] = ρ * R[a_p_i, e_1_i, e_2_i] / ((-a_p) * (1.0 + r_f + τ + ι))
+            R[a_p_i, e_1_i, e_2_i] = R_temp
+            q[a_p_i, e_1_i, e_2_i] = ρ * R_temp / ((-a_p) * (1.0 + r_f + τ + ι))
         end
 
         # risky borrowing limit and maximum discounted borrwoing amount

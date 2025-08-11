@@ -384,8 +384,8 @@ mutable struct Mutable_Aggregate_Variables
     N::Float64
     profit::Float64
     ω::Float64
-    leverage_ratio::Float64
-    KL_to_D_ratio::Float64
+    LR::Float64
+    KL2D::Float64
     debt_to_earning_ratio::Float64
     share_of_filers::Float64
     share_of_involuntary_filers::Float64
@@ -436,21 +436,22 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
     N = 0.0
     profit = 0.0
     ω = 0.0
-    leverage_ratio = 0.0
-    KL_to_D_ratio = 0.0
+    LR = 0.0
+    KL2D = 0.0
     debt_to_earning_ratio = 0.0
     share_of_filers = 0.0
     share_of_involuntary_filers = 0.0
     share_in_debts = 0.0
     avg_loan_rate = 0.0
     avg_loan_rate_pw = 0.0
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+    aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, LR, KL2D, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     if load_init == false
         R = zeros(a_size_neg, e_2_size, e_1_size)
         q = zeros(a_size, e_2_size, e_1_size) 
         q .= q_bar
-        rbl = zeros(2, e_2_size, e_1_size)
+        rbl_a = zeros(e_2_size, e_1_size)
+        rbl_qa = zeros(e_2_size, e_1_size)
         for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size
             e_1 = e_1_grid[e_1_i]
             e_2 = e_2_grid[e_2_i]
@@ -470,8 +471,8 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
             qa_funcion(a_p) = qa_funcion_itp(a_p)
             rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_min, 0.0)
             res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
-            rbl[1, e_2_i, e_1_i] = Optim.minimizer(res_rbl)
-            rbl[2, e_2_i, e_1_i] = Optim.minimum(res_rbl)
+            rbl_a[e_2_i, e_1_i] = Optim.minimizer(res_rbl)
+            rbl_qa[e_2_i, e_1_i] = Optim.minimum(res_rbl)
         end
 
         # define value functions

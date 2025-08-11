@@ -399,9 +399,6 @@ mutable struct Mutable_Variables
     construct a type for mutable variables
     """
     aggregate_variables::Mutable_Aggregate_Variables
-    W::Array{Float64,3}
-    WA::Array{Float64,4}
-    u_d::Array{Float64,3}
     R::Array{Float64,3}
     q::Array{Float64,3}
     rbl::Array{Float64,3}
@@ -429,7 +426,7 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
     @unpack a_ind_zero, a_size, a_grid, a_size_pos, a_size_neg, a_grid_neg, a_ind_zero_μ, a_size_μ, a_size_pos_μ = parameters
     @unpack e_1_size, e_1_grid, e_1_Γ, e_2_size, e_2_grid, e_2_Γ, e_2_ρ, e_2_σ, e_3_size, e_3_grid, e_3_Γ = parameters
     @unpack ν_size, ν_Γ = parameters
-    @unpack ρ, r_f, τ, η, κ, σ = parameters
+    @unpack ρ, r_f, τ, η, κ, σ, w_λ, R_bar, q_bar = parameters
 
     # define aggregate variables
     K = 0.0
@@ -451,7 +448,8 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
 
     if load_init == false
         R = zeros(a_size_neg, e_2_size, e_1_size)
-        q = ones(a_size, e_2_size, e_1_size) .* ρ ./ (1.0 + r_f)
+        q = zeros(a_size, e_2_size, e_1_size) 
+        q .= q_bar
         rbl = zeros(2, e_2_size, e_1_size)
         for e_1_i = 1:e_1_size, e_2_i = 1:e_2_size
             e_1 = e_1_grid[e_1_i]
@@ -459,19 +457,21 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
             for a_p_i = 1:(a_size_neg-1)
                 a_p = a_grid_neg[a_p_i]
                 threshold_e_2 = log_function(-a_p / w_λ) - e_1
-                for ν_p_i = 1:ν_size, e_3_p_i = 1:e_3_size
+                R_temp = 0.0
+                for e_3_p_i = 1:e_3_size
                     e_3_p = e_3_grid[e_3_p_i]
-                    R[a_p_i, e_2_i, e_1_i] += e_3_Γ[e_3_p_i] * ν_Γ[ν_p_i] * repayment_function(e_1, e_2, e_3_p, a_p, threshold_e_2, w_λ, parameters)
+                    R_temp += e_3_Γ[e_3_p_i] * repayment_function(e_1, e_2, e_3_p, a_p, threshold_e_2, w_λ, parameters)
                 end
-                q[a_p_i, e_2_i, e_1_i] = ρ * R[a_p_i, e_2_i, e_1_i] / ((-a_p) * (1.0 + r_f + τ + ι_λ))
+                R[a_p_i, e_2_i, e_1_i] = R_temp 
+                q[a_p_i, e_2_i, e_1_i] = R_bar[a_p_i] * R_temp
             end
 
             qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e_2_i, e_1_i] .* a_grid_neg)
             qa_funcion(a_p) = qa_funcion_itp(a_p)
-            @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_grid[1], 0.0)
+            rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_min, 0.0)
             res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
-            @inbounds rbl[1, e_2_i, e_1_i] = Optim.minimizer(res_rbl)
-            @inbounds rbl[2, e_2_i, e_1_i] = Optim.minimum(res_rbl)
+            rbl[1, e_2_i, e_1_i] = Optim.minimizer(res_rbl)
+            rbl[2, e_2_i, e_1_i] = Optim.minimum(res_rbl)
         end
 
         # define value functions
@@ -500,7 +500,7 @@ function variables_function(parameters::NamedTuple; λ::Float64, load_init::Bool
     threshold_e_2 = zeros(a_size_neg, e_3_size, ν_size, e_1_size)
 
     # return outputs
-    variables = Mutable_Variables(aggregate_prices, aggregate_variables, W, WA, u_d, R, q, rbl, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph, policy_a, policy_d, policy_a_pos, threshold_a, threshold_e_2, μ)
+    variables = Mutable_Variables(aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph, policy_a, policy_d, policy_a_pos, threshold_a, threshold_e_2, μ)
     return variables
 end
 

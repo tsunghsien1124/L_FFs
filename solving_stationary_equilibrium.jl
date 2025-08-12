@@ -679,14 +679,18 @@ function value_and_policy_function!(
     for e2_i = 1:e2_size, e1_i = 1:e1_size
 
         # total permanent and persistent earnings
-        @inbounds e12 = e1_grid[e1_i] + e2_grid[e2_i]
+        # @inbounds e12 = e1_grid[e1_i] + e2_grid[e2_i]
 
         # extract risky borrowing limit and maximum discounted borrowing amount
-        @inbounds @views rbl_a, rbl_qa = variables.rbl[e1_i, e2_i, :]
+        @inbounds @views rbl_a = variables.rbl_a[e2_i, e1_i]
+        @inbounds @views rbl_qa = variables.rbl_qa[e2_i, e1_i]
 
         # construct interpolated functions
-        @inbounds @views qa = variables.q[:, e1_i, e2_i] .* a_grid
-        qa_function_itp = Akima(a_grid, qa)
+        @inbounds @views q = variables.q[:, e1_i, e2_i]
+        q_itp = LinearInterpolation(q, a_grid)
+        qa_itep(a_p) = q_itp(a_p) * a_p 
+        # @inbounds @views qa = variables.q[:, e1_i, e2_i] .* a_grid
+        # qa_function_itp = Akima(a_grid, qa)
         # qa_function_itp = linear_interpolation(a_grid, qa, extrapolation_bc=Line())
         # @inbounds @views qa_function_itp.itp.coefs[:] = qa
 
@@ -705,44 +709,49 @@ function value_and_policy_function!(
         object_nd(a_p, CoH) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
         object_pos(a_p, CoH) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
 
-        for ν_i = 1:ν_size, e3_i = 1:e3_size, a_i = 1:a_size
+        for ν_i = 1:ν_size, 
+            
+            for e3_i = 1:e3_size
+                
+                for a_i = 1:a_size
+                    # constrcut cash on hand
+                    @inbounds @views CoH = variables.aggregate_prices.w_λ * exp(e12 + e3_grid[e3_i]) + a_grid[a_i] - ν_grid[ν_i]
+                    # @inbounds rbl_a_ = (a_i == 1) || (variables.policy_d[a_i-1, e1_i, e2_i, e3_i, ν_i] == 1.0) ? rbl_a : variables.policy_a[a_i-1, e1_i, e2_i, e3_i, ν_i]
 
-            # constrcut cash on hand
-            @inbounds @views CoH = variables.aggregate_prices.w_λ * exp(e12 + e3_grid[e3_i]) + a_grid[a_i] - ν_grid[ν_i]
-            # @inbounds rbl_a_ = (a_i == 1) || (variables.policy_d[a_i-1, e1_i, e2_i, e3_i, ν_i] == 1.0) ? rbl_a : variables.policy_a[a_i-1, e1_i, e2_i, e3_i, ν_i]
+                    # good credit history
+                    if (CoH - rbl_qa) > 0.0
+                        res_nd = optimize(a_p -> object_nd(a_p, CoH), rbl_a, CoH)
+                        @inbounds variables.V_nd[a_i, e1_i, e2_i, e3_i, ν_i] = -Optim.minimum(res_nd)
+                        @inbounds if variables.V_nd[a_i, e1_i, e2_i, e3_i, ν_i] >= variables.V_d[e1_i, e2_i, e3_i]
+                            @inbounds variables.V[a_i, e1_i, e2_i, e3_i, ν_i] = variables.V_nd[a_i, e1_i, e2_i, e3_i, ν_i]
+                            @inbounds variables.policy_a[a_i, e1_i, e2_i, e3_i, ν_i] = Optim.minimizer(res_nd)
+                            @inbounds variables.policy_d[a_i, e1_i, e2_i, e3_i, ν_i] = 0.0
+                        else
+                            @inbounds variables.V[a_i, e1_i, e2_i, e3_i, ν_i] = variables.V_d[e1_i, e2_i, e3_i]
+                            @inbounds variables.policy_a[a_i, e1_i, e2_i, e3_i, ν_i] = 0.0
+                            @inbounds variables.policy_d[a_i, e1_i, e2_i, e3_i, ν_i] = 1.0
+                        end
+                    else
+                        @inbounds variables.V_nd[a_i, e1_i, e2_i, e3_i, ν_i] = -Inf
+                        @inbounds variables.V[a_i, e1_i, e2_i, e3_i, ν_i] = variables.V_d[e1_i, e2_i, e3_i]
+                        @inbounds variables.policy_a[a_i, e1_i, e2_i, e3_i, ν_i] = 0.0
+                        @inbounds variables.policy_d[a_i, e1_i, e2_i, e3_i, ν_i] = 1.0
+                    end
 
-            # good credit history
-            if (CoH - rbl_qa) > 0.0
-                res_nd = optimize(a_p -> object_nd(a_p, CoH), rbl_a, CoH)
-                @inbounds variables.V_nd[a_i, e1_i, e2_i, e3_i, ν_i] = -Optim.minimum(res_nd)
-                @inbounds if variables.V_nd[a_i, e1_i, e2_i, e3_i, ν_i] >= variables.V_d[e1_i, e2_i, e3_i]
-                    @inbounds variables.V[a_i, e1_i, e2_i, e3_i, ν_i] = variables.V_nd[a_i, e1_i, e2_i, e3_i, ν_i]
-                    @inbounds variables.policy_a[a_i, e1_i, e2_i, e3_i, ν_i] = Optim.minimizer(res_nd)
-                    @inbounds variables.policy_d[a_i, e1_i, e2_i, e3_i, ν_i] = 0.0
-                else
-                    @inbounds variables.V[a_i, e1_i, e2_i, e3_i, ν_i] = variables.V_d[e1_i, e2_i, e3_i]
-                    @inbounds variables.policy_a[a_i, e1_i, e2_i, e3_i, ν_i] = 0.0
-                    @inbounds variables.policy_d[a_i, e1_i, e2_i, e3_i, ν_i] = 1.0
-                end
-            else
-                @inbounds variables.V_nd[a_i, e1_i, e2_i, e3_i, ν_i] = -Inf
-                @inbounds variables.V[a_i, e1_i, e2_i, e3_i, ν_i] = variables.V_d[e1_i, e2_i, e3_i]
-                @inbounds variables.policy_a[a_i, e1_i, e2_i, e3_i, ν_i] = 0.0
-                @inbounds variables.policy_d[a_i, e1_i, e2_i, e3_i, ν_i] = 1.0
-            end
-
-            # bad credit history
-            if a_i >= a_ind_zero
-                a_pos_i = a_i - a_ind_zero + 1
-                if CoH > 0.0
-                    res_pos = optimize(a_p -> object_pos(a_p, CoH), 0.0, CoH)
-                    @inbounds variables.V_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = -Optim.minimum(res_pos)
-                    @inbounds variables.policy_a_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = Optim.minimizer(res_pos)
-                    @inbounds variables.policy_d_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = 0.0
-                else
-                    @inbounds variables.V_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = variables.V_d[e1_i, e2_i, e3_i]
-                    @inbounds variables.policy_a_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = 0.0
-                    @inbounds variables.policy_d_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = 1.0
+                # bad credit history
+                    if a_i >= a_ind_zero
+                        a_pos_i = a_i - a_ind_zero + 1
+                        if CoH > 0.0
+                            res_pos = optimize(a_p -> object_pos(a_p, CoH), 0.0, CoH)
+                            @inbounds variables.V_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = -Optim.minimum(res_pos)
+                            @inbounds variables.policy_a_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = Optim.minimizer(res_pos)
+                            @inbounds variables.policy_d_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = 0.0
+                        else
+                            @inbounds variables.V_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = variables.V_d[e1_i, e2_i, e3_i]
+                            @inbounds variables.policy_a_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = 0.0
+                            @inbounds variables.policy_d_pos[a_pos_i, e1_i, e2_i, e3_i, ν_i] = 1.0
+                        end
+                    end
                 end
             end
         end

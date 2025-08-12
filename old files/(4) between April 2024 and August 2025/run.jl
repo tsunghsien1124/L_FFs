@@ -1,8 +1,8 @@
 #=================#
 # Import packages #
 #=================#
-using Dierckx
-using FLOWMath
+# using Dierckx
+# using FLOWMath
 using Distributions
 using QuadGK
 using JLD2: @save, @load
@@ -23,9 +23,10 @@ using DataFrames
 using Measures
 using BenchmarkTools, Profile
 using Polyester
-using Interpolations
+# using Interpolations
 using FastGaussQuadrature
 using LoopVectorization
+using DataInterpolations
 
 #==================#
 # Import functions #

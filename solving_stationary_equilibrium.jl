@@ -571,119 +571,82 @@ end
 #     return nothing
 # end
 
-function E_V_function!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::Mutable_Variables, parameters::NamedTuple)
+function EV_function!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::Mutable_Variables, parameters::NamedTuple)
     """
-    Construct expected value functions `E_V` and `E_V_pos`
+    Construct expected value functions `EV` and `EV_pos`
     """
 
-    # Unpack parameters
     @unpack e3_size, ν_size, e2_size, e1_size, a_size, a_size_pos, a_ind_zero, Ph, Γ, loop_EV = parameters
 
-    # Loop over state tuples (e₂_i, e₁_i, a′_i)
     @inbounds @batch for (e1_i, e2_i, ν_i, a_p_i) in loop_EV
         @views Γ_temp = Γ[:, :, :, ν_i, e2_i]
         @views V_p_temp = V_p[a_p_i, :, :, :, e1_i]
-        EV_temp = 0.0
-        @inbounds @turbo for e2_p_i in 1:e2_size, ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
-            EV_temp += Γ_temp[e3_p_i, ν_p_i, e2_p_i] * V_p_temp[e3_p_i, ν_p_i, e2_p_i]
-        end
+        EV_temp = dot(Γ_temp, V_p_temp)
         variables.EV[a_p_i, ν_i, e2_i, e1_i] = EV_temp
 
         if a_p_i > a_ind_zero
             a_pos_p_i = a_p_i - a_ind_zero + 1
             @views V_pos_p_temp = V_pos_p[a_pos_p_i, :, :, :, e1_i]
-            EV_pos_temp = 0.0
-            @inbounds @turbo for e2_p_i in 1:e2_size, ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
-                EV_pos_temp += Γ_temp[e3_p_i, ν_p_i, e2_p_i] * V_pos_p_temp[e3_p_i, ν_p_i, e2_p_i]
-            end
+            EV_pos_temp = dot(Γ_temp, V_pos_p_temp)
             variables.EV_pos[a_pos_p_i, ν_i, e2_i, e1_i] = EV_pos_temp
             variables.EV_Ph[a_pos_p_i, ν_i, e2_i, e1_i] = Ph * EV_temp + (1.0 - Ph) * EV_pos_temp
         end
     end
-
-    # Replace NaNs with -Inf to ensure numerical safety in optimization
-    # replace!(variables.EV, NaN => -Inf)
-    # replace!(variables.EV_pos, NaN => -Inf)
-
     return nothing  # In-place update; no return
 end
 
 function V_d_function!(variables::Mutable_Variables, parameters::NamedTuple)
     """
-    Update the default value function `V_d` for each state (e₁, e₂, e₃).
-
-    Arguments:
-        variables :: Mutable_Variables
-                - u_c_d: flow utility under default
-                - E_V_pos: expected future values under default
-                - V_d: the value function under default (to be updated)
-
-        parameters :: NamedTuple
-                - e1_size, e2_size, e3_size: grid sizes
-                - ξ: default penalty
-
-    Returns:
-        Nothing (updates variables.V_d in place)
+    Update the default value function `V_d`
     """
 
-    # Unpack model parameters
-    @unpack e1_size, e2_size, e3_size, ξ = parameters
+    @unpack e1_size, e2_size, ν_size, ξ, u_d = parameters
 
-    # Loop over all (e₁, e₂) state combinations
-    for e2_i in 1:e2_size, e1_i in 1:e1_size
-
-        # Precompute E[V(h'=1)] at default state (1st index in 3rd dim)
-        E_V_val = variables.E_V_pos[1, e1_i, e2_i]
-
-        # Loop over all values of e₃ (e.g., transitory shock)
-        for e3_i in 1:e3_size
-
-            # Update default value function:
-            # V_d = u_c_d - penalty + continuation value
-            variables.V_d[e3_i, e2_i, e1_i] = variables.u_c_d[e3_i, e2_i, e1_i] - ξ + E_V_val
-        end
+    @inbounds @batch for e1_i in 1:e1_size, e2_i in 1:e2_size, ν_i in 1:ν_size
+        EV_pos_0 = variables.EV_pos[1, ν_i, e2_i, e1_i]
+        @views u_d_temp = u_d[:, e2_i, e1_i]
+        variables.V_d[:, ν_i, e2_i, e1_i] .= u_d_temp .- ξ .+ EV_pos_0
     end
-
     return nothing
 end
 
-function EV_function(variables::Mutable_Variables, parameters::NamedTuple, 
-    e1_i::Int64, e2_i::Int64, ν_i::Int64, 
-    V_nd_p::Array{Float64,5}, V_d_p::Array{Float64,4}, V_pos_p::Array{Float64,5})
-    """
-    Construct interpolated expected value functions `EV` and `EV_pos`
-    """
+# function EV_function(variables::Mutable_Variables, parameters::NamedTuple, 
+#     e1_i::Int64, e2_i::Int64, ν_i::Int64, 
+#     V_nd_p::Array{Float64,5}, V_d_p::Array{Float64,4}, V_pos_p::Array{Float64,5})
+#     """
+#     Construct interpolated expected value functions `EV` and `EV_pos`
+#     """
 
-    # Unpack parameters
-    @unpack e3_size, ν_size, e2_size, e1_size, a_size, a_size_pos, a_ind_zero, Ph, Γ, loop_EV = parameters
+#     # Unpack parameters
+#     @unpack e3_size, ν_size, e2_size, e1_size, a_size, a_size_pos, a_ind_zero, Ph, Γ, loop_EV = parameters
 
-    @inbounds @views Γ_temp = Γ[:, :, :, ν_i, e2_i]
-    @inbounds @views V_p_temp = V_p[:, :, :, :, e1_i]
-    @inbounds @views V_pos_p_temp = V_pos_p[:, :, :, :, e1_i]
-    @inbounds @views V_d = V_d[, :, :, e1_i]
-    @inbounds @views threshold_a_temp = variables.threshold_a[:, :, :, e1_i]
+#     @inbounds @views Γ_temp = Γ[:, :, :, ν_i, e2_i]
+#     @inbounds @views V_p_temp = V_p[:, :, :, :, e1_i]
+#     @inbounds @views V_pos_p_temp = V_pos_p[:, :, :, :, e1_i]
+#     @inbounds @views V_d = V_d[, :, :, e1_i]
+#     @inbounds @views threshold_a_temp = variables.threshold_a[:, :, :, e1_i]
 
-    EV_itp_ = 0.0
-    EV_pos_itp_ = 0.0
+#     EV_itp_ = 0.0
+#     EV_pos_itp_ = 0.0
 
-    @inbounds @turbo for e2_p_i in 1:e2_size, ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
-        @inbounds Γ_temp_ = Γ_temp[e3_p_i, ν_p_i, e2_p_i]
-        @inbounds @views V_p_temp_ = V_p[:, e3_p_i, ν_p_i, e2_p_i, e1_i]
-        @inbounds @views V_pos_p_temp_ = V_pos_p[:, e3_p_i, ν_p_i, e2_p_i, e1_i]
-        @inbound V_d_ = V_d[e3_p_i, ν_p_i, e2_p_i, e1_i]
-        @inbound threshold_a_temp_ = variables.threshold_a[e3_p_i, ν_p_i, e2_p_i, e1_i]
-        EV_itp(a_p) = a_p <= threshold_a_temp_ ? V_d_ : LinearInterpolation(V_p_temp_, a_grid)
-        EV_itp_ += Γ_temp_ * EV_itp(a_p)
-        EV_pos_itp(a_p) = LinearInterpolation(V_pos_p_temp_, a_grid_pos)
-        EV_itp_ += Γ_temp_ * (Ph * EV_itp(a_p) + (1.0 - Ph) * EV_pos_itp(a_p))
-    end
+#     @inbounds @turbo for e2_p_i in 1:e2_size, ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
+#         @inbounds Γ_temp_ = Γ_temp[e3_p_i, ν_p_i, e2_p_i]
+#         @inbounds @views V_p_temp_ = V_p[:, e3_p_i, ν_p_i, e2_p_i, e1_i]
+#         @inbounds @views V_pos_p_temp_ = V_pos_p[:, e3_p_i, ν_p_i, e2_p_i, e1_i]
+#         @inbound V_d_ = V_d[e3_p_i, ν_p_i, e2_p_i, e1_i]
+#         @inbound threshold_a_temp_ = variables.threshold_a[e3_p_i, ν_p_i, e2_p_i, e1_i]
+#         EV_itp(a_p) = a_p <= threshold_a_temp_ ? V_d_ : LinearInterpolation(V_p_temp_, a_grid)
+#         EV_itp_ += Γ_temp_ * EV_itp(a_p)
+#         EV_pos_itp(a_p) = LinearInterpolation(V_pos_p_temp_, a_grid_pos)
+#         EV_itp_ += Γ_temp_ * (Ph * EV_itp(a_p) + (1.0 - Ph) * EV_pos_itp(a_p))
+#     end
 
-    # Replace NaNs with -Inf to ensure numerical safety in optimization
-    # replace!(variables.EV, NaN => -Inf)
-    # replace!(variables.EV_pos, NaN => -Inf)
+#     # Replace NaNs with -Inf to ensure numerical safety in optimization
+#     # replace!(variables.EV, NaN => -Inf)
+#     # replace!(variables.EV_pos, NaN => -Inf)
 
-    return nothing  # In-place update; no return
-end
+#     return nothing  # In-place update; no return
+# end
 
 struct DP_Problem{T_qa,T_EV,T_u,T_σ}
     qa_itp::T_qa
@@ -766,8 +729,9 @@ function value_and_policy_function!(
 
         # construct interpolated functions
         @inbounds @views q = variables.q[:, e1_i, e2_i]
-        q_itp = LinearInterpolation(q, a_grid)
+        q_itp = linear_interpolation(a_grid, q, extrapolation_bc=Line())
         qa_itp(a_p) = q_itp(a_p) * a_p 
+
         # @inbounds @views qa = variables.q[:, e1_i, e2_i] .* a_grid
         # qa_function_itp = Akima(a_grid, qa)
         # qa_function_itp = linear_interpolation(a_grid, qa, extrapolation_bc=Line())

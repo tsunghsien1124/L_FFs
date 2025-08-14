@@ -343,7 +343,8 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e2::Array{
             @inbounds @views V_nd_Non_Inf = findall(V_nd[:, e3_i, e2_i, e1_i, ν_i] .!= -Inf)
             @inbounds @views a_grid_itp = a_grid[V_nd_Non_Inf]
             @inbounds @views V_nd_grid_itp = V_nd[V_nd_Non_Inf, e3_i, e2_i, e1_i, ν_i]
-            V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
+            # V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
+            V_nd_itp = _build_itp(a_grid_itp, V_nd_grid_itp)
             @inbounds V_diff_itp(a) = V_nd_itp(a) - V_d[e3_i, e2_i, e1_i]
 
             if minimum(V_nd_grid_itp) > V_d[e3_i, e2_i, e1_i]
@@ -359,7 +360,8 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e2::Array{
         @inbounds @views thres_a_grid_itp = -threshold_a[e1_i, thres_a_Non_Inf, e3_i, ν_i]
         earning_grid_itp = w * exp.(e1_grid[e1_i] .+ e2_grid[thres_a_Non_Inf] .+ e3_grid[e3_i]) .- ν_grid[ν_i]
         # threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k=1, bc="extrapolate")
-        threshold_earning_itp = Akima(thres_a_grid_itp, earning_grid_itp)
+        # threshold_earning_itp = Akima(thres_a_grid_itp, earning_grid_itp)
+        threshold_earning_itp = _build_itp(athres_a_grid_itp, earning_grid_itp)
 
         # Threads.@threads 
         for a_i = 1:a_size_neg
@@ -468,13 +470,13 @@ function variables_function(parameters::NamedTuple; load_init::Bool=false)
     aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, LR, KL2D, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 
     if load_init == false
-        R = zeros(a_size_neg-1, e2_size, e1_size)
+        R = zeros(a_size_neg - 1, e2_size, e1_size)
         q = zeros(a_size, e2_size, e1_size)
         q .= q_bar
         rbl_a = zeros(e2_size, e1_size)
         rbl_qa = zeros(e2_size, e1_size)
         threshold_a = zeros(e3_size, ν_size, e2_size, e1_size)
-        threshold_e2 = zeros(a_size_neg-1, e3_size, ν_size, e1_size)
+        threshold_e2 = zeros(a_size_neg - 1, e3_size, ν_size, e1_size)
         for e1_i = 1:e1_size, e3_i = 1:e3_size, a_p_i = 1:(a_size_neg-1)
             e1 = e1_grid[e1_i]
             e3 = e3_grid[e3_i]
@@ -489,7 +491,8 @@ function variables_function(parameters::NamedTuple; load_init::Bool=false)
             end
             R[a_p_i, e2_i, e1_i] = R_temp
             q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
-            qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e2_i, e1_i] .* a_grid_neg)
+            # qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e2_i, e1_i] .* a_grid_neg)
+            qa_funcion_itp = _build_itp(a_grid_neg, q[1:a_ind_zero, e2_i, e1_i] .* a_grid_neg)
             qa_funcion(a_p) = qa_funcion_itp(a_p)
             rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_min, 0.0)
             res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
@@ -533,6 +536,110 @@ function variables_function_update!(variables::Mutable_Variables, parameters::Na
     # define aggregate prices
     ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ=λ)
     variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
+end
+
+struct Itp_Cache{ITP_q,ITP_EV,ITP_EV_pos}
+    q::Array{ITP_q,2}               # size: (e2_size, e1_size)
+    EV::Array{ITP_EV,3}             # size: (ν_size, e2_size, e1_size)
+    EV_pos::Array{ITP_EV_pos,3}     # size: (ν_size, e2_size, e1_size)
+end
+
+@inline _build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Line())
+
+@inbounds function build_itp_cache(variables::Mutable_Variables, parameters::NamedTuple)
+    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
+
+    # sample types (use views to avoid copies)
+    q_sample = linear_interpolation(a_grid, @view(variables.q[:, 1, 1]), extrapolation_bc=Line())
+    EV_sample = linear_interpolation(a_grid, @view(variables.EV[:, 1, 1, 1]), extrapolation_bc=Line())
+    EV_pos_sample = linear_interpolation(a_grid_pos, @view(variables.EV_pos[:, 1, 1, 1]), extrapolation_bc=Line())
+
+    # allocate concretely-typed containers
+    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)         # (e2, e1)
+    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size) # (ν, e2, e1)
+    EV_pos_itp = Array{typeof(EV_pos_sample)}(undef, ν_size, e2_size, e1_size)
+
+    for e2_i in 1:e2_size, e1_i in 1:e1_size
+        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, @view(variables.q[:, e2_i, e1_i]), extrapolation_bc=Line())
+        for ν_i in 1:ν_size
+            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, @view(variables.EV[:, ν_i, e2_i, e1_i]), extrapolation_bc=Line())
+            EV_pos_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, @view(variables.EV_pos[:, ν_i, e2_i, e1_i]), extrapolation_bc=Line())
+        end
+    end
+
+    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_pos_sample)}(q_itp, EV_itp, EV_pos_itp)
+end
+
+@views @inbounds function build_itp_cache_1(variables::Mutable_Variables, parameters::NamedTuple)
+    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
+
+    # sample types (views come from @views on the function)
+    q_sample = linear_interpolation(a_grid, variables.q[:, 1, 1], extrapolation_bc=Line())
+    EV_sample = linear_interpolation(a_grid, variables.EV[:, 1, 1, 1], extrapolation_bc=Line())
+    EV_pos_sample = linear_interpolation(a_grid_pos, variables.EV_pos[:, 1, 1, 1], extrapolation_bc=Line())
+
+    # concretely-typed containers
+    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)          # (e2, e1)
+    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size)  # (ν, e2, e1)
+    EV_pos_itp = Array{typeof(EV_pos_sample)}(undef, ν_size, e2_size, e1_size)
+
+    for e2_i in 1:e2_size, e1_i in 1:e1_size
+        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, variables.q[:, e2_i, e1_i], extrapolation_bc=Line())
+        for ν_i in 1:ν_size
+            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, variables.EV[:, ν_i, e2_i, e1_i], extrapolation_bc=Line())
+            EV_pos_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, variables.EV_pos[:, ν_i, e2_i, e1_i], extrapolation_bc=Line())
+        end
+    end
+
+    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_pos_sample)}(q_itp, EV_itp, EV_pos_itp)
+end
+
+@inbounds function build_itp_cache_2(variables::Mutable_Variables, parameters::NamedTuple)
+    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
+
+    # sample types (use views to avoid copies)
+    q_sample = linear_interpolation(a_grid, view(variables.q, :, 1, 1), extrapolation_bc=Line())
+    EV_sample = linear_interpolation(a_grid, view(variables.EV, :, 1, 1, 1), extrapolation_bc=Line())
+    EV_pos_sample = linear_interpolation(a_grid_pos, view(variables.EV_pos, :, 1, 1, 1), extrapolation_bc=Line())
+
+    # allocate concretely-typed containers
+    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)         # (e2, e1)
+    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size) # (ν, e2, e1)
+    EV_pos_itp = Array{typeof(EV_pos_sample)}(undef, ν_size, e2_size, e1_size)
+
+    for e2_i in 1:e2_size, e1_i in 1:e1_size
+        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, view(variables.q, :, e2_i, e1_i), extrapolation_bc=Line())
+        for ν_i in 1:ν_size
+            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, view(variables.EV, :, ν_i, e2_i, e1_i), extrapolation_bc=Line())
+            EV_pos_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, view(variables.EV_pos, :, ν_i, e2_i, e1_i), extrapolation_bc=Line())
+        end
+    end
+
+    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_pos_sample)}(q_itp, EV_itp, EV_pos_itp)
+end
+
+@views @inbounds function build_itp_cache_3(variables::Mutable_Variables, parameters::NamedTuple)
+    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
+
+    # sample types (use views to avoid copies)
+    q_sample = linear_interpolation(a_grid, view(variables.q, :, 1, 1), extrapolation_bc=Line())
+    EV_sample = linear_interpolation(a_grid, view(variables.EV, :, 1, 1, 1), extrapolation_bc=Line())
+    EV_pos_sample = linear_interpolation(a_grid_pos, view(variables.EV_pos, :, 1, 1, 1), extrapolation_bc=Line())
+
+    # allocate concretely-typed containers
+    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)         # (e2, e1)
+    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size) # (ν, e2, e1)
+    EV_pos_itp = Array{typeof(EV_pos_sample)}(undef, ν_size, e2_size, e1_size)
+
+    for e2_i in 1:e2_size, e1_i in 1:e1_size
+        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, view(variables.q, :, e2_i, e1_i), extrapolation_bc=Line())
+        for ν_i in 1:ν_size
+            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, view(variables.EV, :, ν_i, e2_i, e1_i), extrapolation_bc=Line())
+            EV_pos_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, view(variables.EV_pos, :, ν_i, e2_i, e1_i), extrapolation_bc=Line())
+        end
+    end
+
+    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_pos_sample)}(q_itp, EV_itp, EV_pos_itp)
 end
 
 # function E_V_function!(E_V::Array{Float64,3}, E_V_pos::Array{Float64,3}, V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, parameters::NamedTuple)
@@ -592,7 +699,7 @@ function EV_function!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variable
             variables.EV_Ph[a_pos_p_i, ν_i, e2_i, e1_i] = Ph * EV_temp + (1.0 - Ph) * EV_pos_temp
         end
     end
-    return nothing  # In-place update; no return
+    return nothing
 end
 
 function V_d_function!(variables::Mutable_Variables, parameters::NamedTuple)
@@ -605,48 +712,10 @@ function V_d_function!(variables::Mutable_Variables, parameters::NamedTuple)
     @inbounds @batch for e1_i in 1:e1_size, e2_i in 1:e2_size, ν_i in 1:ν_size
         EV_pos_0 = variables.EV_pos[1, ν_i, e2_i, e1_i]
         @views u_d_temp = u_d[:, e2_i, e1_i]
-        variables.V_d[:, ν_i, e2_i, e1_i] .= u_d_temp .- ξ .+ EV_pos_0
+        @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_0
     end
     return nothing
 end
-
-# function EV_function(variables::Mutable_Variables, parameters::NamedTuple, 
-#     e1_i::Int64, e2_i::Int64, ν_i::Int64, 
-#     V_nd_p::Array{Float64,5}, V_d_p::Array{Float64,4}, V_pos_p::Array{Float64,5})
-#     """
-#     Construct interpolated expected value functions `EV` and `EV_pos`
-#     """
-
-#     # Unpack parameters
-#     @unpack e3_size, ν_size, e2_size, e1_size, a_size, a_size_pos, a_ind_zero, Ph, Γ, loop_EV = parameters
-
-#     @inbounds @views Γ_temp = Γ[:, :, :, ν_i, e2_i]
-#     @inbounds @views V_p_temp = V_p[:, :, :, :, e1_i]
-#     @inbounds @views V_pos_p_temp = V_pos_p[:, :, :, :, e1_i]
-#     @inbounds @views V_d = V_d[, :, :, e1_i]
-#     @inbounds @views threshold_a_temp = variables.threshold_a[:, :, :, e1_i]
-
-#     EV_itp_ = 0.0
-#     EV_pos_itp_ = 0.0
-
-#     @inbounds @turbo for e2_p_i in 1:e2_size, ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
-#         @inbounds Γ_temp_ = Γ_temp[e3_p_i, ν_p_i, e2_p_i]
-#         @inbounds @views V_p_temp_ = V_p[:, e3_p_i, ν_p_i, e2_p_i, e1_i]
-#         @inbounds @views V_pos_p_temp_ = V_pos_p[:, e3_p_i, ν_p_i, e2_p_i, e1_i]
-#         @inbound V_d_ = V_d[e3_p_i, ν_p_i, e2_p_i, e1_i]
-#         @inbound threshold_a_temp_ = variables.threshold_a[e3_p_i, ν_p_i, e2_p_i, e1_i]
-#         EV_itp(a_p) = a_p <= threshold_a_temp_ ? V_d_ : LinearInterpolation(V_p_temp_, a_grid)
-#         EV_itp_ += Γ_temp_ * EV_itp(a_p)
-#         EV_pos_itp(a_p) = LinearInterpolation(V_pos_p_temp_, a_grid_pos)
-#         EV_itp_ += Γ_temp_ * (Ph * EV_itp(a_p) + (1.0 - Ph) * EV_pos_itp(a_p))
-#     end
-
-#     # Replace NaNs with -Inf to ensure numerical safety in optimization
-#     # replace!(variables.EV, NaN => -Inf)
-#     # replace!(variables.EV_pos, NaN => -Inf)
-
-#     return nothing  # In-place update; no return
-# end
 
 struct DP_Problem{T_qa,T_EV,T_u,T_σ}
     qa_itp::T_qa
@@ -667,20 +736,21 @@ end
 )
     if !(ub > lb) || isapprox(ub, lb; rtol=0.0, atol=atol)
         a_star = lb
-        v_nd   = -obj_DP(DP, a_star, a, W_)
+        v_nd = -obj_DP(DP, a_star, a, W_)
         return v_nd, a_star, 1 # degenerate bracket
     end
 
     F = (a_p::Float64) -> obj_DP(DP, a_p, a, W_)
     res = Optim.optimize(F, lb, ub, Optim.Brent();
-                         rel_tol = rtol, abs_tol = atol, iterations = iters)
+        rel_tol=rtol, abs_tol=atol, iterations=iters)
 
     if Optim.converged(res) && isfinite(Optim.minimum(res))
         a_star = Optim.minimizer(res)
-        v_nd   = -Optim.minimum(res)
+        v_nd = -Optim.minimum(res)
         return v_nd, a_star, 2 # normal convergence
     else
-        FL = F(lb); FU = F(ub)
+        FL = F(lb)
+        FU = F(ub)
         if FL <= FU
             return -FL, lb, 3 # boundary solution
         else
@@ -699,7 +769,6 @@ function value_and_policy_function!(
     one-step update of value and policy functions
     """
 
-    # unpack parameters
     @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero = parameters
     @unpack e1_size, e1_grid, e1_Γ, e2_size, e2_grid, e2_Γ, e3_size, e3_grid, e3_Γ = parameters
     @unpack ν_size, ν_grid, ν_Γ = parameters
@@ -707,66 +776,35 @@ function value_and_policy_function!(
     @unpack Ph, η, κ, ξ = parameters
     @unpack loop_V = parameters
 
-    # pre-compute the next-period discounted expected value funtions and defaulting value
-    # E_V_function!(variables.E_V, variables.E_V_pos, V_p, V_pos_p, parameters)
-    # @inbounds @views variables.V_d .= variables.u_c_d .- ξ .+ reshape(variables.E_V_pos[1, :, :], (e1_size, e2_size, 1))
-    # V_d_function!(variables.V_d, variables.u_c_d, variables.E_V_pos, parameters)
+    EV_function!(V_p, V_pos_p, variables, parameters)
+    V_d_function!(variables, parameters)
 
-    # qa_function_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
-    # V_hat_itp = linear_interpolation(a_grid, a_grid, extrapolation_bc=Line())
-    # V_hat_pos_itp = linear_interpolation(a_grid_pos, a_grid_pos, extrapolation_bc=Line())
-
-    # loop over all states
-    # Threads.@threads for (ν_i, e3_i, e2_i, e1_i, a_i) in loop_V
     @batch for e2_i = 1:e2_size, e1_i = 1:e1_size
 
-        # total permanent and persistent earnings
-        # @inbounds e12 = e1_grid[e1_i] + e2_grid[e2_i]
-
-        # extract risky borrowing limit and maximum discounted borrowing amount
         @inbounds rbl_a = variables.rbl_a[e2_i, e1_i]
         @inbounds rbl_qa = variables.rbl_qa[e2_i, e1_i]
+        @inbounds @views q_ = variables.q[:, e1_i, e2_i]
+        q_itp = linear_interpolation(a_grid, q_, extrapolation_bc=Line())
+        @inline qa_itp(a_p::Float64) = q_itp(a_p) * a_p
+        EV_temp = similar(a_grid, Float64)
+        EV_pos_temp = similar(a_grid_pos, Float64)
+        EV_itp = linear_interpolation(a_grid, EV_temp, extrapolation_bc=Line())
+        EV_pos_itp = linear_interpolation(a_grid_pos, EV_pos_temp, extrapolation_bc=Line())
 
-        # construct interpolated functions
-        @inbounds @views q = variables.q[:, e1_i, e2_i]
-        q_itp = linear_interpolation(a_grid, q, extrapolation_bc=Line())
-        qa_itp(a_p) = q_itp(a_p) * a_p 
+        for ν_i = 1:ν_size
 
-        # @inbounds @views qa = variables.q[:, e1_i, e2_i] .* a_grid
-        # qa_function_itp = Akima(a_grid, qa)
-        # qa_function_itp = linear_interpolation(a_grid, qa, extrapolation_bc=Line())
-        # @inbounds @views qa_function_itp.itp.coefs[:] = qa
-
-        # @inbounds @views V_hat = variables.E_V[:, e1_i, e2_i]
-        # @inbounds @views V_hat_pos = variables.E_V_pos[:, e1_i, e2_i]
-        # V_hat_itp = Akima(a_grid, V_hat)
-        # V_hat_itp = linear_interpolation(a_grid, V_hat, extrapolation_bc=Line())
-        # @inbounds @views V_hat_itp.itp.coefs[:] = V_hat
-
-        # @inbounds @views V_hat_pos_ = Ph * V_hat[a_ind_zero:end] + (1.0 - Ph) * V_hat_pos
-        # V_hat_pos_itp = Akima(a_grid_pos, V_hat_pos_)
-        # V_hat_pos_itp = linear_interpolation(a_grid_pos, V_hat_pos_, extrapolation_bc=Line())
-        # @inbounds @views V_hat_pos_itp.itp.coefs[:] = V_hat_pos_
-
-        # define objective functions
-        # object_nd(a_p, CoH) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_itp(a_p))
-        # object_pos(a_p, CoH) = -(utility_function(CoH - qa_function_itp(a_p), σ) + V_hat_pos_itp(a_p))
-
-        for ν_i = 1:ν_size, 
-
-            # call a function geberate the interpolants for expected values
+            @inbounds @views EV_ = variables.EV[:, ν_i, e2_i, e1_i]
+            @inbounds @views EV_pos_ = variables.EV_pos[:, ν_i, e2_i, e1_i]
+            copyto!(EV_temp, EV_)
+            copyto!(EV_pos_temp, EV_pos_)
 
             for e3_i = 1:e3_size
+
                 @inbounds W_ = W[e3_i, e2_i, e1_i]
+                @inbounds V_d_ = variables.V_d[e3_i, ν_i, e2_i, e1_i]
 
-                @inbounds v_d  = variables.V_d[e3_i, ν_i, e2_i, e1_i]
-
-                # ND and POS problems (same utility/sigma, different EV)
-                DP_Problem_nd  = DP_Problem(qa_itp, EV_itp, utility_function, σ)
+                DP_Problem_nd = DP_Problem(qa_itp, EV_itp, utility_function, σ)
                 DP_Problem_pos = DP_Problem(qa_itp, EV_pos_itp, utility_function, σ)
-
-                # obj_nd(a_p, a, W) = -(utility_function(W + a - qa_itp(a_p), σ) + EV_itp(a_p))
-                # obj_pos(a_p, a, W) = -(utility_function(W + a - qa_itp(a_p), σ) + EV_pos_itp(a_p))
 
                 for a_i = 1:a_size
 
@@ -778,13 +816,13 @@ function value_and_policy_function!(
                     # good credit history
                     if (CoH - rbl_qa) <= 0.0
                         @inbounds variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = -Inf
-                        @inbounds variables.V[a_i, e3_i, ν_i, e2_i, e1_i]    = v_d
+                        @inbounds variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = v_d
                         @inbounds variables.policy_a[a_i, e3_i, ν_i, e2_i, e1_i] = 0.0
                         @inbounds variables.policy_d[a_i, e3_i, ν_i, e2_i, e1_i] = 1.0
                     else
-                        v_nd, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_; 
-                                                    lb=lb_nd, ub=CoH,
-                                                    rtol=rtol_a, atol=atol_a, iters=maxit)
+                        v_nd, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_;
+                            lb=lb_nd, ub=CoH,
+                            rtol=rtol_a, atol=atol_a, iters=maxit)
                         @inbounds variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = v_nd
                         if v_nd > v_d
                             @inbounds variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = v_nd
@@ -799,13 +837,13 @@ function value_and_policy_function!(
                             lb_nd = a_star_nd
                         end
                     end
-            
+
                     # bad credit history
                     if a_i >= a_ind_zero
                         a_pos_i = a_i - a_ind_zero + 1
-                        v_pos, a_star_pos, status_pos = solve_DP(DP_Problem_pos, a, W_; 
-                                                        lb=lb_pos, ub=CoH,
-                                                        rtol=rtol_a, atol=atol_a, iters=maxit)
+                        v_pos, a_star_pos, status_pos = solve_DP(DP_Problem_pos, a, W_;
+                            lb=lb_pos, ub=CoH,
+                            rtol=rtol_a, atol=atol_a, iters=maxit)
                         @inbounds variables.V_pos[a_pos_i, e3_i, ν_i, e2_i, e1_i] = v_pos
                         @inbounds variables.policy_a_pos[a_pos_i, e3_i, ν_i, e2_i, e1_i] = a_star_pos
                         if status_pos == 2

@@ -1,5 +1,16 @@
 parameters = parameters_function();
 variables = variables_function(parameters);
+itp_cache = build_itp_cache(variables, parameters);
+itp_cache_1 = build_itp_cache_1(variables, parameters);
+itp_cache_2 = build_itp_cache_2(variables, parameters);
+itp_cache_3 = build_itp_cache_3(variables, parameters);
+
+variables.EV[:,1,1,1] .= rand(parameters.a_size)
+
+itp_cache.EV[1,1,1].itp.coefs
+itp_cache_1.EV[1,1,1].itp.coefs
+itp_cache_2.EV[1,1,1].itp.coefs
+itp_cache_3.EV[1,1,1].itp.coefs
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -58,3 +69,13 @@ t = -0.123  # some query inside [x[1], x[end]]
 @btime $lin($t)
 @btime $pch($t)
 @btime σ($pch_logit($t))
+
+############
+using Interpolations
+A = reshape(collect(1.0:5.0), 5, 1, 1, 1)
+itp = linear_interpolation(collect(1:5), @view(A[:,1,1,1]), extrapolation_bc=Line())
+v1 = itp(3.0)            # ~3.0
+A[:,1,1,1] .= 100:104
+v2 = itp(3.0)            # still ~3.0  ← internally copied at construction
+itp.itp.coefs .= @view A[:,1,1,1]
+v3 = itp(3.0)            # now ~102.0  ← manual refresh fixed it

@@ -250,48 +250,78 @@ function initialize_parameters(;
     )
 end
 
-function min_bounds_function(obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
-    """
-    compute bounds for minimization
-    """
+# function find_min_bounds(obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
+#     """
+#     compute bounds for minimization
+#     """
 
-    grid = range(grid_min, grid_max, length=grid_length)
-    obj_grid = obj.(grid)
-    obj_index = argmin(obj_grid)
-    if obj_index < (1 + obj_range)
-        lb = grid_min
-        @inbounds ub = grid[obj_index+obj_range]
-    elseif obj_index > (grid_length - obj_range)
-        @inbounds lb = grid[obj_index-obj_range]
-        ub = grid_max
-    else
-        @inbounds lb = grid[obj_index-obj_range]
-        @inbounds ub = grid[obj_index+obj_range]
+#     grid = range(grid_min, grid_max, length=grid_length)
+#     obj_grid = obj.(grid)
+#     obj_index = argmin(obj_grid)
+#     if obj_index < (1 + obj_range)
+#         lb = grid_min
+#         @inbounds ub = grid[obj_index+obj_range]
+#     elseif obj_index > (grid_length - obj_range)
+#         @inbounds lb = grid[obj_index-obj_range]
+#         ub = grid_max
+#     else
+#         @inbounds lb = grid[obj_index-obj_range]
+#         @inbounds ub = grid[obj_index+obj_range]
+#     end
+#     return lb, ub
+# end
+
+@inline function find_min_bounds(obj, grid_min::Real, grid_max::Real; grid_length::Int=120, neighborhood::Int=1)
+    @assert grid_max > grid_min
+    @assert grid_length ≥ 2
+    @assert neighborhood ≥ 1
+
+    step = (grid_max - grid_min) / (grid_length - 1)
+
+    best_val = Inf
+    best_i   = 1
+    @inbounds @simd for i in 1:grid_length
+        x = grid_min + (i - 1) * step
+        y = obj(x)
+        if isfinite(y) && y < best_val
+            best_val = y
+            best_i   = i
+        end
+    end
+
+    lo_i = max(1, best_i - neighborhood)
+    hi_i = min(grid_length, best_i + neighborhood)
+
+    lb = grid_min + (lo_i - 1) * step
+    ub = grid_min + (hi_i - 1) * step
+    if lb == ub
+        ub = min(grid_max, lb + step)
+        lb = max(grid_min, ub - step)
     end
     return lb, ub
 end
 
-function min_bounds_function!(bb::Vector{Float64}, grid::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64}, obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
-    """
-    compute bounds for minimization
-    """
+# function find_min_bounds!(bb::Vector{Float64}, grid::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64}, obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
+#     """
+#     compute bounds for minimization
+#     """
 
-    grid .= range(grid_min, grid_max, length=grid_length)
-    grid_size = length(grid)
-    obj_grid = obj.(grid)
-    obj_index = argmin(obj_grid)
-    if obj_index < (1 + obj_range)
-        @inbounds bb[1] = grid_min
-        @inbounds bb[2] = grid[obj_index+obj_range]
-    elseif obj_index > (grid_size - obj_range)
-        @inbounds bb[1] = grid[obj_index-obj_range]
-        @inbounds bb[2] = grid_max
-    else
-        @inbounds bb[1] = grid[obj_index-obj_range]
-        @inbounds bb[2] = grid[obj_index+obj_range]
-    end
-    return nothing
-end
+#     grid .= range(grid_min, grid_max, length=grid_length)
+#     grid_size = length(grid)
+#     obj_grid = obj.(grid)
+#     obj_index = argmin(obj_grid)
+#     if obj_index < (1 + obj_range)
+#         @inbounds bb[1] = grid_min
+#         @inbounds bb[2] = grid[obj_index+obj_range]
+#     elseif obj_index > (grid_size - obj_range)
+#         @inbounds bb[1] = grid[obj_index-obj_range]
+#         @inbounds bb[2] = grid_max
+#     else
+#         @inbounds bb[1] = grid[obj_index-obj_range]
+#         @inbounds bb[2] = grid[obj_index+obj_range]
+#     end
+#     return nothing
+# end
 
 function zero_bounds_function(V_d::Float64, V_nd::Vector{Float64}, a_grid::Vector{Float64})
     """
@@ -432,8 +462,8 @@ mutable struct Mutable_Variables{T,
     policy_a::A5
     policy_d::A5
     policy_a_pos::A5
-    threshold_a::A4
-    threshold_e2::A4
+    thres_a::A4
+    thres_e2::A4
     μ::A6
 end
 
@@ -470,37 +500,38 @@ end
     rbl_a = Array{T}(undef, e2_size, e1_size)
     rbl_qa = Array{T}(undef, e2_size, e1_size)
 
-    threshold_a = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
-    threshold_e2 = Array{T}(undef, a_size_neg, e3_size, ν_size, e1_size)
+    thres_a = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
+    thres_e2 = Array{T}(undef, a_size_neg, e3_size, ν_size, e1_size)
 
     # --- Fill threshold_e2 with fused broadcasts (no inner scalar loops)
     for e1_i in 1:e1_size, ν_i in 1:ν_size, e3_i in 1:e3_size
         e1 = e1_grid[e1_i]
         e3 = e3_grid[e3_i]
-        @. threshold_e2[:, e3_i, ν_i, e1_i] = log_(-a_grid_neg / w_λ) - e1 - e3
+        @. thres_e2[:, e3_i, ν_i, e1_i] = log_(-a_grid_neg / w_λ) - e1 - e3
     end
 
     # --- Compute R and q; find rbl via bounded 1d optimize
     for e1_i in 1:e1_size, e2_i in 1:e2_size, a_p_i in 1:(a_size_neg-1)
         R_temp = 0.0
         for ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
+            thres_e2_ = thres_e2[a_p_i, e3_p_i, ν_p_i, e1_i]
             R_temp += T(Γ_e3_ν[e3_p_i, ν_p_i]) *
-                      repayment(a_p_i, e3_p_i, e2_i, e1_i, threshold_e2[a_p_i, e3_p_i, ν_p_i, e1_i], parameters)
+                      repayment(a_p_i, e3_p_i, e2_i, e1_i, thres_e2_, parameters)
         end
         R[a_p_i, e2_i, e1_i] = R_temp
         q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
     end
 
     # Build qa interpolant once per (e1,e2); then optimize
-    for e1_i in 1:e1_size, e2_i in 1:e2_size
-        q_ = q[1:a_size_neg, e2_i, e1_i]
-        q_itp = _build_itp(a_grid_neg, q_)
-        qa_itp(a) = q_itp(a) * a
-        lb, ub = min_bounds_function(qa_itp, a_min, 0.0)
-        res = optimize(qa_itp, lb, ub)
-        rbl_a[e2_i, e1_i] = Optim.minimizer(res)
-        rbl_qa[e2_i, e1_i] = Optim.minimum(res)
-    end
+    # for e1_i in 1:e1_size, e2_i in 1:e2_size
+    #     q_ = q[1:a_size_neg, e2_i, e1_i]
+    #     q_itp = _build_itp(a_grid_neg, q_)
+    #     qa_itp(a) = q_itp(a) * a
+    #     lb, ub = find_min_bounds(qa_itp, a_min, 0.0)
+    #     res = optimize(qa_itp, lb, ub)
+    #     rbl_a[e2_i, e1_i] = Optim.minimizer(res)
+    #     rbl_qa[e2_i, e1_i] = Optim.minimum(res)
+    # end
 
     # -- Value functions (undef if you fully set later; zeros if used before fill)
     V = zeros(T, a_size, e3_size, ν_size, e2_size, e1_size)
@@ -525,7 +556,7 @@ end
     return Mutable_Variables{T,
         typeof(R),typeof(V_d),typeof(V),typeof(μ)}(
         agg, R, q, rbl_a, rbl_qa, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
-        policy_a, policy_d, policy_a_pos, threshold_a, threshold_e2, μ
+        policy_a, policy_d, policy_a_pos, thres_a, thres_e2, μ
     )
 end
 
@@ -539,10 +570,10 @@ function variables_function_update!(variables::Mutable_Variables, parameters::Na
     variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
-struct Itp_Cache{ITP_q,ITP_EV,ITP_EV}
-    q::Array{ITP_q,2}               # size: (e2_size, e1_size)
-    EV::Array{ITP_EV,3}             # size: (ν_size, e2_size, e1_size)
-    EV_Ph::Array{ITP_EV,3}       # size: (ν_size, e2_size, e1_size)
+struct Itp_Cache{ItpQ,ItpEv,ItpEvPh}
+    q::Array{ItpQ,2}                # size: (e2_size, e1_size)
+    EV::Array{ItpEv,3}              # size: (ν_size, e2_size, e1_size)
+    EV_Ph::Array{ItpEvPh,3}           # size: (ν_size, e2_size, e1_size)
 end
 
 @inline _build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Line())
@@ -613,17 +644,17 @@ end
     @unpack e1_size, e2_size, ν_size, ξ, u_d = parameters
 
     @batch for e1_i in 1:e1_size, e2_i in 1:e2_size, ν_i in 1:ν_size
-        EV_pos_0 = variables.EV_pos[1, ν_i, e2_i, e1_i]
+        EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
         u_d_temp = u_d[:, e2_i, e1_i]
-        @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_0
+        @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
     end
     return nothing
 end
 
-struct DP_Problem{ITP_q,ITP_EV,F_u,T}
-    qa_itp::ITP_q
-    EV_itp::ITP_EV
-    utility::F_u
+struct DP_Problem{ItpQ,ItpEv,FunU,T}
+    qa_itp::ItpQ
+    EV_itp::ItpEv
+    utility::FunU
     σ::T
 end
 
@@ -662,6 +693,12 @@ end
     end
 end
 
+struct QaInterpolant{ITP_q}
+    q_itp::ITP_q
+end
+
+@inline (f::QaInterpolant)(a_p::Real) = f.q_itp(a_p) * a_p
+
 function update_value_and_policy_functions!(
     variables::Mutable_Variables,
     V_p::Array{Float64,5},
@@ -672,82 +709,82 @@ function update_value_and_policy_functions!(
     one-step update of value and policy functions
     """
 
-    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero = parameters
+    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero, a_min = parameters
     @unpack e1_size, e1_grid, e1_Γ, e2_size, e2_grid, e2_Γ, e3_size, e3_grid, e3_Γ = parameters
     @unpack ν_size, ν_grid, ν_Γ = parameters
     @unpack ρ, β, σ, r_f = parameters
-    @unpack Ph, η, κ, ξ = parameters
+    @unpack Ph, η, κ, ξ, W = parameters
 
     update_EV!(V_p, V_pos_p, variables, parameters)
     update_V_d!(variables, parameters)
 
-    @batch for e2_i = 1:e2_size, e1_i = 1:e1_size
+    @views @inbounds @batch for e2_i = 1:e2_size, e1_i = 1:e1_size
 
-        @inbounds rbl_a = variables.rbl_a[e2_i, e1_i]
-        @inbounds rbl_qa = variables.rbl_qa[e2_i, e1_i]
-        @inbounds @views q_ = variables.q[:, e1_i, e2_i]
-        @inbounds itp_cache.q[e2_i,e1_i].itp.coefs .= q_
-        @inline qa_itp(a_p::Float64) = itp_cache.q[e2_i,e1_i](a_p) * a_p
-        EV_temp = similar(a_grid, Float64)
-        EV_pos_temp = similar(a_grid_pos, Float64)
-        EV_itp = linear_interpolation(a_grid, EV_temp, extrapolation_bc=Line())
-        EV_pos_itp = linear_interpolation(a_grid_pos, EV_pos_temp, extrapolation_bc=Line())
+        q_ = variables.q[:, e2_i, e1_i]
+        q_itp = itp_cache.q[e2_i, e1_i]
+        copyto!(q_itp.itp.coefs, q_)
+        qa_itp = QaInterpolant(q_itp)
+
+        rbl_lb, rbl_ub = find_min_bounds(qa_itp, a_min, 0.0)
+        res_rbl = Optim.optimize(qa_itp, rbl_lb, rbl_ub)
+        variables.rbl_a[e2_i, e1_i] = Optim.minimizer(res_rbl)
+        variables.rbl_qa[e2_i, e1_i] = Optim.minimum(res_rbl)
+
+        rbl_a_ = variables.rbl_a[e2_i, e1_i]
+        rbl_qa_ = variables.rbl_qa[e2_i, e1_i]
 
         for ν_i = 1:ν_size
 
-            @inbounds @views EV_ = variables.EV[:, ν_i, e2_i, e1_i]
-            @inbounds @views EV_pos_ = variables.EV_pos[:, ν_i, e2_i, e1_i]
-            copyto!(EV_temp, EV_)
-            copyto!(EV_pos_temp, EV_pos_)
+            EV_ = variables.EV[:, ν_i, e2_i, e1_i]
+            EV_itp = itp_cache.EV[ν_i, e2_i, e1_i]
+            copyto!(EV_itp.itp.coefs, EV_)
+
+            EV_Ph_ = variables.EV_Ph[:, ν_i, e2_i, e1_i]
+            EV_Ph_itp = itp_cache.EV_Ph[ν_i, e2_i, e1_i]
+            copyto!(EV_Ph_itp.itp.coefs, EV_Ph_)
 
             for e3_i = 1:e3_size
 
-                @inbounds W_ = W[e3_i, e2_i, e1_i]
-                @inbounds V_d_ = variables.V_d[e3_i, ν_i, e2_i, e1_i]
+                W_ = W[e3_i, e2_i, e1_i]
+                V_d_ = variables.V_d[e3_i, ν_i, e2_i, e1_i]
 
-                DP_Problem_nd = DP_Problem(qa_itp, EV_itp, utility_function, σ)
-                DP_Problem_pos = DP_Problem(qa_itp, EV_pos_itp, utility_function, σ)
+                DP_Problem_nd = DP_Problem(qa_itp, EV_itp, utility, σ)
+                DP_Problem_pos = DP_Problem(qa_itp, EV_Ph_itp, utility, σ)
 
                 for a_i = 1:a_size
 
-                    @inbounds a = a_grid[a_i]
+                    a = a_grid[a_i]
                     CoH = W_ + a
                     lb_nd = rbl_a
                     lb_pos = 0.0
 
-                    # good credit history
                     if (CoH - rbl_qa) <= 0.0
-                        @inbounds variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = -Inf
-                        @inbounds variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = v_d
-                        @inbounds variables.policy_a[a_i, e3_i, ν_i, e2_i, e1_i] = 0.0
-                        @inbounds variables.policy_d[a_i, e3_i, ν_i, e2_i, e1_i] = 1.0
+                        variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = -Inf
+                        variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = V_d_
+                        variables.policy_a[a_i, e3_i, ν_i, e2_i, e1_i] = 0.0
+                        variables.policy_d[a_i, e3_i, ν_i, e2_i, e1_i] = 1.0
                     else
-                        v_nd, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_;
-                            lb=lb_nd, ub=CoH,
-                            rtol=rtol_a, atol=atol_a, iters=maxit)
-                        @inbounds variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = v_nd
-                        if v_nd > v_d
-                            @inbounds variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = v_nd
-                            @inbounds variables.policy_a[a_i, e3_i, ν_i, e2_i, e1_i] = a_star_nd
-                            @inbounds variables.policy_d[a_i, e3_i, ν_i, e2_i, e1_i] = 0.0
+                        V_nd_, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=CoH)
+                        variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = V_nd_
+                        if V_nd_ > V_d_
+                            variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = V_nd_
+                            variables.policy_a[a_i, e3_i, ν_i, e2_i, e1_i] = a_star_nd
+                            variables.policy_d[a_i, e3_i, ν_i, e2_i, e1_i] = 0.0
                         else
-                            @inbounds variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = v_d
-                            @inbounds variables.policy_a[a_i, e3_i, ν_i, e2_i, e1_i] = 0.0
-                            @inbounds variables.policy_d[a_i, e3_i, ν_i, e2_i, e1_i] = 1.0
+                            variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = V_d_
+                            variables.policy_a[a_i, e3_i, ν_i, e2_i, e1_i] = 0.0
+                            variables.policy_d[a_i, e3_i, ν_i, e2_i, e1_i] = 1.0
                         end
                         if status_nd == 2
                             lb_nd = a_star_nd
                         end
                     end
 
-                    # bad credit history
                     if a_i >= a_ind_zero
                         a_pos_i = a_i - a_ind_zero + 1
-                        v_pos, a_star_pos, status_pos = solve_DP(DP_Problem_pos, a, W_;
-                            lb=lb_pos, ub=CoH,
-                            rtol=rtol_a, atol=atol_a, iters=maxit)
-                        @inbounds variables.V_pos[a_pos_i, e3_i, ν_i, e2_i, e1_i] = v_pos
-                        @inbounds variables.policy_a_pos[a_pos_i, e3_i, ν_i, e2_i, e1_i] = a_star_pos
+                        V_pos_, a_star_pos, status_pos = solve_DP(DP_Problem_pos, a, W_; lb=lb_pos, ub=CoH)
+                        variables.V_pos[a_pos_i, e3_i, ν_i, e2_i, e1_i] = V_pos_
+                        variables.policy_a_pos[a_pos_i, e3_i, ν_i, e2_i, e1_i] = a_star_pos
                         if status_pos == 2
                             lb_pos = a_star_pos
                         end
@@ -756,8 +793,6 @@ function update_value_and_policy_functions!(
             end
         end
     end
-
-    # return results
     return nothing
 end
 
@@ -785,7 +820,7 @@ function pricing_and_rbl_function!(variables::Mutable_Variables, parameters::Nam
         @views qa_function_itp = Akima(a_grid_neg, variables.q[1:a_ind_zero, e2_i, e1_i] .* a_grid_neg)
         # qa_function_itp = Spline1D(a_grid_neg, q[1:a_ind_zero, e1_i, e2_i] .* a_grid_neg; k = 1, bc = "extrapolate")
         qa_function(a_p) = qa_function_itp(a_p)
-        @inbounds rbl_lb, rbl_ub = min_bounds_function(qa_function, a_min, 0.0)
+        @inbounds rbl_lb, rbl_ub = find_min_bounds(qa_function, a_min, 0.0)
         res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
         # res_rbl = optimize(qa_function, a_grid[1], 0.0)
         @inbounds variables.rbl_a[e2_i, e1_i] = Optim.minimizer(res_rbl)

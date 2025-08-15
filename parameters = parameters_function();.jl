@@ -1,16 +1,10 @@
-parameters = parameters_function();
-variables = variables_function(parameters);
+using BenchmarkTools
+
+parameters = initialize_parameters();
+variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-itp_cache_1 = build_itp_cache_1(variables, parameters);
-itp_cache_2 = build_itp_cache_2(variables, parameters);
-itp_cache_3 = build_itp_cache_3(variables, parameters);
-
 variables.EV[:,1,1,1] .= rand(parameters.a_size)
-
-itp_cache.EV[1,1,1].itp.coefs
-itp_cache_1.EV[1,1,1].itp.coefs
-itp_cache_2.EV[1,1,1].itp.coefs
-itp_cache_3.EV[1,1,1].itp.coefs
+@btime itp_cache.EV[1,1,1].itp.coefs .= variables.EV[:,1,1,1]
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -18,14 +12,14 @@ itp_cache_3.EV[1,1,1].itp.coefs
 
 e1_i = parameters.e1_size - 1
 e2_i = parameters.e2_size - 1
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, e2_i, e1_i], seriestype=:scatter)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i], seriestype=:scatter)
 
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, e2_i, e1_i] .* parameters.a_grid_neg, seriestype=:scatter)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i] .* parameters.a_grid_neg, seriestype=:scatter)
 plot!([variables.rbl_a[e2_i, e1_i]], [variables.rbl_qa[e2_i, e1_i]], seriestype=:scatter)
 
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, :, e1_i])
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i])
 
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_ind_zero, :, e1_i] .* parameters.a_grid_neg)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i] .* parameters.a_grid_neg)
 plot!(variables.rbl_a[:, e1_i], variables.rbl_qa[:, e1_i], seriestype=:scatter)
 
 

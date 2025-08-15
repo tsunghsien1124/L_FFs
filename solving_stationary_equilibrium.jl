@@ -28,7 +28,7 @@ function adda_cooper(N::Int64, ρ::Float64, σ::Float64; μ::Float64=0.0)
     return z, Π
 end
 
-function parameters_function(;
+function initialize_parameters(;
     β::Float64=0.955,                # discount factor (households)
     ρ::Float64=0.975,                # survival rate
     r_f::Float64=0.04,               # risk-free rate # 1.04*ρ-1.0
@@ -101,12 +101,13 @@ function parameters_function(;
 
     # asset holding grid for VFI
     a_min = -1.5 * exp(e1_grid[end] + e2_grid[end] + e3_grid[end])
-    # a_grid_neg = collect(range(a_min, 0.0, length=a_size_neg))
     a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) / (a_size_neg - 1)) .^ a_degree) * a_min
+    a_grid_neg = a_grid_neg[1:(end-1)]
     a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) / (a_size_pos - 1)) .^ a_degree) * a_max
-    a_grid = cat(a_grid_neg[1:(end-1)], a_grid_pos, dims=1)
+    a_grid = cat(a_grid_neg, a_grid_pos, dims=1)
     a_size = length(a_grid)
     a_ind_zero = a_size_neg
+    a_size_neg = a_size_neg - 1
 
     # asset holding grid for μ
     a_size_neg_μ = a_size_neg * μ_scale
@@ -156,7 +157,7 @@ function parameters_function(;
         e3 = e3_grid[e3_i]
         W[e3_i, e2_i, e1_i] = w_λ * exp(e1 + e2 + e3)
         WA[:, e3_i, e2_i, e1_i] .= W[e3_i, e2_i, e1_i] .+ a_grid
-        u_d[e3_i, e2_i, e1_i] = utility_function((1.0 - η) * W[e3_i, e2_i, e1_i] - κ, σ)
+        u_d[e3_i, e2_i, e1_i] = utility((1.0 - η) * W[e3_i, e2_i, e1_i] - κ, σ)
     end
 
     e2_μ_grid = e2_ρ .* e2_grid
@@ -301,7 +302,7 @@ function zero_bounds_function(V_d::Float64, V_nd::Vector{Float64}, a_grid::Vecto
     return lb, ub
 end
 
-function utility_function(c::Float64, γ::Float64)
+function utility(c::Float64, γ::Float64)
     """
     compute utility of CRRA utility function with coefficient γ
     """
@@ -313,7 +314,7 @@ function utility_function(c::Float64, γ::Float64)
     end
 end
 
-function log_function(threshold_e::Float64)
+function log_(threshold_e::Float64)
     """
     adjusted log funciton where assigning -Inf to negative domain
     """
@@ -375,7 +376,7 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e2::Array{
     return nothing
 end
 
-function repayment_function(a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int64, threshold_e2::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
+function repayment(a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int64, threshold_e2::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
     """
     evaluate repayment analytically with and without wage garnishment
     """
@@ -395,137 +396,137 @@ function repayment_function(a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int6
     return clamp(total_amount, 0, -a_p)
 end
 
-mutable struct Mutable_Aggregate_Variables
-    """
-    construct a type for mutable aggregate variables
-    """
-    K::Float64
-    L::Float64
-    L_adj::Float64
-    D::Float64
-    N::Float64
-    profit::Float64
-    ω::Float64
-    LR::Float64
-    KL2D::Float64
-    debt_to_earning_ratio::Float64
-    share_of_filers::Float64
-    share_of_involuntary_filers::Float64
-    share_in_debts::Float64
-    avg_loan_rate::Float64
-    avg_loan_rate_pw::Float64
+mutable struct Mutable_Aggregate_Variables{T}
+    K::T
+    L::T
+    L_adj::T
+    D::T
+    N::T
+    profit::T
+    ω::T
+    LR::T
+    KL2D::T
+    debt_to_earning_ratio::T
+    share_of_filers::T
+    share_of_involuntary_filers::T
+    share_in_debts::T
+    avg_loan_rate::T
+    avg_loan_rate_pw::T
 end
 
-mutable struct Mutable_Variables
-    """
-    construct a type for mutable variables
-    """
-    aggregate_variables::Mutable_Aggregate_Variables
-    R::Array{Float64,3}
-    q::Array{Float64,3}
-    rbl_a::Array{Float64,2}
-    rbl_qa::Array{Float64,2}
-    V::Array{Float64,5}
-    V_d::Array{Float64,4}
-    V_nd::Array{Float64,5}
-    V_pos::Array{Float64,5}
-    EV::Array{Float64,4}
-    EV_pos::Array{Float64,4}
-    EV_Ph::Array{Float64,4}
-    policy_a::Array{Float64,5}
-    policy_d::Array{Float64,5}
-    policy_a_pos::Array{Float64,5}
-    threshold_a::Array{Float64,4}
-    threshold_e2::Array{Float64,4}
-    μ::Array{Float64,6}
+# 2) Main container: parametric and concrete
+mutable struct Mutable_Variables{T,
+    A3<:AbstractArray{T,3},A4<:AbstractArray{T,4},A5<:AbstractArray{T,5},A6<:AbstractArray{T,6}}
+    aggregate_variables::Mutable_Aggregate_Variables{T}
+    R::A3
+    q::A3
+    rbl_a::AbstractArray{T,2}
+    rbl_qa::AbstractArray{T,2}
+    V::A5
+    V_d::A4
+    V_nd::A5
+    V_pos::A5
+    EV::A4
+    EV_pos::A4
+    EV_Ph::A4
+    policy_a::A5
+    policy_d::A5
+    policy_a_pos::A5
+    threshold_a::A4
+    threshold_e2::A4
+    μ::A6
 end
 
-function variables_function(parameters::NamedTuple; load_init::Bool=false)
-    """
-    construct a mutable object containing endogenous variables
-    """
+@views @inbounds function create_variables(parameters::NamedTuple; T::Type{<:Real}=Float64)
 
-    # unpack parameters
-    @unpack a_min, a_ind_zero, a_size, a_grid, a_size_pos, a_size_neg, a_grid_neg, a_ind_zero_μ, a_size_μ, a_size_pos_μ = parameters
-    @unpack e1_size, e1_grid, e1_Γ, e2_size, e2_grid, e2_Γ, e2_ρ, e2_σ, e3_size, e3_grid, e3_Γ = parameters
-    @unpack ν_size, ν_Γ = parameters
-    @unpack ρ, r_f, τ, η, κ, σ, w_λ, R_bar, q_bar, Γ_e3_ν = parameters
+    # ---- Assets / grids / sizes
+    @unpack a_min, a_max, a_degree,
+    a_size, a_size_neg, a_size_pos,
+    a_grid, a_grid_neg, a_grid_pos,
+    a_ind_zero,
+    a_size_μ, a_size_pos_μ, a_ind_zero_μ = parameters
 
-    # define aggregate variables
-    K = 0.0
-    L = 0.0
-    L_adj = 0.0
-    D = 0.0
-    N = 0.0
-    profit = 0.0
-    ω = 0.0
-    LR = 0.0
-    KL2D = 0.0
-    debt_to_earning_ratio = 0.0
-    share_of_filers = 0.0
-    share_of_involuntary_filers = 0.0
-    share_in_debts = 0.0
-    avg_loan_rate = 0.0
-    avg_loan_rate_pw = 0.0
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, LR, KL2D, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+    # ---- Shocks: sizes, grids, transitions
+    @unpack e1_size, e1_grid, e1_Γ,
+    e2_size, e2_grid, e2_Γ, e2_ρ, e2_σ,
+    e3_size, e3_grid, e3_Γ,
+    ν_size, ν_Γ = parameters
 
-    if load_init == false
-        R = zeros(a_size_neg - 1, e2_size, e1_size)
-        q = zeros(a_size, e2_size, e1_size)
-        q .= q_bar
-        rbl_a = zeros(e2_size, e1_size)
-        rbl_qa = zeros(e2_size, e1_size)
-        threshold_a = zeros(e3_size, ν_size, e2_size, e1_size)
-        threshold_e2 = zeros(a_size_neg - 1, e3_size, ν_size, e1_size)
-        for e1_i = 1:e1_size, e3_i = 1:e3_size, a_p_i = 1:(a_size_neg-1)
-            e1 = e1_grid[e1_i]
-            e3 = e3_grid[e3_i]
-            a_p = a_grid_neg[a_p_i]
-            threshold_e2[a_p_i, e3_i, :, e1_i] .= log_function(-a_p / w_λ) - e1 - e3
-        end
+    # ---- Prices / policy / model scalars
+    @unpack ρ, r_f, τ, η, κ, σ, w_λ,
+    R_bar, q_bar, Γ_e3_ν = parameters
 
-        for e1_i = 1:e1_size, e2_i = 1:e2_size, a_p_i = 1:(a_size_neg-1)
-            R_temp = 0.0
-            for ν_p_i = 1:ν_size, e3_p_i = 1:e3_size
-                R_temp += Γ_e3_ν[e3_p_i, ν_p_i] * repayment_function(a_p_i, e3_p_i, e2_i, e1_i, threshold_e2[a_p_i, e3_p_i, ν_p_i, e1_i], parameters)
-            end
-            R[a_p_i, e2_i, e1_i] = R_temp
-            q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
-            # qa_funcion_itp = Akima(a_grid_neg, q[1:a_ind_zero, e2_i, e1_i] .* a_grid_neg)
-            qa_funcion_itp = _build_itp(a_grid_neg, q[1:a_ind_zero, e2_i, e1_i] .* a_grid_neg)
-            qa_funcion(a_p) = qa_funcion_itp(a_p)
-            rbl_lb, rbl_ub = min_bounds_function(qa_funcion, a_min, 0.0)
-            res_rbl = optimize(qa_funcion, rbl_lb, rbl_ub)
-            rbl_a[e2_i, e1_i] = Optim.minimizer(res_rbl)
-            rbl_qa[e2_i, e1_i] = Optim.minimum(res_rbl)
-        end
 
-        # define value functions
-        V = zeros(a_size, e3_size, ν_size, e2_size, e1_size)
-        V_d = zeros(e3_size, ν_size, e2_size, e1_size)
-        V_nd = zeros(a_size, e3_size, ν_size, e2_size, e1_size)
-        V_pos = zeros(a_size_pos, e3_size, ν_size, e2_size, e1_size)
-        EV = zeros(a_size, ν_size, e2_size, e1_size)
-        EV_pos = zeros(a_size_pos, ν_size, e2_size, e1_size)
-        EV_Ph = zeros(a_size_pos, ν_size, e2_size, e1_size)
+    # -- Aggregates
+    agg = Mutable_Aggregate_Variables{T}(
+        zero(T), zero(T), zero(T), zero(T), zero(T),
+        zero(T), zero(T), zero(T), zero(T), zero(T),
+        zero(T), zero(T), zero(T), zero(T), zero(T))
 
-        # define cross-sectional distribution
-        μ = zeros(a_size_μ, e1_size, e2_size, e3_size, ν_size, 2)
-        μ_size = (a_size_μ + a_size_pos_μ) * e1_size * e2_size * e3_size * ν_size
-        μ[:, :, :, :, :, 1] .= 1.0 ./ μ_size
-        μ[a_ind_zero_μ:end, :, :, :, :, 2] .= 1.0 ./ μ_size
-    else
-        @load "results_int.jld2" V V_d V_nd V_pos R q rbl μ
+    # -- Prices / schedules
+    R = Array{T}(undef, a_size_neg, e2_size, e1_size)
+    q = fill(q_bar, a_size, e2_size, e1_size)
+
+    rbl_a = Array{T}(undef, e2_size, e1_size)
+    rbl_qa = Array{T}(undef, e2_size, e1_size)
+
+    threshold_a = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
+    threshold_e2 = Array{T}(undef, a_size_neg, e3_size, ν_size, e1_size)
+
+    # --- Fill threshold_e2 with fused broadcasts (no inner scalar loops)
+    for e1_i in 1:e1_size, ν_i in 1:ν_size, e3_i in 1:e3_size
+        e1 = e1_grid[e1_i]
+        e3 = e3_grid[e3_i]
+        @. threshold_e2[:, e3_i, ν_i, e1_i] = log_(-a_grid_neg / w_λ) - e1 - e3
     end
 
-    # define policy functions
-    policy_a = zeros(a_size, e3_size, ν_size, e2_size, e1_size)
-    policy_d = zeros(a_size, e3_size, ν_size, e2_size, e1_size)
-    policy_a_pos = zeros(a_size_pos, e3_size, ν_size, e2_size, e1_size)
+    # --- Compute R and q; find rbl via bounded 1d optimize
+    for e1_i in 1:e1_size, e2_i in 1:e2_size, a_p_i in 1:(a_size_neg-1)
+        R_temp = 0.0
+        for ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
+            R_temp += T(Γ_e3_ν[e3_p_i, ν_p_i]) *
+                      repayment(a_p_i, e3_p_i, e2_i, e1_i, threshold_e2[a_p_i, e3_p_i, ν_p_i, e1_i], parameters)
+        end
+        R[a_p_i, e2_i, e1_i] = R_temp
+        q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
+    end
 
-    # return outputs
-    variables = Mutable_Variables(aggregate_variables, R, q, rbl_a, rbl_qa, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph, policy_a, policy_d, policy_a_pos, threshold_a, threshold_e2, μ)
-    return variables
+    # Build qa interpolant once per (e1,e2); then optimize
+    for e1_i in 1:e1_size, e2_i in 1:e2_size
+        q_ = q[1:a_size_neg, e2_i, e1_i]
+        q_itp = _build_itp(a_grid_neg, q_)
+        qa_itp(a) = q_itp(a) * a
+        lb, ub = min_bounds_function(qa_itp, a_min, 0.0)
+        res = optimize(qa_itp, lb, ub)
+        rbl_a[e2_i, e1_i] = Optim.minimizer(res)
+        rbl_qa[e2_i, e1_i] = Optim.minimum(res)
+    end
+
+    # -- Value functions (undef if you fully set later; zeros if used before fill)
+    V = zeros(T, a_size, e3_size, ν_size, e2_size, e1_size)
+    V_d = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
+    V_nd = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
+    V_pos = zeros(T, a_size_pos, e3_size, ν_size, e2_size, e1_size)
+    EV = zeros(T, a_size, ν_size, e2_size, e1_size)
+    EV_pos = zeros(T, a_size_pos, ν_size, e2_size, e1_size)
+    EV_Ph = zeros(T, a_size_pos, ν_size, e2_size, e1_size)
+
+    # -- Distribution
+    μ = zeros(T, a_size_μ, e1_size, e2_size, e3_size, ν_size, 2)
+    μ_size = (a_size_μ + a_size_pos_μ) * e1_size * e2_size * e3_size * ν_size
+    μ[:, :, :, :, :, 1] .= inv(T(μ_size))
+    μ[a_ind_zero_μ:end, :, :, :, :, 2] .= inv(T(μ_size))
+
+    # -- Policies
+    policy_a = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
+    policy_d = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
+    policy_a_pos = Array{T}(undef, a_size_pos, e3_size, ν_size, e2_size, e1_size)
+
+    return Mutable_Variables{T,
+        typeof(R),typeof(V_d),typeof(V),typeof(μ)}(
+        agg, R, q, rbl_a, rbl_qa, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
+        policy_a, policy_d, policy_a_pos, threshold_a, threshold_e2, μ
+    )
 end
 
 function variables_function_update!(variables::Mutable_Variables, parameters::NamedTuple; λ::Float64)
@@ -538,162 +539,64 @@ function variables_function_update!(variables::Mutable_Variables, parameters::Na
     variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
-struct Itp_Cache{ITP_q,ITP_EV,ITP_EV_pos}
+struct Itp_Cache{ITP_q,ITP_EV,ITP_EV}
     q::Array{ITP_q,2}               # size: (e2_size, e1_size)
     EV::Array{ITP_EV,3}             # size: (ν_size, e2_size, e1_size)
-    EV_pos::Array{ITP_EV_pos,3}     # size: (ν_size, e2_size, e1_size)
+    EV_Ph::Array{ITP_EV,3}       # size: (ν_size, e2_size, e1_size)
 end
 
 @inline _build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Line())
 
-@inbounds function build_itp_cache(variables::Mutable_Variables, parameters::NamedTuple)
-    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
+@views @inbounds function build_itp_cache(variables::Mutable_Variables, parameters::NamedTuple)
+    """
+    construct the cached interpolants
+    """
+
+    @unpack a_grid, a_grid_pos, a_ind_zero, Ph, e1_size, e2_size, ν_size = parameters
 
     # sample types (use views to avoid copies)
-    q_sample = linear_interpolation(a_grid, @view(variables.q[:, 1, 1]), extrapolation_bc=Line())
-    EV_sample = linear_interpolation(a_grid, @view(variables.EV[:, 1, 1, 1]), extrapolation_bc=Line())
-    EV_pos_sample = linear_interpolation(a_grid_pos, @view(variables.EV_pos[:, 1, 1, 1]), extrapolation_bc=Line())
+    q_ = variables.q[:, 1, 1]
+    q_sample = linear_interpolation(a_grid, q_, extrapolation_bc=Line())
+    EV_ = variables.EV[:, 1, 1, 1]
+    EV_sample = linear_interpolation(a_grid, EV_, extrapolation_bc=Line())
+    EV_Ph_ = variables.EV_Ph[:, 1, 1, 1]
+    EV_Ph_sample = linear_interpolation(a_grid_pos, EV_Ph_, extrapolation_bc=Line())
 
     # allocate concretely-typed containers
-    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)         # (e2, e1)
-    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size) # (ν, e2, e1)
-    EV_pos_itp = Array{typeof(EV_pos_sample)}(undef, ν_size, e2_size, e1_size)
+    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)
+    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size)
+    EV_Ph_itp = Array{typeof(EV_Ph_sample)}(undef, ν_size, e2_size, e1_size)
 
     for e2_i in 1:e2_size, e1_i in 1:e1_size
-        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, @view(variables.q[:, e2_i, e1_i]), extrapolation_bc=Line())
+        q_ = variables.q[:, e2_i, e1_i]
+        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, q_, extrapolation_bc=Line())
         for ν_i in 1:ν_size
-            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, @view(variables.EV[:, ν_i, e2_i, e1_i]), extrapolation_bc=Line())
-            EV_pos_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, @view(variables.EV_pos[:, ν_i, e2_i, e1_i]), extrapolation_bc=Line())
+            EV_ = variables.EV[:, ν_i, e2_i, e1_i]
+            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, EV_, extrapolation_bc=Line())
+            EV_Ph_ = variables.EV_Ph[:, ν_i, e2_i, e1_i]
+            EV_Ph_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, EV_Ph_, extrapolation_bc=Line())
         end
     end
 
-    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_pos_sample)}(q_itp, EV_itp, EV_pos_itp)
+    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_Ph_sample)}(q_itp, EV_itp, EV_Ph_itp)
 end
 
-@views @inbounds function build_itp_cache_1(variables::Mutable_Variables, parameters::NamedTuple)
-    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
-
-    # sample types (views come from @views on the function)
-    q_sample = linear_interpolation(a_grid, variables.q[:, 1, 1], extrapolation_bc=Line())
-    EV_sample = linear_interpolation(a_grid, variables.EV[:, 1, 1, 1], extrapolation_bc=Line())
-    EV_pos_sample = linear_interpolation(a_grid_pos, variables.EV_pos[:, 1, 1, 1], extrapolation_bc=Line())
-
-    # concretely-typed containers
-    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)          # (e2, e1)
-    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size)  # (ν, e2, e1)
-    EV_pos_itp = Array{typeof(EV_pos_sample)}(undef, ν_size, e2_size, e1_size)
-
-    for e2_i in 1:e2_size, e1_i in 1:e1_size
-        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, variables.q[:, e2_i, e1_i], extrapolation_bc=Line())
-        for ν_i in 1:ν_size
-            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, variables.EV[:, ν_i, e2_i, e1_i], extrapolation_bc=Line())
-            EV_pos_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, variables.EV_pos[:, ν_i, e2_i, e1_i], extrapolation_bc=Line())
-        end
-    end
-
-    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_pos_sample)}(q_itp, EV_itp, EV_pos_itp)
-end
-
-@inbounds function build_itp_cache_2(variables::Mutable_Variables, parameters::NamedTuple)
-    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
-
-    # sample types (use views to avoid copies)
-    q_sample = linear_interpolation(a_grid, view(variables.q, :, 1, 1), extrapolation_bc=Line())
-    EV_sample = linear_interpolation(a_grid, view(variables.EV, :, 1, 1, 1), extrapolation_bc=Line())
-    EV_pos_sample = linear_interpolation(a_grid_pos, view(variables.EV_pos, :, 1, 1, 1), extrapolation_bc=Line())
-
-    # allocate concretely-typed containers
-    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)         # (e2, e1)
-    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size) # (ν, e2, e1)
-    EV_pos_itp = Array{typeof(EV_pos_sample)}(undef, ν_size, e2_size, e1_size)
-
-    for e2_i in 1:e2_size, e1_i in 1:e1_size
-        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, view(variables.q, :, e2_i, e1_i), extrapolation_bc=Line())
-        for ν_i in 1:ν_size
-            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, view(variables.EV, :, ν_i, e2_i, e1_i), extrapolation_bc=Line())
-            EV_pos_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, view(variables.EV_pos, :, ν_i, e2_i, e1_i), extrapolation_bc=Line())
-        end
-    end
-
-    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_pos_sample)}(q_itp, EV_itp, EV_pos_itp)
-end
-
-@views @inbounds function build_itp_cache_3(variables::Mutable_Variables, parameters::NamedTuple)
-    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
-
-    # sample types (use views to avoid copies)
-    q_sample = linear_interpolation(a_grid, view(variables.q, :, 1, 1), extrapolation_bc=Line())
-    EV_sample = linear_interpolation(a_grid, view(variables.EV, :, 1, 1, 1), extrapolation_bc=Line())
-    EV_pos_sample = linear_interpolation(a_grid_pos, view(variables.EV_pos, :, 1, 1, 1), extrapolation_bc=Line())
-
-    # allocate concretely-typed containers
-    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)         # (e2, e1)
-    EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size) # (ν, e2, e1)
-    EV_pos_itp = Array{typeof(EV_pos_sample)}(undef, ν_size, e2_size, e1_size)
-
-    for e2_i in 1:e2_size, e1_i in 1:e1_size
-        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, view(variables.q, :, e2_i, e1_i), extrapolation_bc=Line())
-        for ν_i in 1:ν_size
-            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, view(variables.EV, :, ν_i, e2_i, e1_i), extrapolation_bc=Line())
-            EV_pos_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, view(variables.EV_pos, :, ν_i, e2_i, e1_i), extrapolation_bc=Line())
-        end
-    end
-
-    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_pos_sample)}(q_itp, EV_itp, EV_pos_itp)
-end
-
-# function E_V_function!(E_V::Array{Float64,3}, E_V_pos::Array{Float64,3}, V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, parameters::NamedTuple)
-#     """
-#     construct expected value functions
-#     """
-
-#     # unpack parameters
-#     @unpack e1_size, e2_size, e2_Γ, e3_size, e3_Γ, ν_size, ν_Γ, a_size, a_size_pos, a_ind_zero, ρ, β, loop_EV = parameters
-
-#     # update expected value 
-#     # @batch 
-#     # Threads.@threads 
-#     for (e2_i, e1_i, a_p_i) in loop_EV
-#         if a_p_i < a_ind_zero
-#             @inbounds E_V[a_p_i, e1_i, e2_i] = 0.0
-#             for ν_p_i = 1:ν_size, e3_p_i = 1:e3_size, e2_p_i = 1:e2_size
-#                 @inbounds E_V[a_p_i, e1_i, e2_i] += ρ * β * e2_Γ[e2_i, e2_p_i] * e3_Γ[e3_p_i] * ν_Γ[ν_p_i] * V_p[a_p_i, e1_i, e2_p_i, e3_p_i, ν_p_i]
-#             end
-#         else
-#             @inbounds E_V[a_p_i, e1_i, e2_i] = 0.0
-#             a_p_i_pos = a_p_i - a_ind_zero + 1
-#             @inbounds E_V_pos[a_p_i_pos, e1_i, e2_i] = 0.0
-#             for ν_p_i = 1:ν_size, e3_p_i = 1:e3_size, e2_p_i = 1:e2_size
-#                 @inbounds E_V[a_p_i, e1_i, e2_i] += ρ * β * e2_Γ[e2_i, e2_p_i] * e3_Γ[e3_p_i] * ν_Γ[ν_p_i] * V_p[a_p_i, e1_i, e2_p_i, e3_p_i, ν_p_i]
-#                 @inbounds E_V_pos[a_p_i_pos, e1_i, e2_i] += ρ * β * e2_Γ[e2_i, e2_p_i] * e3_Γ[e3_p_i] * ν_Γ[ν_p_i] * V_pos_p[a_p_i_pos, e1_i, e2_p_i, e3_p_i, ν_p_i]
-#             end
-#         end
-#     end
-
-#     # replace NaN with -Inf
-#     replace!(E_V, NaN => -Inf)
-#     replace!(E_V_pos, NaN => -Inf)
-
-#     # return results
-#     return nothing
-# end
-
-function EV_function!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::Mutable_Variables, parameters::NamedTuple)
+@views @inbounds function update_EV!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::Mutable_Variables, parameters::NamedTuple)
     """
     Construct expected value functions `EV` and `EV_pos`
     """
 
     @unpack e3_size, ν_size, e2_size, e1_size, a_size, a_size_pos, a_ind_zero, Ph, Γ, loop_EV = parameters
 
-    @inbounds @batch for (e1_i, e2_i, ν_i, a_p_i) in loop_EV
-        @views Γ_temp = Γ[:, :, :, ν_i, e2_i]
-        @views V_p_temp = V_p[a_p_i, :, :, :, e1_i]
+    @batch for (e1_i, e2_i, ν_i, a_p_i) in loop_EV
+        Γ_temp = Γ[:, :, :, ν_i, e2_i]
+        V_p_temp = V_p[a_p_i, :, :, :, e1_i]
         EV_temp = dot(Γ_temp, V_p_temp)
         variables.EV[a_p_i, ν_i, e2_i, e1_i] = EV_temp
 
         if a_p_i > a_ind_zero
             a_pos_p_i = a_p_i - a_ind_zero + 1
-            @views V_pos_p_temp = V_pos_p[a_pos_p_i, :, :, :, e1_i]
+            V_pos_p_temp = V_pos_p[a_pos_p_i, :, :, :, e1_i]
             EV_pos_temp = dot(Γ_temp, V_pos_p_temp)
             variables.EV_pos[a_pos_p_i, ν_i, e2_i, e1_i] = EV_pos_temp
             variables.EV_Ph[a_pos_p_i, ν_i, e2_i, e1_i] = Ph * EV_temp + (1.0 - Ph) * EV_pos_temp
@@ -702,26 +605,26 @@ function EV_function!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variable
     return nothing
 end
 
-function V_d_function!(variables::Mutable_Variables, parameters::NamedTuple)
+@views @inbounds function update_V_d!(variables::Mutable_Variables, parameters::NamedTuple)
     """
     Update the default value function `V_d`
     """
 
     @unpack e1_size, e2_size, ν_size, ξ, u_d = parameters
 
-    @inbounds @batch for e1_i in 1:e1_size, e2_i in 1:e2_size, ν_i in 1:ν_size
+    @batch for e1_i in 1:e1_size, e2_i in 1:e2_size, ν_i in 1:ν_size
         EV_pos_0 = variables.EV_pos[1, ν_i, e2_i, e1_i]
-        @views u_d_temp = u_d[:, e2_i, e1_i]
+        u_d_temp = u_d[:, e2_i, e1_i]
         @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_0
     end
     return nothing
 end
 
-struct DP_Problem{T_qa,T_EV,T_u,T_σ}
-    qa_itp::T_qa
-    EV_itp::T_EV
-    utility::T_u
-    σ::T_σ
+struct DP_Problem{ITP_q,ITP_EV,F_u,T}
+    qa_itp::ITP_q
+    EV_itp::ITP_EV
+    utility::F_u
+    σ::T
 end
 
 @inline function obj_DP(DP::DP_Problem, a_p::Float64, a::Float64, W_::Float64)
@@ -759,7 +662,7 @@ end
     end
 end
 
-function value_and_policy_function!(
+function update_value_and_policy_functions!(
     variables::Mutable_Variables,
     V_p::Array{Float64,5},
     V_pos_p::Array{Float64,5},
@@ -774,18 +677,17 @@ function value_and_policy_function!(
     @unpack ν_size, ν_grid, ν_Γ = parameters
     @unpack ρ, β, σ, r_f = parameters
     @unpack Ph, η, κ, ξ = parameters
-    @unpack loop_V = parameters
 
-    EV_function!(V_p, V_pos_p, variables, parameters)
-    V_d_function!(variables, parameters)
+    update_EV!(V_p, V_pos_p, variables, parameters)
+    update_V_d!(variables, parameters)
 
     @batch for e2_i = 1:e2_size, e1_i = 1:e1_size
 
         @inbounds rbl_a = variables.rbl_a[e2_i, e1_i]
         @inbounds rbl_qa = variables.rbl_qa[e2_i, e1_i]
         @inbounds @views q_ = variables.q[:, e1_i, e2_i]
-        q_itp = linear_interpolation(a_grid, q_, extrapolation_bc=Line())
-        @inline qa_itp(a_p::Float64) = q_itp(a_p) * a_p
+        @inbounds itp_cache.q[e2_i,e1_i].itp.coefs .= q_
+        @inline qa_itp(a_p::Float64) = itp_cache.q[e2_i,e1_i](a_p) * a_p
         EV_temp = similar(a_grid, Float64)
         EV_pos_temp = similar(a_grid_pos, Float64)
         EV_itp = linear_interpolation(a_grid, EV_temp, extrapolation_bc=Line())

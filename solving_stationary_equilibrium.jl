@@ -250,27 +250,6 @@ function initialize_parameters(;
     )
 end
 
-# function find_min_bounds(obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
-#     """
-#     compute bounds for minimization
-#     """
-
-#     grid = range(grid_min, grid_max, length=grid_length)
-#     obj_grid = obj.(grid)
-#     obj_index = argmin(obj_grid)
-#     if obj_index < (1 + obj_range)
-#         lb = grid_min
-#         @inbounds ub = grid[obj_index+obj_range]
-#     elseif obj_index > (grid_length - obj_range)
-#         @inbounds lb = grid[obj_index-obj_range]
-#         ub = grid_max
-#     else
-#         @inbounds lb = grid[obj_index-obj_range]
-#         @inbounds ub = grid[obj_index+obj_range]
-#     end
-#     return lb, ub
-# end
-
 @inline function find_min_bounds(obj, grid_min::Real, grid_max::Real; grid_length::Int=120, neighborhood::Int=1)
     @assert grid_max > grid_min
     @assert grid_length ≥ 2
@@ -279,13 +258,13 @@ end
     step = (grid_max - grid_min) / (grid_length - 1)
 
     best_val = Inf
-    best_i   = 1
+    best_i = 1
     @inbounds @simd for i in 1:grid_length
         x = grid_min + (i - 1) * step
         y = obj(x)
         if isfinite(y) && y < best_val
             best_val = y
-            best_i   = i
+            best_i = i
         end
     end
 
@@ -300,28 +279,6 @@ end
     end
     return lb, ub
 end
-
-# function find_min_bounds!(bb::Vector{Float64}, grid::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64}, obj::Function, grid_min::Float64, grid_max::Float64; grid_length::Int64=120, obj_range::Int64=1)
-#     """
-#     compute bounds for minimization
-#     """
-
-#     grid .= range(grid_min, grid_max, length=grid_length)
-#     grid_size = length(grid)
-#     obj_grid = obj.(grid)
-#     obj_index = argmin(obj_grid)
-#     if obj_index < (1 + obj_range)
-#         @inbounds bb[1] = grid_min
-#         @inbounds bb[2] = grid[obj_index+obj_range]
-#     elseif obj_index > (grid_size - obj_range)
-#         @inbounds bb[1] = grid[obj_index-obj_range]
-#         @inbounds bb[2] = grid_max
-#     else
-#         @inbounds bb[1] = grid[obj_index-obj_range]
-#         @inbounds bb[2] = grid[obj_index+obj_range]
-#     end
-#     return nothing
-# end
 
 function zero_bounds_function(V_d::Float64, V_nd::Vector{Float64}, a_grid::Vector{Float64})
     """
@@ -344,51 +301,70 @@ function utility(c::Float64, γ::Float64)
     end
 end
 
-function log_(threshold_e::Float64)
+function log_(thres_e::Float64)
     """
     adjusted log funciton where assigning -Inf to negative domain
     """
 
-    if threshold_e > 0.0
-        return log(threshold_e)
+    if thres_e > 0.0
+        return log(thres_e)
     else
         return -Inf
     end
 end
 
-function threshold_function!(threshold_a::Array{Float64,4}, threshold_e2::Array{Float64,4}, V_d::Array{Float64,3}, V_nd::Array{Float64,5}, w::Float64, parameters::NamedTuple)
+function find_thresholds!(variables::Mutable_Variables, parameters::NamedTuple)
     """
     update default thresholds
     """
 
-    # unpack parameters
     @unpack a_size_neg, a_grid, e1_size, e1_grid, e2_size, e2_grid, e3_size, e3_grid, ν_size, ν_grid = parameters
 
-    # loop over states
-    for ν_i = 1:ν_size, e3_i = 1:e3_size, e1_i = 1:e1_size
+    @inbounds @views for e3_i in 1:e3_size, ν_i in 1:ν_size, e2_i in 1:e2_size, e1_i in 1:e1_size
 
-        # println("v_i = $ν_i, e3_i = $e3_i, e1_i = $e1_i")
+        V_nd_ = variables.V_nd[:, e3_i, ν_i, e2_i, e1_i]
+        V_d_ = variables.V_d[e3_i, ν_i, e2_i, e1_i]
 
-        # defaulting thresholds in wealth (a)
-        for e2_i = 1:e2_size
-            @inbounds @views V_nd_Non_Inf = findall(V_nd[:, e3_i, e2_i, e1_i, ν_i] .!= -Inf)
-            @inbounds @views a_grid_itp = a_grid[V_nd_Non_Inf]
-            @inbounds @views V_nd_grid_itp = V_nd[V_nd_Non_Inf, e3_i, e2_i, e1_i, ν_i]
-            # V_nd_itp = Akima(a_grid_itp, V_nd_grid_itp)
-            V_nd_itp = _build_itp(a_grid_itp, V_nd_grid_itp)
-            @inbounds V_diff_itp(a) = V_nd_itp(a) - V_d[e3_i, e2_i, e1_i]
-
-            if minimum(V_nd_grid_itp) > V_d[e3_i, e2_i, e1_i]
-                @inbounds threshold_a[e3_i, e2_i, e1_i, ν_i] = -Inf
-            else
-                @inbounds V_diff_lb, V_diff_ub = zero_bounds_function(V_d[e3_i, e2_i, e1_i], V_nd[:, e3_i, e2_i, e1_i, ν_i], a_grid)
-                @inbounds threshold_a[e3_i, e2_i, e1_i, ν_i] = find_zero(a -> V_diff_itp(a), (V_diff_lb, V_diff_ub), Bisection())
+        first_finite = 0
+        for i in 1:a_size_neg
+            if isfinite(V_nd_[i])
+                first_finite = i 
+                break
             end
         end
 
-        # defaulting thresholds in endowment (e)
-        @inbounds @views thres_a_Non_Inf = findall(threshold_a[e1_i, :, e3_i, ν_i] .!= -Inf)
-        @inbounds @views thres_a_grid_itp = -threshold_a[e1_i, thres_a_Non_Inf, e3_i, ν_i]
+        if (first_finite == 1) && (V_nd_[first_finite] > V_d_)
+            variables.thres_a[e3_i, ν_i, e2_i, e1_i] = -Inf
+            continue
+        elseif (first_finite != 1) && (V_nd_[first_finite] > V_d_)
+            V_nd_1, a_neg_1 = V_nd_[first_finite+1], a_grid_neg[first_finite+1]
+            V_nd_0, a_neg_0 = V_nd_[first_finite], a_grid_neg[first_finite]
+            D_V_nd = V_nd_1 - V_nd_0
+            D_a = a_neg_1 - a_neg_0
+            m = D_V_nd / D_a
+            a_star = a_neg_0 - (V_nd_0 - V_d_) / m
+            variables.thres_a[e3_i, ν_i, e2_i, e1_i] = a_star
+        else
+            first_cross = 0
+            for i in first_finite:a_size_neg
+                if V_nd_[i] > V_d_
+                    first_cross = i 
+                    break
+                end
+            end
+            V_nd_1, a_neg_1 = V_nd_[first_finite], a_grid_neg[first_finite]
+            V_nd_0, a_neg_0 = V_nd_[first_finite-1], a_grid_neg[first_finite-1]
+            D_V_nd = V_nd_1 - V_nd_0
+            D_a = a_neg_1 - a_neg_0
+            m = D_V_nd / D_a
+            a_star = a_neg_0 + (V_d_ - a_neg_0) / m
+            variables.thres_a[e3_i, ν_i, e2_i, e1_i] = a_star
+        end
+    end
+
+    @inbounds @views for a_i in 1:a_size_neg, e3_i in 1:e3_size, ν_i in 1:ν_size, e1_i in 1:e1_size
+        thres_a_Non_Inf = findall(threshold_a[e1_i, :, e3_i, ν_i] .!= -Inf)
+        thres_a_grid_itp = -threshold_a[e1_i, thres_a_Non_Inf, e3_i, ν_i]
         earning_grid_itp = w * exp.(e1_grid[e1_i] .+ e2_grid[thres_a_Non_Inf] .+ e3_grid[e3_i]) .- ν_grid[ν_i]
         # threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k=1, bc="extrapolate")
         # threshold_earning_itp = Akima(thres_a_grid_itp, earning_grid_itp)
@@ -396,28 +372,24 @@ function threshold_function!(threshold_a::Array{Float64,4}, threshold_e2::Array{
 
         # Threads.@threads 
         for a_i = 1:a_size_neg
-            @inbounds earning_thres = threshold_earning_itp(-a_grid[a_i])
+            earning_thres = threshold_earning_itp(-a_grid[a_i])
             e2_thres = log_function((earning_thres + ν_grid[ν_i]) / w) - e1_grid[e1_i] - e3_grid[e3_i]
-            @inbounds threshold_e2[a_i, e1_i, e3_i, ν_i] = e2_thres
+            threshold_e2[a_i, e1_i, e3_i, ν_i] = e2_thres
         end
     end
-
-    # return threshold_a, threshold_e2
     return nothing
 end
 
-function repayment(a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int64, threshold_e2::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
+function repayment(a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int64, thres_e2::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
     """
     evaluate repayment analytically with and without wage garnishment
     """
 
-    # unpack parameters
     @unpack a_grid_neg, e2_σ, e2_μ_σ2_grid, Γ_default = parameters
 
-    # compute expected repayment amount
     a_p = a_grid_neg[a_p_i]
     e2_μ_σ2 = e2_μ_σ2_grid[e2_i]
-    default_adjusted_prob = cdf(Normal(e2_μ_σ2, e2_σ), threshold_e2)
+    default_adjusted_prob = cdf(Normal(e2_μ_σ2, e2_σ), thres_e2)
     total_amount = -a_p * (1.0 - default_adjusted_prob)
     if wage_garnishment == true
         total_amount += Γ_default[e3_p_i, e2_i, e1_i] * default_adjusted_prob
@@ -494,12 +466,6 @@ end
         zero(T), zero(T), zero(T), zero(T), zero(T))
 
     # -- Prices / schedules
-    R = Array{T}(undef, a_size_neg, e2_size, e1_size)
-    q = fill(q_bar, a_size, e2_size, e1_size)
-
-    rbl_a = Array{T}(undef, e2_size, e1_size)
-    rbl_qa = Array{T}(undef, e2_size, e1_size)
-
     thres_a = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
     thres_e2 = Array{T}(undef, a_size_neg, e3_size, ν_size, e1_size)
 
@@ -510,28 +476,30 @@ end
         @. thres_e2[:, e3_i, ν_i, e1_i] = log_(-a_grid_neg / w_λ) - e1 - e3
     end
 
+    R = Array{T}(undef, a_size_neg, e2_size, e1_size)
+    q = fill(q_bar, a_size, e2_size, e1_size)
+
     # --- Compute R and q; find rbl via bounded 1d optimize
-    for e1_i in 1:e1_size, e2_i in 1:e2_size, a_p_i in 1:(a_size_neg-1)
+    for e1_i in 1:e1_size, e2_i in 1:e2_size, a_p_i in 1:a_size_neg
         R_temp = 0.0
         for ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
             thres_e2_ = thres_e2[a_p_i, e3_p_i, ν_p_i, e1_i]
-            R_temp += T(Γ_e3_ν[e3_p_i, ν_p_i]) *
+            R_temp += Γ_e3_ν[e3_p_i, ν_p_i] *
                       repayment(a_p_i, e3_p_i, e2_i, e1_i, thres_e2_, parameters)
         end
         R[a_p_i, e2_i, e1_i] = R_temp
         q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
     end
 
-    # Build qa interpolant once per (e1,e2); then optimize
-    # for e1_i in 1:e1_size, e2_i in 1:e2_size
-    #     q_ = q[1:a_size_neg, e2_i, e1_i]
-    #     q_itp = _build_itp(a_grid_neg, q_)
-    #     qa_itp(a) = q_itp(a) * a
-    #     lb, ub = find_min_bounds(qa_itp, a_min, 0.0)
-    #     res = optimize(qa_itp, lb, ub)
-    #     rbl_a[e2_i, e1_i] = Optim.minimizer(res)
-    #     rbl_qa[e2_i, e1_i] = Optim.minimum(res)
-    # end
+    rbl_a = Array{T}(undef, e2_size, e1_size)
+    rbl_qa = Array{T}(undef, e2_size, e1_size)
+
+    for e1_i in 1:e1_size, e2_i in 1:e2_size
+        q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
+        rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
+        rbl_a[e2_i, e1_i] = rbl_a_
+        rbl_qa[e2_i, e1_i] = rbl_qa_
+    end
 
     # -- Value functions (undef if you fully set later; zeros if used before fill)
     V = zeros(T, a_size, e3_size, ν_size, e2_size, e1_size)
@@ -570,7 +538,7 @@ function variables_function_update!(variables::Mutable_Variables, parameters::Na
     variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
-struct Itp_Cache{ItpQ,ItpEv,ItpEvPh}
+struct ItpCache{ItpQ,ItpEv,ItpEvPh}
     q::Array{ItpQ,2}                # size: (e2_size, e1_size)
     EV::Array{ItpEv,3}              # size: (ν_size, e2_size, e1_size)
     EV_Ph::Array{ItpEvPh,3}           # size: (ν_size, e2_size, e1_size)
@@ -609,7 +577,7 @@ end
         end
     end
 
-    return Itp_Cache{typeof(q_sample),typeof(EV_sample),typeof(EV_Ph_sample)}(q_itp, EV_itp, EV_Ph_itp)
+    return ItpCache{typeof(q_sample),typeof(EV_sample),typeof(EV_Ph_sample)}(q_itp, EV_itp, EV_Ph_itp)
 end
 
 @views @inbounds function update_EV!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::Mutable_Variables, parameters::NamedTuple)
@@ -671,39 +639,84 @@ end
     if !(ub > lb) || isapprox(ub, lb; rtol=0.0, atol=atol)
         a_star = lb
         v_nd = -obj_DP(DP, a_star, a, W_)
-        return v_nd, a_star, 1 # degenerate bracket
+        return v_nd, a_star, 1 # degenerate
     end
 
     F = (a_p::Float64) -> obj_DP(DP, a_p, a, W_)
     res = Optim.optimize(F, lb, ub, Optim.Brent();
-        rel_tol=rtol, abs_tol=atol, iterations=iters)
+                         rel_tol=rtol, abs_tol=atol, iterations=iters)
 
     if Optim.converged(res) && isfinite(Optim.minimum(res))
         a_star = Optim.minimizer(res)
         v_nd = -Optim.minimum(res)
-        return v_nd, a_star, 2 # normal convergence
+        return v_nd, a_star, 2 # convergence
     else
         FL = F(lb)
         FU = F(ub)
         if FL <= FU
-            return -FL, lb, 3 # boundary solution
+            return -FL, lb, 3 # boundary
         else
-            return -FU, ub, 3 # boundary solution
+            return -FU, ub, 3 # boundary
         end
     end
 end
 
-struct QaInterpolant{ITP_q}
-    q_itp::ITP_q
+struct QaInterpolant{Itp}
+    q_itp::Itp
 end
 
 @inline (f::QaInterpolant)(a_p::Real) = f.q_itp(a_p) * a_p
 
+@inline function find_min_qa(a_grid_neg::AbstractVector{T},
+    q_grid_neg::AbstractVector{T}) where {T<:AbstractFloat}
+
+    Na = length(a_grid_neg)
+    @assert Na == length(q_grid_neg) "length mismatch"
+    @assert Na ≥ 2 "need at least 2 points"
+
+    best_f, best_a, best_i = typemax(Float64), a_grid_neg[1], 1
+
+    @inbounds for i in 1:(Na-1)
+
+        a0, a1 = a_grid_neg[i], a_grid_neg[i+1]
+        q0, q1 = q_grid_neg[i], q_grid_neg[i+1]
+
+        Da = a1 - a0
+        @assert Da > 0 "grid must be strictly ascending at i=$i: a0=$a0, a1=$a1"
+
+        Dq = q1 - q0
+        m = Dq / Da
+
+        if m != 0.0
+            a_star = (a0 - q0 / m) / 2.0
+            if a0 ≤ a_star ≤ a1
+                f_star = a_star * (q0 + m * (a_star - a0))
+                if f_star < best_f
+                    best_f, best_a, best_i = f_star, a_star, i
+                end
+            end
+        end
+
+        f0 = a0 * q0
+        if f0 < best_f
+            best_f, best_a, i = f0, a0, i
+        end
+
+        f1 = a1 * q1
+        if f1 < best_f
+            best_f, best_a, i = f1, a1, i
+        end
+    end
+
+    return best_a, best_f, best_i
+end
+
 function update_value_and_policy_functions!(
-    variables::Mutable_Variables,
     V_p::Array{Float64,5},
     V_pos_p::Array{Float64,5},
-    parameters::NamedTuple
+    variables::Mutable_Variables,
+    parameters::NamedTuple,
+    itp_cache::ItpCache
 )
     """
     one-step update of value and policy functions
@@ -713,7 +726,7 @@ function update_value_and_policy_functions!(
     @unpack e1_size, e1_grid, e1_Γ, e2_size, e2_grid, e2_Γ, e3_size, e3_grid, e3_Γ = parameters
     @unpack ν_size, ν_grid, ν_Γ = parameters
     @unpack ρ, β, σ, r_f = parameters
-    @unpack Ph, η, κ, ξ, W = parameters
+    @unpack Ph, η, κ, ξ, W, q_bar = parameters
 
     update_EV!(V_p, V_pos_p, variables, parameters)
     update_V_d!(variables, parameters)
@@ -724,11 +737,6 @@ function update_value_and_policy_functions!(
         q_itp = itp_cache.q[e2_i, e1_i]
         copyto!(q_itp.itp.coefs, q_)
         qa_itp = QaInterpolant(q_itp)
-
-        rbl_lb, rbl_ub = find_min_bounds(qa_itp, a_min, 0.0)
-        res_rbl = Optim.optimize(qa_itp, rbl_lb, rbl_ub)
-        variables.rbl_a[e2_i, e1_i] = Optim.minimizer(res_rbl)
-        variables.rbl_qa[e2_i, e1_i] = Optim.minimum(res_rbl)
 
         rbl_a_ = variables.rbl_a[e2_i, e1_i]
         rbl_qa_ = variables.rbl_qa[e2_i, e1_i]
@@ -743,28 +751,30 @@ function update_value_and_policy_functions!(
             EV_Ph_itp = itp_cache.EV_Ph[ν_i, e2_i, e1_i]
             copyto!(EV_Ph_itp.itp.coefs, EV_Ph_)
 
+            DP_Problem_nd = DP_Problem(qa_itp, EV_itp, utility, σ)
+            DP_Problem_pos = DP_Problem(qa_itp, EV_Ph_itp, utility, σ)
+
             for e3_i = 1:e3_size
 
                 W_ = W[e3_i, e2_i, e1_i]
                 V_d_ = variables.V_d[e3_i, ν_i, e2_i, e1_i]
 
-                DP_Problem_nd = DP_Problem(qa_itp, EV_itp, utility, σ)
-                DP_Problem_pos = DP_Problem(qa_itp, EV_Ph_itp, utility, σ)
+                lb_nd = rbl_a_
+                lb_pos = 0.0
 
                 for a_i = 1:a_size
 
                     a = a_grid[a_i]
                     CoH = W_ + a
-                    lb_nd = rbl_a
-                    lb_pos = 0.0
+                    ub_q = CoH / q_bar 
 
-                    if (CoH - rbl_qa) <= 0.0
+                    if ((CoH - rbl_qa_) <= 0.0) || (ub_q <= lb_nd)
                         variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = -Inf
                         variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = V_d_
                         variables.policy_a[a_i, e3_i, ν_i, e2_i, e1_i] = 0.0
                         variables.policy_d[a_i, e3_i, ν_i, e2_i, e1_i] = 1.0
                     else
-                        V_nd_, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=CoH)
+                        V_nd_, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
                         variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = V_nd_
                         if V_nd_ > V_d_
                             variables.V[a_i, e3_i, ν_i, e2_i, e1_i] = V_nd_
@@ -782,7 +792,7 @@ function update_value_and_policy_functions!(
 
                     if a_i >= a_ind_zero
                         a_pos_i = a_i - a_ind_zero + 1
-                        V_pos_, a_star_pos, status_pos = solve_DP(DP_Problem_pos, a, W_; lb=lb_pos, ub=CoH)
+                        V_pos_, a_star_pos, status_pos = solve_DP(DP_Problem_pos, a, W_; lb=lb_pos, ub=ub_q)
                         variables.V_pos[a_pos_i, e3_i, ν_i, e2_i, e1_i] = V_pos_
                         variables.policy_a_pos[a_pos_i, e3_i, ν_i, e2_i, e1_i] = a_star_pos
                         if status_pos == 2

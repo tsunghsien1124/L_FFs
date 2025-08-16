@@ -132,6 +132,7 @@ function initialize_parameters(;
 
     # iterators
     # loop_V = collect(Iterators.product(1:ν_size, 1:e3_size, 1:e2_size, 1:e1_size, 1:a_size))
+    loop_e2_e1 = CartesianIndices((e2_size, e1_size))
     loop_ν_e2_e1 = CartesianIndices((ν_size, e2_size, e1_size))
     loop_a_ν_e2_e1 = CartesianIndices((a_size, ν_size, e2_size, e1_size))
     loop_e3_ν_e2_e1 = CartesianIndices((e3_size, ν_size, e2_size, e1_size))
@@ -239,6 +240,7 @@ function initialize_parameters(;
         r_k_λ=r_k_λ,
         K_λ=K_λ,
         w_λ=w_λ,
+        loop_e2_e1=loop_e2_e1,
         loop_ν_e2_e1=loop_ν_e2_e1,
         loop_a_ν_e2_e1=loop_a_ν_e2_e1,
         loop_e3_ν_e2_e1=loop_e3_ν_e2_e1,
@@ -674,12 +676,14 @@ function update_value_and_policy_functions!(
     @unpack e1_size, e1_grid, e1_Γ, e2_size, e2_grid, e2_Γ, e3_size, e3_grid, e3_Γ = parameters
     @unpack ν_size, ν_grid, ν_Γ = parameters
     @unpack ρ, β, γ, r_f = parameters
-    @unpack Ph, η, κ, ξ, W, q_bar = parameters
+    @unpack Ph, η, κ, ξ, W, q_bar, loop_e2_e1 = parameters
 
     update_EV!(V_p, V_pos_p, variables, parameters)
     update_V_d!(variables, parameters)
 
-    @views @inbounds @batch for e2_i = 1:e2_size, e1_i = 1:e1_size
+    @views @inbounds @batch for idx in loop_e2_e1
+
+        e2_i, e1_i = idx.I
 
         q_ = variables.q[:, e2_i, e1_i]
         q_itp = itp_cache.q[e2_i, e1_i]
@@ -915,6 +919,27 @@ function pricing_and_rbl_function!(variables::MutableVariables, parameters::Name
         # res_rbl = optimize(qa_function, a_grid[1], 0.0)
         @inbounds variables.rbl_a[e2_i, e1_i] = Optim.minimizer(res_rbl)
         @inbounds variables.rbl_qa[e2_i, e1_i] = Optim.minimum(res_rbl)
+    end
+
+    for e1_i in 1:e1_size, e2_i in 1:e2_size, a_p_i in 1:a_size_neg
+        R_temp = 0.0
+        for ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
+            thres_e2_ = thres_e2[a_p_i, e3_p_i, ν_p_i, e1_i]
+            R_temp += Γ_e3_ν[e3_p_i, ν_p_i] *
+                      repayment(a_p_i, e3_p_i, e2_i, e1_i, thres_e2_, parameters)
+        end
+        R[a_p_i, e2_i, e1_i] = R_temp
+        q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
+    end
+
+    rbl_a = Array{T}(undef, e2_size, e1_size)
+    rbl_qa = Array{T}(undef, e2_size, e1_size)
+
+    for e1_i in 1:e1_size, e2_i in 1:e2_size
+        q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
+        rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
+        rbl_a[e2_i, e1_i] = rbl_a_
+        rbl_qa[e2_i, e1_i] = rbl_qa_
     end
 
     # return results

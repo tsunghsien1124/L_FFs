@@ -36,7 +36,7 @@ function initialize_parameters(;
     β_f::Float64=1.0 / (1.0 + r_f),  # discount factor (bank)
     # τ::Float64=0.00,                 # transaction cost
     τ::Float64=0.04,                 # transaction cost
-    σ::Float64=2.00,                 # CRRA coefficient
+    γ::Float64=2.00,                 # CRRA coefficient
     δ::Float64=0.08,                 # depreciation rate
     α::Float64=0.33,                 # capital share
     ψ::Float64=0.972^4,              # exogenous retention ratio # 1.0 - 1.0 / 20.0
@@ -74,6 +74,7 @@ function initialize_parameters(;
     G_e1 = e1_Γ
 
     # persistent endowment shock
+    inv_e2_σ = 1.0 / e2_σ
     e2_MC = tauchen(e2_size, e2_ρ, e2_σ, 0.0, 3)
     # e2_MC = rouwenhorst(e2_size, e2_ρ, e2_σ, 0.0)
     e2_Γ = e2_MC.p
@@ -130,8 +131,11 @@ function initialize_parameters(;
     w_λ = (1.0 - α) * (K_λ / E)^α
 
     # iterators
-    loop_V = collect(Iterators.product(1:ν_size, 1:e3_size, 1:e2_size, 1:e1_size, 1:a_size))
-    loop_EV = collect(Iterators.product(1:e1_size, 1:e2_size, 1:ν_size, 1:a_size))
+    # loop_V = collect(Iterators.product(1:ν_size, 1:e3_size, 1:e2_size, 1:e1_size, 1:a_size))
+    loop_ν_e2_e1 = CartesianIndices((ν_size, e2_size, e1_size))
+    loop_a_ν_e2_e1 = CartesianIndices((a_size, ν_size, e2_size, e1_size))
+    loop_e3_ν_e2_e1 = CartesianIndices((e3_size, ν_size, e2_size, e1_size))
+    loop_a_neg_e3_ν_e1 = CartesianIndices((a_size_neg, e3_size, ν_size, e1_size))
 
     # dsicounted aggregate shock transition
     Γ = zeros(e3_size, ν_size, e2_size, ν_size, e2_size)
@@ -157,7 +161,7 @@ function initialize_parameters(;
         e3 = e3_grid[e3_i]
         W[e3_i, e2_i, e1_i] = w_λ * exp(e1 + e2 + e3)
         WA[:, e3_i, e2_i, e1_i] .= W[e3_i, e2_i, e1_i] .+ a_grid
-        u_d[e3_i, e2_i, e1_i] = utility((1.0 - η) * W[e3_i, e2_i, e1_i] - κ, σ)
+        u_d[e3_i, e2_i, e1_i] = utility((1.0 - η) * W[e3_i, e2_i, e1_i] - κ, γ)
     end
 
     e2_μ_grid = e2_ρ .* e2_grid
@@ -178,7 +182,7 @@ function initialize_parameters(;
         r_f=r_f,
         β_f=β_f,
         τ=τ,
-        σ=σ,
+        γ=γ,
         δ=δ,
         α=α,
         ψ=ψ,
@@ -194,6 +198,7 @@ function initialize_parameters(;
         G_e1=G_e1,
         e2_ρ=e2_ρ,
         e2_σ=e2_σ,
+        inv_e2_σ=inv_e2_σ,
         e2_size=e2_size,
         e2_Γ=e2_Γ,
         e2_grid=e2_grid,
@@ -234,8 +239,10 @@ function initialize_parameters(;
         r_k_λ=r_k_λ,
         K_λ=K_λ,
         w_λ=w_λ,
-        loop_V=loop_V,
-        loop_EV=loop_EV,
+        loop_ν_e2_e1=loop_ν_e2_e1,
+        loop_a_ν_e2_e1=loop_a_ν_e2_e1,
+        loop_e3_ν_e2_e1=loop_e3_ν_e2_e1,
+        loop_a_neg_e3_ν_e1=loop_a_neg_e3_ν_e1,
         Γ=Γ,
         Γ_e3_ν=Γ_e3_ν,
         R_bar=R_bar,
@@ -293,7 +300,6 @@ function utility(c::Float64, γ::Float64)
     """
     compute utility of CRRA utility function with coefficient γ
     """
-
     if c > 0.0
         return γ == 1.0 ? log(c) : 1.0 / ((1.0 - γ) * c^(γ - 1.0))
     else
@@ -301,104 +307,43 @@ function utility(c::Float64, γ::Float64)
     end
 end
 
-function log_(thres_e::Float64)
+function inverse_utility(u::Float64, γ::Float64)
     """
-    adjusted log funciton where assigning -Inf to negative domain
+    compute inverse utility of CRRA utility function with coefficient γ
     """
-
-    if thres_e > 0.0
-        return log(thres_e)
+    if u == -Inf
+        return 0.0
     else
-        return -Inf
-    end
-end
-
-function find_thresholds!(variables::Mutable_Variables, parameters::NamedTuple)
-    """
-    update default thresholds
-    """
-
-    @unpack a_size_neg, a_grid, e1_size, e1_grid, e2_size, e2_grid, e3_size, e3_grid, ν_size, ν_grid = parameters
-
-    @inbounds @views for e3_i in 1:e3_size, ν_i in 1:ν_size, e2_i in 1:e2_size, e1_i in 1:e1_size
-
-        V_nd_ = variables.V_nd[:, e3_i, ν_i, e2_i, e1_i]
-        V_d_ = variables.V_d[e3_i, ν_i, e2_i, e1_i]
-
-        first_finite = 0
-        for i in 1:a_size_neg
-            if isfinite(V_nd_[i])
-                first_finite = i 
-                break
-            end
-        end
-
-        if (first_finite == 1) && (V_nd_[first_finite] > V_d_)
-            variables.thres_a[e3_i, ν_i, e2_i, e1_i] = -Inf
-            continue
-        elseif (first_finite != 1) && (V_nd_[first_finite] > V_d_)
-            V_nd_1, a_neg_1 = V_nd_[first_finite+1], a_grid_neg[first_finite+1]
-            V_nd_0, a_neg_0 = V_nd_[first_finite], a_grid_neg[first_finite]
-            D_V_nd = V_nd_1 - V_nd_0
-            D_a = a_neg_1 - a_neg_0
-            m = D_V_nd / D_a
-            a_star = a_neg_0 - (V_nd_0 - V_d_) / m
-            variables.thres_a[e3_i, ν_i, e2_i, e1_i] = a_star
+        if γ == 1.0
+            return exp(u)
         else
-            first_cross = 0
-            for i in first_finite:a_size_neg
-                if V_nd_[i] > V_d_
-                    first_cross = i 
-                    break
-                end
+            denominator = (1.0 - γ) * u
+            if denominator > 0.0
+                return denominator^(1.0 / (1.0 - γ))
+            else
+                return 0.0
             end
-            V_nd_1, a_neg_1 = V_nd_[first_finite], a_grid_neg[first_finite]
-            V_nd_0, a_neg_0 = V_nd_[first_finite-1], a_grid_neg[first_finite-1]
-            D_V_nd = V_nd_1 - V_nd_0
-            D_a = a_neg_1 - a_neg_0
-            m = D_V_nd / D_a
-            a_star = a_neg_0 + (V_d_ - a_neg_0) / m
-            variables.thres_a[e3_i, ν_i, e2_i, e1_i] = a_star
         end
     end
-
-    @inbounds @views for a_i in 1:a_size_neg, e3_i in 1:e3_size, ν_i in 1:ν_size, e1_i in 1:e1_size
-        thres_a_Non_Inf = findall(threshold_a[e1_i, :, e3_i, ν_i] .!= -Inf)
-        thres_a_grid_itp = -threshold_a[e1_i, thres_a_Non_Inf, e3_i, ν_i]
-        earning_grid_itp = w * exp.(e1_grid[e1_i] .+ e2_grid[thres_a_Non_Inf] .+ e3_grid[e3_i]) .- ν_grid[ν_i]
-        # threshold_earning_itp = Spline1D(thres_a_grid_itp, earning_grid_itp; k=1, bc="extrapolate")
-        # threshold_earning_itp = Akima(thres_a_grid_itp, earning_grid_itp)
-        threshold_earning_itp = _build_itp(athres_a_grid_itp, earning_grid_itp)
-
-        # Threads.@threads 
-        for a_i = 1:a_size_neg
-            earning_thres = threshold_earning_itp(-a_grid[a_i])
-            e2_thres = log_function((earning_thres + ν_grid[ν_i]) / w) - e1_grid[e1_i] - e3_grid[e3_i]
-            threshold_e2[a_i, e1_i, e3_i, ν_i] = e2_thres
-        end
-    end
-    return nothing
 end
 
-function repayment(a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int64, thres_e2::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
+@inline @inbounds function repayment(a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int64, thres_e2::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
     """
     evaluate repayment analytically with and without wage garnishment
     """
-
-    @unpack a_grid_neg, e2_σ, e2_μ_σ2_grid, Γ_default = parameters
-
+    
+    @unpack a_grid_neg, inv_e2_σ, e2_μ_σ2_grid, Γ_default = parameters
+    
     a_p = a_grid_neg[a_p_i]
     e2_μ_σ2 = e2_μ_σ2_grid[e2_i]
-    default_adjusted_prob = cdf(Normal(e2_μ_σ2, e2_σ), thres_e2)
-    total_amount = -a_p * (1.0 - default_adjusted_prob)
-    if wage_garnishment == true
-        total_amount += Γ_default[e3_p_i, e2_i, e1_i] * default_adjusted_prob
-    end
-
-    return clamp(total_amount, 0, -a_p)
+    default_prob = normcdf((thres_e2 - e2_μ_σ2) * inv_e2_σ)
+    total_amount = -a_p * (1.0 - default_prob)
+    wage_garnishment && (total_amount += Γ_default[e3_p_i, e2_i, e1_i] * default_prob)
+    
+    return clamp(total_amount, 0.0, -a_p)
 end
 
-mutable struct Mutable_Aggregate_Variables{T}
+mutable struct MutableAggregateVariables{T}
     K::T
     L::T
     L_adj::T
@@ -417,9 +362,9 @@ mutable struct Mutable_Aggregate_Variables{T}
 end
 
 # 2) Main container: parametric and concrete
-mutable struct Mutable_Variables{T,
+mutable struct MutableVariables{T,
     A3<:AbstractArray{T,3},A4<:AbstractArray{T,4},A5<:AbstractArray{T,5},A6<:AbstractArray{T,6}}
-    aggregate_variables::Mutable_Aggregate_Variables{T}
+    aggregate_variables::MutableAggregateVariables{T}
     R::A3
     q::A3
     rbl_a::AbstractArray{T,2}
@@ -455,12 +400,12 @@ end
     ν_size, ν_Γ = parameters
 
     # ---- Prices / policy / model scalars
-    @unpack ρ, r_f, τ, η, κ, σ, w_λ,
+    @unpack ρ, r_f, τ, η, κ, w_λ,
     R_bar, q_bar, Γ_e3_ν = parameters
 
 
     # -- Aggregates
-    agg = Mutable_Aggregate_Variables{T}(
+    agg = MutableAggregateVariables{T}(
         zero(T), zero(T), zero(T), zero(T), zero(T),
         zero(T), zero(T), zero(T), zero(T), zero(T),
         zero(T), zero(T), zero(T), zero(T), zero(T))
@@ -521,14 +466,14 @@ end
     policy_d = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
     policy_a_pos = Array{T}(undef, a_size_pos, e3_size, ν_size, e2_size, e1_size)
 
-    return Mutable_Variables{T,
+    return MutableVariables{T,
         typeof(R),typeof(V_d),typeof(V),typeof(μ)}(
         agg, R, q, rbl_a, rbl_qa, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
         policy_a, policy_d, policy_a_pos, thres_a, thres_e2, μ
     )
 end
 
-function variables_function_update!(variables::Mutable_Variables, parameters::NamedTuple; λ::Float64)
+function variables_function_update!(variables::MutableVariables, parameters::NamedTuple; λ::Float64)
     """
     construct a mutable object containing endogenous variables
     """
@@ -546,14 +491,13 @@ end
 
 @inline _build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Line())
 
-@views @inbounds function build_itp_cache(variables::Mutable_Variables, parameters::NamedTuple)
+@views @inbounds function build_itp_cache(variables::MutableVariables, parameters::NamedTuple)
     """
     construct the cached interpolants
     """
 
     @unpack a_grid, a_grid_pos, a_ind_zero, Ph, e1_size, e2_size, ν_size = parameters
 
-    # sample types (use views to avoid copies)
     q_ = variables.q[:, 1, 1]
     q_sample = linear_interpolation(a_grid, q_, extrapolation_bc=Line())
     EV_ = variables.EV[:, 1, 1, 1]
@@ -561,7 +505,6 @@ end
     EV_Ph_ = variables.EV_Ph[:, 1, 1, 1]
     EV_Ph_sample = linear_interpolation(a_grid_pos, EV_Ph_, extrapolation_bc=Line())
 
-    # allocate concretely-typed containers
     q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)
     EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size)
     EV_Ph_itp = Array{typeof(EV_Ph_sample)}(undef, ν_size, e2_size, e1_size)
@@ -580,14 +523,17 @@ end
     return ItpCache{typeof(q_sample),typeof(EV_sample),typeof(EV_Ph_sample)}(q_itp, EV_itp, EV_Ph_itp)
 end
 
-@views @inbounds function update_EV!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::Mutable_Variables, parameters::NamedTuple)
+function update_EV!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::MutableVariables, parameters::NamedTuple)
     """
     Construct expected value functions `EV` and `EV_pos`
     """
 
-    @unpack e3_size, ν_size, e2_size, e1_size, a_size, a_size_pos, a_ind_zero, Ph, Γ, loop_EV = parameters
+    @unpack a_ind_zero, Ph, Γ, loop_a_ν_e2_e1 = parameters
 
-    @batch for (e1_i, e2_i, ν_i, a_p_i) in loop_EV
+    @views @inbounds @batch for idx in loop_a_ν_e2_e1
+
+        a_p_i, ν_i, e2_i, e1_i = idx.I
+
         Γ_temp = Γ[:, :, :, ν_i, e2_i]
         V_p_temp = V_p[a_p_i, :, :, :, e1_i]
         EV_temp = dot(Γ_temp, V_p_temp)
@@ -601,17 +547,19 @@ end
             variables.EV_Ph[a_pos_p_i, ν_i, e2_i, e1_i] = Ph * EV_temp + (1.0 - Ph) * EV_pos_temp
         end
     end
+
     return nothing
 end
 
-@views @inbounds function update_V_d!(variables::Mutable_Variables, parameters::NamedTuple)
+function update_V_d!(variables::MutableVariables, parameters::NamedTuple)
     """
     Update the default value function `V_d`
     """
 
-    @unpack e1_size, e2_size, ν_size, ξ, u_d = parameters
+    @unpack loop_ν_e2_e1, u_d, ξ = parameters
 
-    @batch for e1_i in 1:e1_size, e2_i in 1:e2_size, ν_i in 1:ν_size
+    @views @inbounds @batch  for idx in loop_ν_e2_e1
+        ν_i, e2_i, e1_i = idx.I
         EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
         u_d_temp = u_d[:, e2_i, e1_i]
         @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
@@ -623,12 +571,12 @@ struct DP_Problem{ItpQ,ItpEv,FunU,T}
     qa_itp::ItpQ
     EV_itp::ItpEv
     utility::FunU
-    σ::T
+    γ::T
 end
 
 @inline function obj_DP(DP::DP_Problem, a_p::Float64, a::Float64, W_::Float64)
     c = W_ + a - DP.qa_itp(a_p)
-    return -(DP.utility(c, DP.σ) + DP.EV_itp(a_p))
+    return -(DP.utility(c, DP.γ) + DP.EV_itp(a_p))
 end
 
 @inline function solve_DP(
@@ -644,7 +592,7 @@ end
 
     F = (a_p::Float64) -> obj_DP(DP, a_p, a, W_)
     res = Optim.optimize(F, lb, ub, Optim.Brent();
-                         rel_tol=rtol, abs_tol=atol, iterations=iters)
+        rel_tol=rtol, abs_tol=atol, iterations=iters)
 
     if Optim.converged(res) && isfinite(Optim.minimum(res))
         a_star = Optim.minimizer(res)
@@ -714,7 +662,7 @@ end
 function update_value_and_policy_functions!(
     V_p::Array{Float64,5},
     V_pos_p::Array{Float64,5},
-    variables::Mutable_Variables,
+    variables::MutableVariables,
     parameters::NamedTuple,
     itp_cache::ItpCache
 )
@@ -725,7 +673,7 @@ function update_value_and_policy_functions!(
     @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero, a_min = parameters
     @unpack e1_size, e1_grid, e1_Γ, e2_size, e2_grid, e2_Γ, e3_size, e3_grid, e3_Γ = parameters
     @unpack ν_size, ν_grid, ν_Γ = parameters
-    @unpack ρ, β, σ, r_f = parameters
+    @unpack ρ, β, γ, r_f = parameters
     @unpack Ph, η, κ, ξ, W, q_bar = parameters
 
     update_EV!(V_p, V_pos_p, variables, parameters)
@@ -751,8 +699,8 @@ function update_value_and_policy_functions!(
             EV_Ph_itp = itp_cache.EV_Ph[ν_i, e2_i, e1_i]
             copyto!(EV_Ph_itp.itp.coefs, EV_Ph_)
 
-            DP_Problem_nd = DP_Problem(qa_itp, EV_itp, utility, σ)
-            DP_Problem_pos = DP_Problem(qa_itp, EV_Ph_itp, utility, σ)
+            DP_Problem_nd = DP_Problem(qa_itp, EV_itp, utility, γ)
+            DP_Problem_pos = DP_Problem(qa_itp, EV_Ph_itp, utility, γ)
 
             for e3_i = 1:e3_size
 
@@ -766,7 +714,7 @@ function update_value_and_policy_functions!(
 
                     a = a_grid[a_i]
                     CoH = W_ + a
-                    ub_q = CoH / q_bar 
+                    ub_q = CoH / q_bar
 
                     if ((CoH - rbl_qa_) <= 0.0) || (ub_q <= lb_nd)
                         variables.V_nd[a_i, e3_i, ν_i, e2_i, e1_i] = -Inf
@@ -806,7 +754,139 @@ function update_value_and_policy_functions!(
     return nothing
 end
 
-function pricing_and_rbl_function!(variables::Mutable_Variables, parameters::NamedTuple)
+@inline log_(thres_e::Float64) = thres_e > 0.0 ? log(thres_e) : -Inf
+
+@inline function compute_e2_star(W_fc_0::Float64, W_fc_1::Float64, thres_a_fc_0::Float64, thres_a_fc_1::Float64, 
+                                 a_neg_::Float64, crossing_idx::Union{Nothing,Int64})::Float64
+
+    m_fc = (thres_a_fc_1 - thres_a_fc_0) / (W_fc_1 - W_fc_0)
+    
+    if isnothing(crossing_idx)
+        # Beyond upper bound - extrapolate
+        e2_star = W_fc_1 + (a_neg_ - thres_a_fc_1) / m_fc
+    elseif crossing_idx == 1
+        # Beyond lower bound - extrapolate  
+        e2_star = W_fc_0 - (thres_a_fc_0 - a_neg_) / m_fc
+    else
+        # Normal interpolation case
+        e2_star = W_fc_1 - (thres_a_fc_1 - a_neg_) / m_fc
+    end
+    
+    return e2_star
+end
+
+function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; indIU::Bool=false, indE::Bool=false)
+    """
+    update default thresholds in assets and persistent endowments (e2)
+    """
+
+    @unpack a_size_neg, a_grid_neg, e2_size, e2_grid, loop_e3_ν_e2_e1, loop_a_neg_e3_ν_e1 = parameters
+    @unpack γ, e1_grid, e3_grid, W, w_λ = parameters
+
+    # if indIU
+    #     @unpack γ = parameters
+    # end
+
+    # if indE
+    #     @unpack e1_grid, e3_grid, W, w_λ = parameters
+    # end
+
+    @inbounds @views @batch for idx in loop_e3_ν_e2_e1
+
+        e3_i, ν_i, e2_i, e1_i = idx.I
+
+        V_d_ = variables.V_d[e3_i, ν_i, e2_i, e1_i]
+        V_nd_ = variables.V_nd[:, e3_i, ν_i, e2_i, e1_i]
+
+        first_finite = findfirst(isfinite, V_nd_)
+        @assert !isnothing(first_finite) "no finite V_nd exists for (e3,ν,e2,e1) = ($e3_i,$ν_i,$e2_i,$e1_i)"
+        @assert first_finite != a_size_neg "finite V_nd exists only at the boundary for (e3,ν,e2,e1) = ($e3_i,$ν_i,$e2_i,$e1_i)"
+
+        V_nd_ff_0 = V_nd_[first_finite]
+
+        if V_nd_ff_0 > V_d_
+
+            first_finite_1 = first_finite + 1
+            a_ff_0, a_ff_1 = a_grid_neg[first_finite], a_grid_neg[first_finite_1]
+            V_nd_ff_1 = V_nd_[first_finite_1]
+
+            if indIU
+                V_d_ = inverse_utility(V_d_, γ)
+                V_nd_ff_0 = inverse_utility(V_nd_ff_0, γ)
+                V_nd_ff_1 = inverse_utility(V_nd_ff_1, γ)
+            end
+
+            m_ff = (V_nd_ff_1 - V_nd_ff_0) / (a_ff_1 - a_ff_0)
+            a_star = a_ff_0 - (V_nd_ff_0 - V_d_) / m_ff
+
+        elseif V_nd_ff_0 == V_d_
+
+            a_star = a_grid_neg[first_finite]
+
+        else
+
+            crossing_idx = findfirst(i -> V_nd_[i] > V_d_, first_finite:a_size_neg)
+            @assert !isnothing(crossing_idx) "no crossing found: V_nd ≤ V_d for (e3,ν,e2,e1) = ($e3_i,$ν_i,$e2_i,$e1_i)"
+
+            first_cross_1 = first_finite + crossing_idx - 1
+            first_cross_0 = first_cross_1 - 1
+
+            a_fc_0, a_fc_1 = a_grid_neg[first_cross_0], a_grid_neg[first_cross_1]
+            V_nd_fc_0, V_nd_fc_1 = V_nd_[first_cross_0], V_nd_[first_cross_1]
+
+            if indIU
+                V_d_ = inverse_utility(V_d_, γ)
+                V_nd_fc_0 = inverse_utility(V_nd_fc_0, γ)
+                V_nd_fc_1 = inverse_utility(V_nd_fc_1, γ)
+            end
+
+            m_fc = (V_nd_fc_1 - V_nd_fc_0) / (a_fc_1 - a_fc_0)
+            a_star = a_fc_1 - (V_nd_fc_1 - V_d_) / m_fc # a_star = a_fc_0 + (V_d_ - V_nd_fc_0) / m_fc
+        end
+
+        variables.thres_a[e3_i, ν_i, e2_i, e1_i] = a_star
+    end
+
+    @inbounds @views @batch for idx in loop_a_neg_e3_ν_e1
+
+        a_neg_i, e3_i, ν_i, e1_i = idx.I
+
+        a_neg_ = a_grid_neg[a_neg_i]
+        thres_a_ = variables.thres_a[e3_i, ν_i, :, e1_i]
+
+        if indE
+            W_ = W[e3_i, :, e1_i]
+            e3_, e1_ =  e3_grid[e3_i], e1_grid[e1_i]
+        else
+            W_ = e2_grid
+        end
+
+        crossing_idx = findfirst(i -> a_neg_ > thres_a_[i], 1:e2_size)
+        
+        if isnothing(crossing_idx)
+            first_cross_0, first_cross_1 = e2_size - 1, e2_size
+        elseif crossing_idx == 1
+            first_cross_0, first_cross_1 = 1, 2
+        else
+            first_cross_0, first_cross_1 = crossing_idx - 1, crossing_idx
+        end
+
+        W_fc_0, W_fc_1 = W_[first_cross_0], W_[first_cross_1]
+        thres_a_fc_0, thres_a_fc_1 = thres_a_[first_cross_0], thres_a_[first_cross_1]
+
+        e2_star = compute_e2_star(W_fc_0, W_fc_1, thres_a_fc_0, thres_a_fc_1, a_neg_, crossing_idx)
+
+        if indE
+            e2_star = log_(e2_star / w_λ) - e3_ - e1_
+        end
+
+        variables.thres_e2[a_neg_i, e3_i, ν_i, e1_i] = e2_star
+    end
+
+    return nothing
+end
+
+function pricing_and_rbl_function!(variables::MutableVariables, parameters::NamedTuple)
     """
     update pricing function and borrowing risky limit
     """
@@ -841,7 +921,8 @@ function pricing_and_rbl_function!(variables::Mutable_Variables, parameters::Nam
     return nothing
 end
 
-function solve_value_and_pricing_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Float64=1E-8, iter_max::Int64=1000, slow_updating::Float64=1.0)
+function solve_value_and_pricing_function!(variables::MutableVariables, parameters::NamedTuple, itp_cache::ItpCache; 
+    tol::Float64=1E-8, iter_max::Int64=1000, slow_updating::Float64=1.0)
     """
     solve household and banking problems using one-loop algorithm
     """
@@ -864,10 +945,10 @@ function solve_value_and_pricing_function!(variables::Mutable_Variables, paramet
         copyto!(q_p, variables.q)
 
         # value and policy functions
-        value_and_policy_function!(variables, V_p, V_pos_p, parameters)
+        update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
 
         # default thresholds
-        threshold_function!(variables.threshold_a, variables.threshold_e2, variables.V_d, variables.V_nd, variables.aggregate_prices.w_λ, parameters)
+        find_thresholds!(variables, parameters)
 
         # pricing function and borrowing risky limit
         pricing_and_rbl_function!(variables.R, variables.q, variables.rbl, variables.threshold_e2, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)

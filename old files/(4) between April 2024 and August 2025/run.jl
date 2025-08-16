@@ -27,6 +27,7 @@ using Interpolations
 using FastGaussQuadrature
 using LoopVectorization
 # using DataInterpolations
+using StatsFuns
 
 #==================#
 # Import functions #

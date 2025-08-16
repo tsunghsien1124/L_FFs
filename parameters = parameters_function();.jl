@@ -3,8 +3,6 @@ using BenchmarkTools
 parameters = initialize_parameters();
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-variables.EV[:,1,1,1] .= rand(parameters.a_size)
-@btime itp_cache.EV[1,1,1].itp.coefs .= variables.EV[:,1,1,1]
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));

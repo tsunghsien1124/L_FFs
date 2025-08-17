@@ -133,6 +133,7 @@ function initialize_parameters(;
     # iterators
     # loop_V = collect(Iterators.product(1:ν_size, 1:e3_size, 1:e2_size, 1:e1_size, 1:a_size))
     loop_e2_e1 = CartesianIndices((e2_size, e1_size))
+    loop_a_neg_e2_e1 = CartesianIndices((a_size_neg, e2_size, e1_size))
     loop_ν_e2_e1 = CartesianIndices((ν_size, e2_size, e1_size))
     loop_a_ν_e2_e1 = CartesianIndices((a_size, ν_size, e2_size, e1_size))
     loop_e3_ν_e2_e1 = CartesianIndices((e3_size, ν_size, e2_size, e1_size))
@@ -241,6 +242,7 @@ function initialize_parameters(;
         K_λ=K_λ,
         w_λ=w_λ,
         loop_e2_e1=loop_e2_e1,
+        loop_a_neg_e2_e1=loop_a_neg_e2_e1,
         loop_ν_e2_e1=loop_ν_e2_e1,
         loop_a_ν_e2_e1=loop_a_ν_e2_e1,
         loop_e3_ν_e2_e1=loop_e3_ν_e2_e1,
@@ -329,20 +331,35 @@ function inverse_utility(u::Float64, γ::Float64)
     end
 end
 
-@inline @inbounds function repayment(a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int64, thres_e2::Float64, parameters::NamedTuple; wage_garnishment::Bool=true)
+# @inline @inbounds function repayment(thres_e2::Float64, a_p_i::Int64, e3_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple; wage_garnishment::Bool=true)::Float64
+#     """
+#     evaluate repayment analytically with and without wage garnishment
+#     """
+    
+#     @unpack a_grid_neg, inv_e2_σ, e2_μ_σ2_grid, Γ_default = parameters
+    
+#     e2_μ_σ2 = e2_μ_σ2_grid[e2_i]
+#     default_prob = normcdf((thres_e2 - e2_μ_σ2) * inv_e2_σ)
+#     a_p = a_grid_neg[a_p_i]
+#     total_amount = -a_p * (1.0 - default_prob)
+#     wage_garnishment && (total_amount += Γ_default[e3_p_i, e2_i, e1_i] * default_prob)
+    
+#     return clamp(total_amount, 0.0, -a_p)
+# end
+
+@inline @views @inbounds function repayment_mat(thres_e2::AbstractArray{Float64,2}, a_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple)::Matrix{Float64}
     """
     evaluate repayment analytically with and without wage garnishment
     """
     
     @unpack a_grid_neg, inv_e2_σ, e2_μ_σ2_grid, Γ_default = parameters
     
-    a_p = a_grid_neg[a_p_i]
     e2_μ_σ2 = e2_μ_σ2_grid[e2_i]
-    default_prob = normcdf((thres_e2 - e2_μ_σ2) * inv_e2_σ)
-    total_amount = -a_p * (1.0 - default_prob)
-    wage_garnishment && (total_amount += Γ_default[e3_p_i, e2_i, e1_i] * default_prob)
-    
-    return clamp(total_amount, 0.0, -a_p)
+    a_p = a_grid_neg[a_p_i]
+    Γ_e3 = Γ_default[:, e2_i, e1_i] 
+    default_probs = normcdf.((thres_e2 .- e2_μ_σ2) .* inv_e2_σ)
+    total_amounts = -a_p .* (1.0 .- default_probs) .+ Γ_e3 .* default_probs
+    return clamp.(total_amounts, 0.0, -a_p)
 end
 
 mutable struct MutableAggregateVariables{T}
@@ -405,6 +422,7 @@ end
     @unpack ρ, r_f, τ, η, κ, w_λ,
     R_bar, q_bar, Γ_e3_ν = parameters
 
+    @unpack loop_a_neg_e3_ν_e1, loop_a_neg_e2_e1, loop_e2_e1 = parameters
 
     # -- Aggregates
     agg = MutableAggregateVariables{T}(
@@ -417,23 +435,23 @@ end
     thres_e2 = Array{T}(undef, a_size_neg, e3_size, ν_size, e1_size)
 
     # --- Fill threshold_e2 with fused broadcasts (no inner scalar loops)
-    for e1_i in 1:e1_size, ν_i in 1:ν_size, e3_i in 1:e3_size
+    @batch for idx in loop_a_neg_e3_ν_e1
+        a_neg_i, e3_i, ν_i, e1_i = idx.I
         e1 = e1_grid[e1_i]
         e3 = e3_grid[e3_i]
-        @. thres_e2[:, e3_i, ν_i, e1_i] = log_(-a_grid_neg / w_λ) - e1 - e3
+        a_neg = a_grid_neg[a_neg_i]
+        thres_e2[a_neg_i, e3_i, ν_i, e1_i] = log_(-a_neg / w_λ) - e1 - e3
     end
 
     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
     q = fill(q_bar, a_size, e2_size, e1_size)
 
     # --- Compute R and q; find rbl via bounded 1d optimize
-    for e1_i in 1:e1_size, e2_i in 1:e2_size, a_p_i in 1:a_size_neg
-        R_temp = 0.0
-        for ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
-            thres_e2_ = thres_e2[a_p_i, e3_p_i, ν_p_i, e1_i]
-            R_temp += Γ_e3_ν[e3_p_i, ν_p_i] *
-                      repayment(a_p_i, e3_p_i, e2_i, e1_i, thres_e2_, parameters)
-        end
+    @batch for idx in loop_a_neg_e2_e1
+        a_p_i, e2_i, e1_i = idx.I        
+        thres_e2_ = thres_e2[a_p_i, :, :, e1_i]
+        repayment_e3_ν = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
+        R_temp = dot(Γ_e3_ν, repayment_e3_ν)
         R[a_p_i, e2_i, e1_i] = R_temp
         q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
     end
@@ -441,7 +459,8 @@ end
     rbl_a = Array{T}(undef, e2_size, e1_size)
     rbl_qa = Array{T}(undef, e2_size, e1_size)
 
-    for e1_i in 1:e1_size, e2_i in 1:e2_size
+    @batch for idx in loop_e2_e1
+        e2_i, e1_i = idx.I        
         q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
         rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
         rbl_a[e2_i, e1_i] = rbl_a_
@@ -473,16 +492,6 @@ end
         agg, R, q, rbl_a, rbl_qa, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
         policy_a, policy_d, policy_a_pos, thres_a, thres_e2, μ
     )
-end
-
-function variables_function_update!(variables::MutableVariables, parameters::NamedTuple; λ::Float64)
-    """
-    construct a mutable object containing endogenous variables
-    """
-
-    # define aggregate prices
-    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ=λ)
-    variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
 struct ItpCache{ItpQ,ItpEv,ItpEvPh}
@@ -525,22 +534,18 @@ end
     return ItpCache{typeof(q_sample),typeof(EV_sample),typeof(EV_Ph_sample)}(q_itp, EV_itp, EV_Ph_itp)
 end
 
-function update_EV!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::MutableVariables, parameters::NamedTuple)
+@views @inbounds function update_EV!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::MutableVariables, parameters::NamedTuple)
     """
     Construct expected value functions `EV` and `EV_pos`
     """
 
     @unpack a_ind_zero, Ph, Γ, loop_a_ν_e2_e1 = parameters
-
-    @views @inbounds @batch for idx in loop_a_ν_e2_e1
-
+    @batch for idx in loop_a_ν_e2_e1
         a_p_i, ν_i, e2_i, e1_i = idx.I
-
         Γ_temp = Γ[:, :, :, ν_i, e2_i]
         V_p_temp = V_p[a_p_i, :, :, :, e1_i]
         EV_temp = dot(Γ_temp, V_p_temp)
         variables.EV[a_p_i, ν_i, e2_i, e1_i] = EV_temp
-
         if a_p_i > a_ind_zero
             a_pos_p_i = a_p_i - a_ind_zero + 1
             V_pos_p_temp = V_pos_p[a_pos_p_i, :, :, :, e1_i]
@@ -559,13 +564,21 @@ function update_V_d!(variables::MutableVariables, parameters::NamedTuple)
     """
 
     @unpack loop_ν_e2_e1, u_d, ξ = parameters
-
-    @views @inbounds @batch  for idx in loop_ν_e2_e1
+    @views @inbounds @batch for idx in loop_ν_e2_e1
         ν_i, e2_i, e1_i = idx.I
         EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
         u_d_temp = u_d[:, e2_i, e1_i]
         @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
     end
+
+    # @unpack loop_e3_ν_e2_e1, u_d, ξ = parameters
+    # @inbounds @batch for idx in loop_e3_ν_e2_e1
+    #     e3_i, ν_i, e2_i, e1_i = idx.I
+    #     EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
+    #     u_d_temp = u_d[e3_i, e2_i, e1_i]
+    #     variables.V_d[e3_i, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
+    # end
+
     return nothing
 end
 
@@ -617,8 +630,7 @@ end
 
 @inline (f::QaInterpolant)(a_p::Real) = f.q_itp(a_p) * a_p
 
-@inline function find_min_qa(a_grid_neg::AbstractVector{T},
-    q_grid_neg::AbstractVector{T}) where {T<:AbstractFloat}
+@inline @inbounds function find_min_qa(a_grid_neg::AbstractVector{T}, q_grid_neg::AbstractVector{T}) where {T<:AbstractFloat}
 
     Na = length(a_grid_neg)
     @assert Na == length(q_grid_neg) "length mismatch"
@@ -626,7 +638,7 @@ end
 
     best_f, best_a, best_i = typemax(Float64), a_grid_neg[1], 1
 
-    @inbounds for i in 1:(Na-1)
+    for i in 1:(Na-1)
 
         a0, a1 = a_grid_neg[i], a_grid_neg[i+1]
         q0, q1 = q_grid_neg[i], q_grid_neg[i+1]
@@ -661,7 +673,7 @@ end
     return best_a, best_f, best_i
 end
 
-function update_value_and_policy_functions!(
+@views @inbounds function update_value_and_policy_functions!(
     V_p::Array{Float64,5},
     V_pos_p::Array{Float64,5},
     variables::MutableVariables,
@@ -681,7 +693,7 @@ function update_value_and_policy_functions!(
     update_EV!(V_p, V_pos_p, variables, parameters)
     update_V_d!(variables, parameters)
 
-    @views @inbounds @batch for idx in loop_e2_e1
+    @batch for idx in loop_e2_e1
 
         e2_i, e1_i = idx.I
 
@@ -779,21 +791,13 @@ end
     return e2_star
 end
 
-function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; indIU::Bool=false, indE::Bool=false)
+function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; indIU::Bool=true, indE::Bool=true)
     """
     update default thresholds in assets and persistent endowments (e2)
     """
 
     @unpack a_size_neg, a_grid_neg, e2_size, e2_grid, loop_e3_ν_e2_e1, loop_a_neg_e3_ν_e1 = parameters
     @unpack γ, e1_grid, e3_grid, W, w_λ = parameters
-
-    # if indIU
-    #     @unpack γ = parameters
-    # end
-
-    # if indE
-    #     @unpack e1_grid, e3_grid, W, w_λ = parameters
-    # end
 
     @inbounds @views @batch for idx in loop_e3_ν_e2_e1
 
@@ -890,59 +894,30 @@ function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; i
     return nothing
 end
 
-function pricing_and_rbl_function!(variables::MutableVariables, parameters::NamedTuple)
+@views @inbounds function update_pricing_and_rbl_function!(variables::MutableVariables, parameters::NamedTuple)
     """
-    update pricing function and borrowing risky limit
+    update discounted borrowing price and borrowing risky limit
     """
 
-    # unpack parameters
-    @unpack a_min, a_grid_neg, a_size_neg, a_ind_zero, e1_size, e2_size, e3_size, ν_size, Γ_e3_ν, R_bar = parameters
+    @unpack loop_a_neg_e2_e1, Γ_e3_ν, R_bar, loop_e2_e1, a_size_neg, a_grid_neg = parameters
 
-    # loop over states
-    @inbounds @batch for e1_i = 1:e1_size, e2_i = 1:e2_size
-        @inbounds @turbo for a_p_i = 1:(a_size_neg-1)
-            R_temp = 0.0
-            for ν_p_i = 1:ν_size, e3_p_i = 1:e3_size
-                threshold_e2 = variables.threshold_e2[a_p_i, e3_p_i, ν_p_i, e1_i]
-                R_temp += Γ_e3_ν[e3_p_i, ν_p_i] * repayment_function(e1_i, e2_i, e3_p_i, a_p_i, threshold_e2, parameters)
-            end
-            variables.R[a_p_i, e2_i, e1_i] = R_temp
-            variables.q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
-        end
-
-        # risky borrowing limit and maximum discounted borrwoing amount
-        @views qa_function_itp = Akima(a_grid_neg, variables.q[1:a_ind_zero, e2_i, e1_i] .* a_grid_neg)
-        # qa_function_itp = Spline1D(a_grid_neg, q[1:a_ind_zero, e1_i, e2_i] .* a_grid_neg; k = 1, bc = "extrapolate")
-        qa_function(a_p) = qa_function_itp(a_p)
-        @inbounds rbl_lb, rbl_ub = find_min_bounds(qa_function, a_min, 0.0)
-        res_rbl = optimize(qa_function, rbl_lb, rbl_ub)
-        # res_rbl = optimize(qa_function, a_grid[1], 0.0)
-        @inbounds variables.rbl_a[e2_i, e1_i] = Optim.minimizer(res_rbl)
-        @inbounds variables.rbl_qa[e2_i, e1_i] = Optim.minimum(res_rbl)
+    @batch for idx in loop_a_neg_e2_e1
+        a_p_i, e2_i, e1_i = idx.I
+        thres_e2_ = variables.thres_e2[a_p_i, :, :, e1_i]
+        repayment_e3_ν = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
+        R_temp = dot(Γ_e3_ν, repayment_e3_ν)
+        variables.R[a_p_i, e2_i, e1_i] = R_temp
+        variables.q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
     end
 
-    for e1_i in 1:e1_size, e2_i in 1:e2_size, a_p_i in 1:a_size_neg
-        R_temp = 0.0
-        for ν_p_i in 1:ν_size, e3_p_i in 1:e3_size
-            thres_e2_ = thres_e2[a_p_i, e3_p_i, ν_p_i, e1_i]
-            R_temp += Γ_e3_ν[e3_p_i, ν_p_i] *
-                      repayment(a_p_i, e3_p_i, e2_i, e1_i, thres_e2_, parameters)
-        end
-        R[a_p_i, e2_i, e1_i] = R_temp
-        q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
-    end
-
-    rbl_a = Array{T}(undef, e2_size, e1_size)
-    rbl_qa = Array{T}(undef, e2_size, e1_size)
-
-    for e1_i in 1:e1_size, e2_i in 1:e2_size
-        q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
+    @batch for idx in loop_e2_e1
+        e2_i, e1_i = idx.I
+        q_grid_neg = variables.q[1:a_size_neg, e2_i, e1_i]
         rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
-        rbl_a[e2_i, e1_i] = rbl_a_
-        rbl_qa[e2_i, e1_i] = rbl_qa_
+        variables.rbl_a[e2_i, e1_i] = rbl_a_
+        variables.rbl_qa[e2_i, e1_i] = rbl_qa_
     end
 
-    # return results
     return nothing
 end
 
@@ -973,10 +948,10 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
         update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
 
         # default thresholds
-        find_thresholds!(variables, parameters)
+        find_thresholds!(variables, parameters; indIU = true, indE = true)
 
         # pricing function and borrowing risky limit
-        pricing_and_rbl_function!(variables.R, variables.q, variables.rbl, variables.threshold_e2, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
+        update_pricing_and_rbl_function!(variables, parameters)
 
         # check convergence
         V_crit = norm(variables.V .- V_p, Inf)
@@ -994,6 +969,16 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
     end
 
     return crit
+end
+
+function variables_function_update!(variables::MutableVariables, parameters::NamedTuple; λ::Float64)
+    """
+    construct a mutable object containing endogenous variables
+    """
+
+    # define aggregate prices
+    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ=λ)
+    variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
 function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Array{Float64,5}, threshold_a::Array{Float64,4}, policy_pos_a::Array{Float64,5}, policy_pos_d::Array{Float64,5}, parameters::NamedTuple)

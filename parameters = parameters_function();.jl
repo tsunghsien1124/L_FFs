@@ -3,6 +3,7 @@ using BenchmarkTools
 parameters = initialize_parameters();
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
+solve_value_and_pricing_function!(variables, parameters, itp_cache)
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -20,6 +21,25 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i])
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i] .* parameters.a_grid_neg)
 plot!(variables.rbl_a[:, e1_i], variables.rbl_qa[:, e1_i], seriestype=:scatter)
 
+#####
+e1_i = parameters.e1_size
+e2_i = 2 # parameters.e2_size
+ν_i = parameters.ν_size
+e3_i = parameters.e3_size
+
+plot(parameters.a_grid_neg, variables.V_nd[1:parameters.a_size_neg, e3_i, ν_i, e2_i, e1_i])
+hline!([variables.V_d[e3_i, ν_i, e2_i, e1_i]])
+
+plot(parameters.a_grid_neg, inverse_utility.(variables.V_nd[1:parameters.a_size_neg, e3_i, ν_i, e2_i, e1_i], parameters.γ))
+hline!([inverse_utility(variables.V_d[e3_i, ν_i, e2_i, e1_i], parameters.γ)])
+
+plot(parameters.e2_grid, variables.thres_a[e3_i, ν_i, :, e1_i])
+
+plot(parameters.W[e3_i,:,e1_i], variables.thres_a[e3_i, ν_i, :, e1_i])
+
+plot(parameters.a_grid_neg, variables.thres_e2[:, e3_i, ν_i, e1_i])
+
+#####
 
 @views p = variables.q[1:(parameters.a_ind_zero-1), e2_i, e1_i]
 @views a = parameters.a_grid_neg[1:(end-1)]

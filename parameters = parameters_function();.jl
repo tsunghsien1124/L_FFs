@@ -9,8 +9,8 @@ solve_value_and_pricing_function!(variables, parameters, itp_cache)
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
 # @btime E_V_function!($V_p, $V_pos_p, $variables, $parameters);
 
-e1_i = parameters.e1_size - 1
-e2_i = parameters.e2_size - 1
+e1_i = parameters.e1_size
+e2_i = parameters.e2_size
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i] .* parameters.a_grid_neg, seriestype=:scatter)
@@ -23,21 +23,75 @@ plot!(variables.rbl_a[:, e1_i], variables.rbl_qa[:, e1_i], seriestype=:scatter)
 
 #####
 e1_i = parameters.e1_size
-e2_i = 2 # parameters.e2_size
+e2_i = 2 #parameters.e2_size
 ν_i = parameters.ν_size
 e3_i = parameters.e3_size
 
 plot(parameters.a_grid_neg, variables.V_nd[1:parameters.a_size_neg, e3_i, ν_i, e2_i, e1_i])
 hline!([variables.V_d[e3_i, ν_i, e2_i, e1_i]])
+scatter!([variables.thres_a[e3_i, ν_i, e2_i, e1_i]], [variables.V_d[e3_i, ν_i, e2_i, e1_i]])
 
 plot(parameters.a_grid_neg, inverse_utility.(variables.V_nd[1:parameters.a_size_neg, e3_i, ν_i, e2_i, e1_i], parameters.γ))
 hline!([inverse_utility(variables.V_d[e3_i, ν_i, e2_i, e1_i], parameters.γ)])
+scatter!([variables.thres_a[e3_i, ν_i, e2_i, e1_i]], [inverse_utility(variables.V_d[e3_i, ν_i, e2_i, e1_i], parameters.γ)])
+
+a_p_i = 50 # parameters.a_size_neg
+a_p_ = parameters.a_grid_neg[a_p_i]
+e1_ = parameters.e1_grid[e1_i]
+e3_ = parameters.e3_grid[e3_i]
 
 plot(parameters.e2_grid, variables.thres_a[e3_i, ν_i, :, e1_i])
+scatter!([variables.thres_e2[a_p_i, e3_i, ν_i, e1_i]], [parameters.a_grid_neg[a_p_i]])
 
+W_ = parameters.w_λ * exp(variables.thres_e2[a_p_i, e3_i, ν_i, e1_i] + e1_ + e3_)
 plot(parameters.W[e3_i,:,e1_i], variables.thres_a[e3_i, ν_i, :, e1_i])
+scatter!([W_], [parameters.a_grid_neg[a_p_i]])
 
 plot(parameters.a_grid_neg, variables.thres_e2[:, e3_i, ν_i, e1_i])
+
+#####
+
+e1_i = 1 # parameters.e1_size
+e2_i = 1 # parameters.e2_size
+ν_i = 1 # parameters.ν_size
+e3_i = 1 # parameters.e3_size
+
+plot(parameters.a_grid_pos, variables.V[parameters.a_ind_zero:end, e3_i, ν_i, :, e1_i])
+
+plot(parameters.a_grid_pos, V_p[parameters.a_ind_zero:end, e3_i, ν_i, :, e1_i])
+
+plot(parameters.a_grid_pos[1:10], variables.V[parameters.a_ind_zero+1:parameters.a_ind_zero+10, e3_i, ν_i, :, e1_i])
+
+plot(parameters.a_grid_neg[1:30], variables.V[1:30, e3_i, ν_i, :, e1_i])
+
+plot(parameters.a_grid, variables.EV[:, ν_i, e2_i, e1_i])
+
+plot(parameters.a_grid_neg, variables.EV[1:parameters.a_size_neg, ν_i, e2_i, e1_i])
+
+plot(parameters.a_grid_neg[1:30], variables.EV[1:30, ν_i, e2_i, e1_i])
+
+plot(parameters.a_grid_pos, variables.EV_pos[:, ν_i, e2_i, e1_i])
+
+plot(parameters.a_grid_pos, variables.EV_Ph[:, ν_i, e2_i, e1_i])
+
+#####
+
+e1_i = 1 # parameters.e1_size
+e2_i = 1 # parameters.e2_size
+ν_i = 1 # parameters.ν_size
+e3_i = 1 # parameters.e3_size
+
+plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg, e3_i, ν_i, :, e1_i])
+
+plot(parameters.a_grid_neg[60:end], variables.policy_a[60:parameters.a_size_neg, :, ν_i, e2_i, e1_i])
+
+plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg, e3_i, ν_i, e2_i, :])
+
+plot(parameters.a_grid_neg, variables.policy_d[1:parameters.a_size_neg, e3_i, ν_i, e2_i, :])
+
+plot(parameters.a_grid, variables.policy_a[:, e3_i, ν_i, :, e1_i])
+
+plot(parameters.a_grid_pos[1:20], variables.policy_a_pos[1:20, e3_i, ν_i, :, e1_i])
 
 #####
 
@@ -91,3 +145,35 @@ A[:,1,1,1] .= 100:104
 v2 = itp(3.0)            # still ~3.0  ← internally copied at construction
 itp.itp.coefs .= @view A[:,1,1,1]
 v3 = itp(3.0)            # now ~102.0  ← manual refresh fixed it
+
+#####
+
+# Before the function, check for duplicates
+function check_index_uniqueness(loop_indices, name)
+    indices_set = Set()
+    for idx in loop_indices
+        key = idx.I  # or whatever indexing you're using
+        if key in indices_set
+            println("Duplicate found in $name: $key")
+            return false
+        end
+        push!(indices_set, key)
+    end
+    return true
+end
+
+# Call before your loops
+check_index_uniqueness(parameters.loop_a_ν_e2_e1, "loop_a_ν_e2_e1")
+check_index_uniqueness(parameters.loop_a_pos_ν_e2_e1, "loop_a_pos_ν_e2_e1")
+
+#####
+
+using BenchmarkTools
+
+# Test with your typical array sizes
+Γ_sample = rand(3,4,5,6)
+V_sample = rand(3,4,5,6)
+
+# Single-threaded comparison
+@btime dot($Γ_sample, $V_sample)
+@btime sum($Γ_sample .* $V_sample)

@@ -136,6 +136,8 @@ function initialize_parameters(;
     loop_a_neg_e2_e1 = CartesianIndices((a_size_neg, e2_size, e1_size))
     loop_ν_e2_e1 = CartesianIndices((ν_size, e2_size, e1_size))
     loop_a_ν_e2_e1 = CartesianIndices((a_size, ν_size, e2_size, e1_size))
+    loop_a_neg_ν_e2_e1 = CartesianIndices((a_size_neg, ν_size, e2_size, e1_size))
+    loop_a_pos_ν_e2_e1 = CartesianIndices((a_size_pos, ν_size, e2_size, e1_size))
     loop_e3_ν_e2_e1 = CartesianIndices((e3_size, ν_size, e2_size, e1_size))
     loop_a_neg_e3_ν_e1 = CartesianIndices((a_size_neg, e3_size, ν_size, e1_size))
 
@@ -161,9 +163,10 @@ function initialize_parameters(;
         e1 = e1_grid[e1_i]
         e2 = e2_grid[e2_i]
         e3 = e3_grid[e3_i]
-        W[e3_i, e2_i, e1_i] = w_λ * exp(e1 + e2 + e3)
-        WA[:, e3_i, e2_i, e1_i] .= W[e3_i, e2_i, e1_i] .+ a_grid
-        u_d[e3_i, e2_i, e1_i] = utility((1.0 - η) * W[e3_i, e2_i, e1_i] - κ, γ)
+        W_temp = w_λ * exp(e1 + e2 + e3)
+        W[e3_i, e2_i, e1_i] = W_temp
+        WA[:, e3_i, e2_i, e1_i] .= W_temp .+ a_grid
+        u_d[e3_i, e2_i, e1_i] = utility((1.0 - η) * W_temp - κ, γ)
     end
 
     e2_μ_grid = e2_ρ .* e2_grid
@@ -245,6 +248,8 @@ function initialize_parameters(;
         loop_a_neg_e2_e1=loop_a_neg_e2_e1,
         loop_ν_e2_e1=loop_ν_e2_e1,
         loop_a_ν_e2_e1=loop_a_ν_e2_e1,
+        loop_a_neg_ν_e2_e1=loop_a_neg_ν_e2_e1,
+        loop_a_pos_ν_e2_e1=loop_a_pos_ν_e2_e1,
         loop_e3_ν_e2_e1=loop_e3_ν_e2_e1,
         loop_a_neg_e3_ν_e1=loop_a_neg_e3_ν_e1,
         Γ=Γ,
@@ -347,7 +352,8 @@ end
 #     return clamp(total_amount, 0.0, -a_p)
 # end
 
-@inline @views @inbounds function repayment_mat(thres_e2::AbstractArray{Float64,2}, a_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple)::Matrix{Float64}
+# @inline @views @inbounds 
+function repayment_mat(thres_e2::AbstractArray{Float64,2}, a_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple)::Matrix{Float64}
     """
     evaluate repayment analytically with and without wage garnishment
     """
@@ -451,7 +457,7 @@ end
         a_p_i, e2_i, e1_i = idx.I        
         thres_e2_ = thres_e2[a_p_i, :, :, e1_i]
         repayment_e3_ν = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
-        R_temp = dot(Γ_e3_ν, repayment_e3_ν)
+        R_temp = sum(Γ_e3_ν .* repayment_e3_ν)
         R[a_p_i, e2_i, e1_i] = R_temp
         q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
     end
@@ -539,20 +545,24 @@ end
     Construct expected value functions `EV` and `EV_pos`
     """
 
-    @unpack a_ind_zero, Ph, Γ, loop_a_ν_e2_e1 = parameters
+    @unpack a_ind_zero, Ph, Γ, loop_a_ν_e2_e1, loop_a_pos_ν_e2_e1 = parameters
+
     @batch for idx in loop_a_ν_e2_e1
         a_p_i, ν_i, e2_i, e1_i = idx.I
         Γ_temp = Γ[:, :, :, ν_i, e2_i]
         V_p_temp = V_p[a_p_i, :, :, :, e1_i]
-        EV_temp = dot(Γ_temp, V_p_temp)
-        variables.EV[a_p_i, ν_i, e2_i, e1_i] = EV_temp
-        if a_p_i > a_ind_zero
-            a_pos_p_i = a_p_i - a_ind_zero + 1
-            V_pos_p_temp = V_pos_p[a_pos_p_i, :, :, :, e1_i]
-            EV_pos_temp = dot(Γ_temp, V_pos_p_temp)
-            variables.EV_pos[a_pos_p_i, ν_i, e2_i, e1_i] = EV_pos_temp
-            variables.EV_Ph[a_pos_p_i, ν_i, e2_i, e1_i] = Ph * EV_temp + (1.0 - Ph) * EV_pos_temp
-        end
+        variables.EV[a_p_i, ν_i, e2_i, e1_i] = sum(Γ_temp .* V_p_temp)
+    end
+
+    @batch for idx in loop_a_pos_ν_e2_e1
+        a_pos_p_i, ν_i, e2_i, e1_i = idx.I
+        a_p_i = a_pos_p_i + a_ind_zero - 1
+        EV_temp = variables.EV[a_p_i, ν_i, e2_i, e1_i]
+        Γ_temp = Γ[:, :, :, ν_i, e2_i]
+        V_pos_p_temp = V_pos_p[a_pos_p_i, :, :, :, e1_i]
+        EV_pos_temp = sum(Γ_temp .* V_pos_p_temp)
+        variables.EV_pos[a_pos_p_i, ν_i, e2_i, e1_i] = EV_pos_temp
+        variables.EV_Ph[a_pos_p_i, ν_i, e2_i, e1_i] = Ph * EV_temp + (1.0 - Ph) * EV_pos_temp
     end
 
     return nothing
@@ -563,21 +573,21 @@ function update_V_d!(variables::MutableVariables, parameters::NamedTuple)
     Update the default value function `V_d`
     """
 
-    @unpack loop_ν_e2_e1, u_d, ξ = parameters
-    @views @inbounds @batch for idx in loop_ν_e2_e1
-        ν_i, e2_i, e1_i = idx.I
-        EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
-        u_d_temp = u_d[:, e2_i, e1_i]
-        @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
-    end
-
-    # @unpack loop_e3_ν_e2_e1, u_d, ξ = parameters
-    # @inbounds @batch for idx in loop_e3_ν_e2_e1
-    #     e3_i, ν_i, e2_i, e1_i = idx.I
+    # @unpack loop_ν_e2_e1, u_d, ξ = parameters
+    # @views @inbounds @batch for idx in loop_ν_e2_e1
+    #     ν_i, e2_i, e1_i = idx.I
     #     EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
-    #     u_d_temp = u_d[e3_i, e2_i, e1_i]
-    #     variables.V_d[e3_i, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
+    #     u_d_temp = u_d[:, e2_i, e1_i]
+    #     @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
     # end
+
+    @unpack loop_e3_ν_e2_e1, u_d, ξ = parameters
+    @inbounds @batch for idx in loop_e3_ν_e2_e1
+        e3_i, ν_i, e2_i, e1_i = idx.I
+        EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
+        u_d_temp = u_d[e3_i, e2_i, e1_i]
+        variables.V_d[e3_i, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
+    end
 
     return nothing
 end
@@ -693,7 +703,8 @@ end
     update_EV!(V_p, V_pos_p, variables, parameters)
     update_V_d!(variables, parameters)
 
-    @batch for idx in loop_e2_e1
+    # @batch 
+    for idx in loop_e2_e1
 
         e2_i, e1_i = idx.I
 
@@ -905,12 +916,13 @@ end
         a_p_i, e2_i, e1_i = idx.I
         thres_e2_ = variables.thres_e2[a_p_i, :, :, e1_i]
         repayment_e3_ν = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
-        R_temp = dot(Γ_e3_ν, repayment_e3_ν)
+        R_temp = sum(Γ_e3_ν .* repayment_e3_ν)
         variables.R[a_p_i, e2_i, e1_i] = R_temp
         variables.q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
     end
 
-    @batch for idx in loop_e2_e1
+    # @batch 
+    for idx in loop_e2_e1
         e2_i, e1_i = idx.I
         q_grid_neg = variables.q[1:a_size_neg, e2_i, e1_i]
         rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)

@@ -7,6 +7,7 @@ using Distributions
 using QuadGK
 using JLD2: @save, @load
 using LinearAlgebra
+BLAS.set_num_threads(1)
 using Optim
 # using BlackBoxOptim
 using Parameters: @unpack

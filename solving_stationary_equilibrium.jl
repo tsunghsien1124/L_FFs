@@ -55,9 +55,10 @@ function initialize_parameters(;
     ν_size::Int64=2,                 # number of preference shock
     # a_min::Float64=-5.0,             # min of asset holding
     a_max::Float64=800.0,            # max of asset holding
-    a_size_neg::Int64=101,           # number of grid of negative asset holding for VFI
-    a_size_pos::Int64=101,           # number of grid of positive asset holding for VFI
-    a_degree::Int64=3,               # curvature of the positive asset gridpoints
+    a_size_neg::Int64=101,            # number of grid of negative asset holding for VFI
+    a_size_pos::Int64=101,            # number of grid of positive asset holding for VFI
+    a_degree_neg::Int64=1,            # curvature of the negative asset gridpoints
+    a_degree_pos::Int64=3,            # curvature of the positive asset gridpoints
     μ_scale::Int64=1,                # scale for the asset holding gridpoints for distribution
     λ::Float64=0.0                   # multiplier
 )
@@ -101,10 +102,11 @@ function initialize_parameters(;
     G_ν = ν_Γ
 
     # asset holding grid for VFI
-    a_min = -1.5 * exp(e1_grid[end] + e2_grid[end] + e3_grid[end])
-    a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) / (a_size_neg - 1)) .^ a_degree) * a_min
+    # a_min = -1.0 * exp(e1_grid[end] + e2_grid[end] + e3_grid[end])
+    a_min = -1.0 * exp(e1_grid[end] + e2_grid[end])
+    a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) / (a_size_neg - 1)) .^ a_degree_neg) * a_min
     a_grid_neg = a_grid_neg[1:(end-1)]
-    a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) / (a_size_pos - 1)) .^ a_degree) * a_max
+    a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) / (a_size_pos - 1)) .^ a_degree_pos) * a_max
     a_grid = cat(a_grid_neg, a_grid_pos, dims=1)
     a_size = length(a_grid)
     a_ind_zero = a_size_neg
@@ -234,7 +236,8 @@ function initialize_parameters(;
         a_size_neg_μ=a_size_neg_μ,
         a_size_pos_μ=a_size_pos_μ,
         a_ind_zero_μ=a_ind_zero_μ,
-        a_degree=a_degree,
+        a_degree_neg=a_degree_neg,
+        a_degree_pos=a_degree_pos,
         λ=λ,
         ξ_λ=ξ_λ,
         Λ_λ=Λ_λ,
@@ -266,46 +269,37 @@ function initialize_parameters(;
     )
 end
 
-@inline function find_min_bounds(obj, grid_min::Real, grid_max::Real; grid_length::Int=120, neighborhood::Int=1)
-    @assert grid_max > grid_min
-    @assert grid_length ≥ 2
-    @assert neighborhood ≥ 1
+# @inline function find_min_bounds(obj, grid_min::Real, grid_max::Real; grid_length::Int=120, neighborhood::Int=1)
+#     @assert grid_max > grid_min
+#     @assert grid_length ≥ 2
+#     @assert neighborhood ≥ 1
 
-    step = (grid_max - grid_min) / (grid_length - 1)
+#     step = (grid_max - grid_min) / (grid_length - 1)
 
-    best_val = Inf
-    best_i = 1
-    @inbounds @simd for i in 1:grid_length
-        x = grid_min + (i - 1) * step
-        y = obj(x)
-        if isfinite(y) && y < best_val
-            best_val = y
-            best_i = i
-        end
-    end
+#     best_val = Inf
+#     best_i = 1
+#     @inbounds @simd for i in 1:grid_length
+#         x = grid_min + (i - 1) * step
+#         y = obj(x)
+#         if isfinite(y) && y < best_val
+#             best_val = y
+#             best_i = i
+#         end
+#     end
 
-    lo_i = max(1, best_i - neighborhood)
-    hi_i = min(grid_length, best_i + neighborhood)
+#     lo_i = max(1, best_i - neighborhood)
+#     hi_i = min(grid_length, best_i + neighborhood)
 
-    lb = grid_min + (lo_i - 1) * step
-    ub = grid_min + (hi_i - 1) * step
-    if lb == ub
-        ub = min(grid_max, lb + step)
-        lb = max(grid_min, ub - step)
-    end
-    return lb, ub
-end
+#     lb = grid_min + (lo_i - 1) * step
+#     ub = grid_min + (hi_i - 1) * step
+#     if lb == ub
+#         ub = min(grid_max, lb + step)
+#         lb = max(grid_min, ub - step)
+#     end
+#     return lb, ub
+# end
 
-function zero_bounds_function(V_d::Float64, V_nd::Vector{Float64}, a_grid::Vector{Float64})
-    """
-    compute bounds for (zero) root finding
-    """
-    @inbounds lb = a_grid[findlast(V_nd .< V_d)]
-    @inbounds ub = a_grid[findfirst(V_nd .> V_d)]
-    return lb, ub
-end
-
-function utility(c::Float64, γ::Float64)
+@inline function utility(c::Float64, γ::Float64)
     """
     compute utility of CRRA utility function with coefficient γ
     """
@@ -316,7 +310,7 @@ function utility(c::Float64, γ::Float64)
     end
 end
 
-function inverse_utility(u::Float64, γ::Float64)
+@inline function inverse_utility(u::Float64, γ::Float64)
     """
     compute inverse utility of CRRA utility function with coefficient γ
     """
@@ -340,29 +334,28 @@ end
 #     """
 #     evaluate repayment analytically with and without wage garnishment
 #     """
-    
+
 #     @unpack a_grid_neg, inv_e2_σ, e2_μ_σ2_grid, Γ_default = parameters
-    
+
 #     e2_μ_σ2 = e2_μ_σ2_grid[e2_i]
 #     default_prob = normcdf((thres_e2 - e2_μ_σ2) * inv_e2_σ)
 #     a_p = a_grid_neg[a_p_i]
 #     total_amount = -a_p * (1.0 - default_prob)
 #     wage_garnishment && (total_amount += Γ_default[e3_p_i, e2_i, e1_i] * default_prob)
-    
+
 #     return clamp(total_amount, 0.0, -a_p)
 # end
 
-# @inline @views @inbounds 
-function repayment_mat(thres_e2::AbstractArray{Float64,2}, a_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple)::Matrix{Float64}
+@inline @views @inbounds function repayment_mat(thres_e2::AbstractArray{Float64,2}, a_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple)::Matrix{Float64}
     """
     evaluate repayment analytically with and without wage garnishment
     """
-    
+
     @unpack a_grid_neg, inv_e2_σ, e2_μ_σ2_grid, Γ_default = parameters
-    
+
     e2_μ_σ2 = e2_μ_σ2_grid[e2_i]
     a_p = a_grid_neg[a_p_i]
-    Γ_e3 = Γ_default[:, e2_i, e1_i] 
+    Γ_e3 = Γ_default[:, e2_i, e1_i]
     default_probs = normcdf.((thres_e2 .- e2_μ_σ2) .* inv_e2_σ)
     total_amounts = -a_p .* (1.0 .- default_probs) .+ Γ_e3 .* default_probs
     return clamp.(total_amounts, 0.0, -a_p)
@@ -386,7 +379,6 @@ mutable struct MutableAggregateVariables{T}
     avg_loan_rate_pw::T
 end
 
-# 2) Main container: parametric and concrete
 mutable struct MutableVariables{T,
     A3<:AbstractArray{T,3},A4<:AbstractArray{T,4},A5<:AbstractArray{T,5},A6<:AbstractArray{T,6}}
     aggregate_variables::MutableAggregateVariables{T}
@@ -412,7 +404,7 @@ end
 @views @inbounds function create_variables(parameters::NamedTuple; T::Type{<:Real}=Float64)
 
     # ---- Assets / grids / sizes
-    @unpack a_min, a_max, a_degree,
+    @unpack a_min, a_max,
     a_size, a_size_neg, a_size_pos,
     a_grid, a_grid_neg, a_grid_pos,
     a_ind_zero,
@@ -454,7 +446,7 @@ end
 
     # --- Compute R and q; find rbl via bounded 1d optimize
     @batch for idx in loop_a_neg_e2_e1
-        a_p_i, e2_i, e1_i = idx.I        
+        a_p_i, e2_i, e1_i = idx.I
         thres_e2_ = thres_e2[a_p_i, :, :, e1_i]
         repayment_e3_ν = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
         R_temp = sum(Γ_e3_ν .* repayment_e3_ν)
@@ -466,7 +458,7 @@ end
     rbl_qa = Array{T}(undef, e2_size, e1_size)
 
     @batch for idx in loop_e2_e1
-        e2_i, e1_i = idx.I        
+        e2_i, e1_i = idx.I
         q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
         rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
         rbl_a[e2_i, e1_i] = rbl_a_
@@ -513,7 +505,7 @@ end
     construct the cached interpolants
     """
 
-    @unpack a_grid, a_grid_pos, a_ind_zero, Ph, e1_size, e2_size, ν_size = parameters
+    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
 
     q_ = variables.q[:, 1, 1]
     q_sample = linear_interpolation(a_grid, q_, extrapolation_bc=Line())
@@ -540,21 +532,21 @@ end
     return ItpCache{typeof(q_sample),typeof(EV_sample),typeof(EV_Ph_sample)}(q_itp, EV_itp, EV_Ph_itp)
 end
 
-@views @inbounds function update_EV!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::MutableVariables, parameters::NamedTuple)
+function update_EV!(V_p::Array{Float64,5}, V_pos_p::Array{Float64,5}, variables::MutableVariables, parameters::NamedTuple)
     """
     Construct expected value functions `EV` and `EV_pos`
     """
 
     @unpack a_ind_zero, Ph, Γ, loop_a_ν_e2_e1, loop_a_pos_ν_e2_e1 = parameters
 
-    @batch for idx in loop_a_ν_e2_e1
+    @views @inbounds @batch for idx in loop_a_ν_e2_e1
         a_p_i, ν_i, e2_i, e1_i = idx.I
         Γ_temp = Γ[:, :, :, ν_i, e2_i]
         V_p_temp = V_p[a_p_i, :, :, :, e1_i]
         variables.EV[a_p_i, ν_i, e2_i, e1_i] = sum(Γ_temp .* V_p_temp)
     end
 
-    @batch for idx in loop_a_pos_ν_e2_e1
+    @views @inbounds @batch for idx in loop_a_pos_ν_e2_e1
         a_pos_p_i, ν_i, e2_i, e1_i = idx.I
         a_p_i = a_pos_p_i + a_ind_zero - 1
         EV_temp = variables.EV[a_p_i, ν_i, e2_i, e1_i]
@@ -683,7 +675,7 @@ end
     return best_a, best_f, best_i
 end
 
-@views @inbounds function update_value_and_policy_functions!(
+function update_value_and_policy_functions!(
     V_p::Array{Float64,5},
     V_pos_p::Array{Float64,5},
     variables::MutableVariables,
@@ -703,8 +695,7 @@ end
     update_EV!(V_p, V_pos_p, variables, parameters)
     update_V_d!(variables, parameters)
 
-    # @batch 
-    for idx in loop_e2_e1
+    @views @inbounds @batch for idx in loop_e2_e1
 
         e2_i, e1_i = idx.I
 
@@ -778,16 +769,17 @@ end
             end
         end
     end
+
     return nothing
 end
 
 @inline log_(thres_e::Float64) = thres_e > 0.0 ? log(thres_e) : -Inf
 
-@inline function compute_e2_star(W_fc_0::Float64, W_fc_1::Float64, thres_a_fc_0::Float64, thres_a_fc_1::Float64, 
-                                 a_neg_::Float64, crossing_idx::Union{Nothing,Int64})::Float64
+@inline function compute_e2_star(W_fc_0::Float64, W_fc_1::Float64, thres_a_fc_0::Float64, thres_a_fc_1::Float64,
+    a_neg_::Float64, crossing_idx::Union{Nothing,Int64})::Float64
 
     m_fc = (thres_a_fc_1 - thres_a_fc_0) / (W_fc_1 - W_fc_0)
-    
+
     if isnothing(crossing_idx)
         # Beyond upper bound - extrapolate
         e2_star = W_fc_1 + (a_neg_ - thres_a_fc_1) / m_fc
@@ -798,11 +790,11 @@ end
         # Normal interpolation case
         e2_star = W_fc_1 - (thres_a_fc_1 - a_neg_) / m_fc
     end
-    
+
     return e2_star
 end
 
-function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; indIU::Bool=true, indE::Bool=true)
+function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; indIU::Bool=true)
     """
     update default thresholds in assets and persistent endowments (e2)
     """
@@ -872,16 +864,10 @@ function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; i
 
         a_neg_ = a_grid_neg[a_neg_i]
         thres_a_ = variables.thres_a[e3_i, ν_i, :, e1_i]
-
-        if indE
-            W_ = W[e3_i, :, e1_i]
-            e3_, e1_ =  e3_grid[e3_i], e1_grid[e1_i]
-        else
-            W_ = e2_grid
-        end
+        W_ = exp.(e2_grid)
 
         crossing_idx = findfirst(i -> a_neg_ > thres_a_[i], 1:e2_size)
-        
+
         if isnothing(crossing_idx)
             first_cross_0, first_cross_1 = e2_size - 1, e2_size
         elseif crossing_idx == 1
@@ -894,10 +880,7 @@ function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; i
         thres_a_fc_0, thres_a_fc_1 = thres_a_[first_cross_0], thres_a_[first_cross_1]
 
         e2_star = compute_e2_star(W_fc_0, W_fc_1, thres_a_fc_0, thres_a_fc_1, a_neg_, crossing_idx)
-
-        if indE
-            e2_star = log_(e2_star / w_λ) - e3_ - e1_
-        end
+        e2_star = log_(e2_star)
 
         variables.thres_e2[a_neg_i, e3_i, ν_i, e1_i] = e2_star
     end
@@ -905,14 +888,14 @@ function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; i
     return nothing
 end
 
-@views @inbounds function update_pricing_and_rbl_function!(variables::MutableVariables, parameters::NamedTuple)
+function update_pricing_and_rbl_function!(variables::MutableVariables, parameters::NamedTuple)
     """
     update discounted borrowing price and borrowing risky limit
     """
 
     @unpack loop_a_neg_e2_e1, Γ_e3_ν, R_bar, loop_e2_e1, a_size_neg, a_grid_neg = parameters
 
-    @batch for idx in loop_a_neg_e2_e1
+    @views @inbounds @batch for idx in loop_a_neg_e2_e1
         a_p_i, e2_i, e1_i = idx.I
         thres_e2_ = variables.thres_e2[a_p_i, :, :, e1_i]
         repayment_e3_ν = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
@@ -921,8 +904,7 @@ end
         variables.q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
     end
 
-    # @batch 
-    for idx in loop_e2_e1
+    @views @inbounds @batch for idx in loop_e2_e1
         e2_i, e1_i = idx.I
         q_grid_neg = variables.q[1:a_size_neg, e2_i, e1_i]
         rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
@@ -933,51 +915,53 @@ end
     return nothing
 end
 
-function solve_value_and_pricing_function!(variables::MutableVariables, parameters::NamedTuple, itp_cache::ItpCache; 
-    tol::Float64=1E-8, iter_max::Int64=1000, slow_updating::Float64=1.0)
-    """
-    solve household and banking problems using one-loop algorithm
-    """
+function solve_value_and_pricing_function!(variables::MutableVariables, parameters::NamedTuple, itp_cache::ItpCache;
+    tol::Float64=1e-6, iter_max::Int64=1200, slow_updating::Float64=1.0)
 
-    # initialize the iteration number and criterion
+    ω = slow_updating
+    @assert 0.0 < ω <= 1.0 "slow_updating ω must be in (0,1]; got $ω"
+    ω_ = 1.0 - ω
+    tol_eff = tol / ω
+
     search_iter = 0
     crit = Inf
-    prog = ProgressThresh(tol, "Solving household and banking problems (one-loop): ")
+    prog = ProgressThresh(tol_eff, "Solving household and banking problems (one-loop): ")
 
-    # construct containers
     V_p = similar(variables.V)
     V_pos_p = similar(variables.V_pos)
     q_p = similar(variables.q)
 
-    while crit > tol && search_iter < iter_max
+    while crit > tol_eff && search_iter < iter_max
 
-        # copy previous values
         copyto!(V_p, variables.V)
         copyto!(V_pos_p, variables.V_pos)
         copyto!(q_p, variables.q)
 
-        # value and policy functions
         update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
-
-        # default thresholds
-        find_thresholds!(variables, parameters; indIU = true, indE = true)
-
-        # pricing function and borrowing risky limit
+        find_thresholds!(variables, parameters; indIU=true)
         update_pricing_and_rbl_function!(variables, parameters)
 
-        # check convergence
-        V_crit = norm(variables.V .- V_p, Inf)
-        V_pos_crit = norm(variables.V_pos .- V_pos_p, Inf)
-        q_crit = norm(variables.q .- q_p, Inf)
-        crit = max(V_crit, V_pos_crit, q_crit)
+        @. variables.V = ω_ * V_p + ω * variables.V
+        @. variables.V_pos = ω_ * V_pos_p + ω * variables.V_pos
+        @. variables.q = ω_ * q_p + ω * variables.q
 
-        # update the iteration number
-        search_iter += 1
+        diffV = @. abs(variables.V - V_p)
+        diffVpos = @. abs(variables.V_pos - V_pos_p)
+        diffq = @. abs(variables.q - q_p)
 
-        # manually report convergence progress
-        # println("|V| = $V_crit, |V_pos| = $V_pos_crit, |q| = $q_crit")
-        # println("Solving household and banking problems (one-loop): search_iter = $search_iter and crit = $crit > tol = $tol")
+        V_crit, V_linidx = findmax(diffV)
+        V_pos_crit, V_pos_linidx = findmax(diffVpos)
+        q_crit, q_linidx = findmax(diffq)
+        crit = max(V_crit, max(V_pos_crit, q_crit))
+
+        # Convert to Cartesian indices (multi-dim)
+        # ciV = CartesianIndices(size(variables.V))[V_linidx]
+        # ciVpos = CartesianIndices(size(variables.V_pos))[V_pos_linidx]
+        # ciq = CartesianIndices(size(variables.q))[q_linidx]
+
+        # println("iter=$(search_iter+1): |ΔV|∞=$V_crit at $ciV; |ΔV_pos|∞=$V_pos_crit at $ciVpos; |Δq|∞=$q_crit at $ciq; crit=$crit")
         ProgressMeter.update!(prog, crit)
+        search_iter += 1
     end
 
     return crit

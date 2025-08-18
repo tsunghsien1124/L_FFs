@@ -1,9 +1,9 @@
 using BenchmarkTools
 
-parameters = initialize_parameters();
+parameters = initialize_parameters(a_size_neg=151,a_degree_neg=1,a_degree_pos=2);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_pricing_function!(variables, parameters, itp_cache)
+solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updating = 0.75);
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -17,6 +17,9 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i] .* 
 plot!([variables.rbl_a[e2_i, e1_i]], [variables.rbl_qa[e2_i, e1_i]], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i])
+
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
+plot!(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end])
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i] .* parameters.a_grid_neg)
 plot!(variables.rbl_a[:, e1_i], variables.rbl_qa[:, e1_i], seriestype=:scatter)
@@ -43,11 +46,14 @@ e3_ = parameters.e3_grid[e3_i]
 plot(parameters.e2_grid, variables.thres_a[e3_i, ν_i, :, e1_i])
 scatter!([variables.thres_e2[a_p_i, e3_i, ν_i, e1_i]], [parameters.a_grid_neg[a_p_i]])
 
+plot(exp.(parameters.e2_grid), variables.thres_a[e3_i, ν_i, :, e1_i])
+scatter!([exp(variables.thres_e2[a_p_i, e3_i, ν_i, e1_i])], [parameters.a_grid_neg[a_p_i]])
+
 W_ = parameters.w_λ * exp(variables.thres_e2[a_p_i, e3_i, ν_i, e1_i] + e1_ + e3_)
 plot(parameters.W[e3_i,:,e1_i], variables.thres_a[e3_i, ν_i, :, e1_i])
 scatter!([W_], [parameters.a_grid_neg[a_p_i]])
 
-plot(parameters.a_grid_neg, variables.thres_e2[:, e3_i, ν_i, e1_i])
+plot(parameters.a_grid_neg, exp.(variables.thres_e2[:, e3_i, ν_i, :]))
 
 #####
 

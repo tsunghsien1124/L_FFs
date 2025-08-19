@@ -794,7 +794,18 @@ end
     return e2_star
 end
 
-function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; indIU::Bool=true)
+@inline function sticky_update(old::Float64, new::Float64; ω::Float64=1.0, tol_hyst::Float64=1E-8)
+    if !isfinite(new)
+        return old
+    end
+    if abs(new - old) <= tol_hyst
+        return old
+    end
+    return ω*new + (1.0-ω)*old
+end
+
+function find_thresholds!(thres_a_p::Array{Float64,4}, thres_e2_p::Array{Float64,4},
+    variables::MutableVariables, parameters::NamedTuple; indIU::Bool=true)
     """
     update default thresholds in assets and persistent endowments (e2)
     """
@@ -855,7 +866,8 @@ function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; i
             a_star = a_fc_1 - (V_nd_fc_1 - V_d_) / m_fc # a_star = a_fc_0 + (V_d_ - V_nd_fc_0) / m_fc
         end
 
-        variables.thres_a[e3_i, ν_i, e2_i, e1_i] = a_star
+        a_star_old = thres_a_p[e3_i, ν_i, e2_i, e1_i]
+        variables.thres_a[e3_i, ν_i, e2_i, e1_i] = sticky_update(a_star_old, a_star)
     end
 
     @inbounds @views @batch for idx in loop_a_neg_e3_ν_e1
@@ -865,6 +877,9 @@ function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; i
         a_neg_ = a_grid_neg[a_neg_i]
         thres_a_ = variables.thres_a[e3_i, ν_i, :, e1_i]
         W_ = exp.(e2_grid)
+        # W_ = W[e3_i, :, e1_i]
+        # e1_ = e1_grid[e1_i]
+        # e3_ = e3_grid[e3_i]
 
         crossing_idx = findfirst(i -> a_neg_ > thres_a_[i], 1:e2_size)
 
@@ -881,8 +896,10 @@ function find_thresholds!(variables::MutableVariables, parameters::NamedTuple; i
 
         e2_star = compute_e2_star(W_fc_0, W_fc_1, thres_a_fc_0, thres_a_fc_1, a_neg_, crossing_idx)
         e2_star = log_(e2_star)
+        # e2_star = log_(e2_star / w_λ) - e1_ - e3_
 
-        variables.thres_e2[a_neg_i, e3_i, ν_i, e1_i] = e2_star
+        e2_star_old = thres_e2_p[a_neg_i, e3_i, ν_i, e1_i]
+        variables.thres_e2[a_neg_i, e3_i, ν_i, e1_i] = sticky_update(e2_star_old, e2_star)
     end
 
     return nothing
@@ -915,52 +932,94 @@ function update_pricing_and_rbl_function!(variables::MutableVariables, parameter
     return nothing
 end
 
+safe_abs(x) = ifelse(isnan(x), 0.0, abs(x))
+
 function solve_value_and_pricing_function!(variables::MutableVariables, parameters::NamedTuple, itp_cache::ItpCache;
-    tol::Float64=1e-6, iter_max::Int64=1200, slow_updating::Float64=1.0)
+    tol::Float64=1e-6, iter_max::Int64=1200, slow_updating::Float64=1.0, bellman_step::Int64=3)
 
     ω = slow_updating
     @assert 0.0 < ω <= 1.0 "slow_updating ω must be in (0,1]; got $ω"
     ω_ = 1.0 - ω
     tol_eff = tol / ω
-
+    @assert bellman_step >= 1 "bellman step has to be larger than or equal to one; got $bellman_step"
     search_iter = 0
+    V_crit = Inf
+    V_pos_crit = Inf
+    q_crit = Inf
     crit = Inf
-    prog = ProgressThresh(tol_eff, "Solving household and banking problems (one-loop): ")
+    # prog = ProgressThresh(tol_eff, "Solving household and banking problems (one-loop): ")
 
     V_p = similar(variables.V)
+    V_nd_p = similar(variables.V_nd)
+    V_d_p = similar(variables.V_d)
     V_pos_p = similar(variables.V_pos)
     q_p = similar(variables.q)
+    thres_a_p = similar(variables.thres_a)
+    thres_e2_p = similar(variables.thres_e2)
 
     while crit > tol_eff && search_iter < iter_max
 
         copyto!(V_p, variables.V)
+        copyto!(V_nd_p, variables.V_nd)
+        copyto!(V_d_p, variables.V_d)
         copyto!(V_pos_p, variables.V_pos)
         copyto!(q_p, variables.q)
+        copyto!(thres_a_p, variables.thres_a)
+        copyto!(thres_e2_p, variables.thres_e2)
 
-        update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
-        find_thresholds!(variables, parameters; indIU=true)
+        if q_crit < tol_eff
+            for i in 1:bellman_step
+                update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
+            end
+        else
+            update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
+        end
+        find_thresholds!(thres_a_p, thres_e2_p, variables, parameters; indIU=true)
         update_pricing_and_rbl_function!(variables, parameters)
 
         @. variables.V = ω_ * V_p + ω * variables.V
+        @. variables.V_nd = ω_ * V_nd_p + ω * variables.V_nd
+        @. variables.V_d = ω_ * V_d_p + ω * variables.V_d
         @. variables.V_pos = ω_ * V_pos_p + ω * variables.V_pos
         @. variables.q = ω_ * q_p + ω * variables.q
+        @. variables.thres_a = ω_ * thres_a_p + ω * variables.thres_a
+        @. variables.thres_e2 = ω_ * thres_e2_p + ω * variables.thres_e2
 
-        diffV = @. abs(variables.V - V_p)
-        diffVpos = @. abs(variables.V_pos - V_pos_p)
-        diffq = @. abs(variables.q - q_p)
+        diffV = @. safe_abs.(variables.V - V_p)
+        diffVnd = @. safe_abs.(variables.V_nd - V_nd_p)
+        diffVd = @. safe_abs.(variables.V_d - V_d_p)
+        diffVpos = @. safe_abs.(variables.V_pos - V_pos_p)
+        diffq = @. safe_abs.(variables.q - q_p)
+        diffthres_a = @. safe_abs.(variables.thres_a - thres_a_p)
+        diffthres_e2 = @. safe_abs.(variables.thres_e2 - thres_e2_p)
 
         V_crit, V_linidx = findmax(diffV)
+        Vnd_crit, Vnd_linidx = findmax(diffVnd)
+        Vd_crit, Vd_linidx = findmax(diffVd)
         V_pos_crit, V_pos_linidx = findmax(diffVpos)
         q_crit, q_linidx = findmax(diffq)
-        crit = max(V_crit, max(V_pos_crit, q_crit))
+        thres_a_crit, thres_a_linidx = findmax(diffthres_a)
+        thres_e2_crit, thres_e2_linidx = findmax(diffthres_e2)
+        crit = max(Vnd_crit, Vd_crit, q_crit, thres_a_crit, thres_e2_crit)
 
         # Convert to Cartesian indices (multi-dim)
-        # ciV = CartesianIndices(size(variables.V))[V_linidx]
-        # ciVpos = CartesianIndices(size(variables.V_pos))[V_pos_linidx]
-        # ciq = CartesianIndices(size(variables.q))[q_linidx]
+        ciV = CartesianIndices(size(variables.V))[V_linidx]
+        ciVnd = CartesianIndices(size(variables.V_nd))[Vnd_linidx]
+        ciVd = CartesianIndices(size(variables.V_d))[Vd_linidx]
+        ciVpos = CartesianIndices(size(variables.V_pos))[V_pos_linidx]
+        ciq = CartesianIndices(size(variables.q))[q_linidx]
+        cithres_a = CartesianIndices(size(variables.thres_a))[thres_a_linidx]
+        cithres_e2 = CartesianIndices(size(variables.thres_e2))[thres_e2_linidx]
 
         # println("iter=$(search_iter+1): |ΔV|∞=$V_crit at $ciV; |ΔV_pos|∞=$V_pos_crit at $ciVpos; |Δq|∞=$q_crit at $ciq; crit=$crit")
-        ProgressMeter.update!(prog, crit)
+        println("iter=$(search_iter+1): |ΔV|∞=$V_crit at $ciV; crit=$crit")
+        println("iter=$(search_iter+1): |ΔV_nd|∞=$Vnd_crit at $ciVnd; crit=$crit")
+        println("iter=$(search_iter+1): |ΔV_d|∞=$Vd_crit at $ciVd; crit=$crit")
+        println("iter=$(search_iter+1): |ΔV_pos|∞=$V_pos_crit at $ciVpos; crit=$crit")
+        println("iter=$(search_iter+1): |Δq|∞=$q_crit at $ciq; crit=$crit")
+        println("iter=$(search_iter+1): |Δthres_a|∞=$thres_a_crit at $cithres_a; crit=$crit")
+        println("iter=$(search_iter+1): |Δthres_e2|∞=$thres_e2_crit at $cithres_e2; crit=$crit")
+        # ProgressMeter.update!(prog, crit)
         search_iter += 1
     end
 

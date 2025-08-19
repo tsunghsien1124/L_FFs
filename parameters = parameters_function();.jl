@@ -1,9 +1,9 @@
 using BenchmarkTools
 
-parameters = initialize_parameters(a_size_neg=151,a_degree_neg=1,a_degree_pos=2);
+parameters = initialize_parameters(a_size_neg=101, a_degree_neg=2, a_degree_pos=2);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updating = 0.75);
+solve_value_and_pricing_function!(variables, parameters, itp_cache; iter_max=200, slow_updating=1.0, bellman_step=1);
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -16,7 +16,7 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i], se
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i] .* parameters.a_grid_neg, seriestype=:scatter)
 plot!([variables.rbl_a[e2_i, e1_i]], [variables.rbl_qa[e2_i, e1_i]], seriestype=:scatter)
 
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i])
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
 plot!(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end])
@@ -50,7 +50,7 @@ plot(exp.(parameters.e2_grid), variables.thres_a[e3_i, ν_i, :, e1_i])
 scatter!([exp(variables.thres_e2[a_p_i, e3_i, ν_i, e1_i])], [parameters.a_grid_neg[a_p_i]])
 
 W_ = parameters.w_λ * exp(variables.thres_e2[a_p_i, e3_i, ν_i, e1_i] + e1_ + e3_)
-plot(parameters.W[e3_i,:,e1_i], variables.thres_a[e3_i, ν_i, :, e1_i])
+plot(parameters.W[e3_i, :, e1_i], variables.thres_a[e3_i, ν_i, :, e1_i])
 scatter!([W_], [parameters.a_grid_neg[a_p_i]])
 
 plot(parameters.a_grid_neg, exp.(variables.thres_e2[:, e3_i, ν_i, :]))
@@ -107,7 +107,7 @@ a_test_1 = collect(parameters.a_min:1:0.00001)
 a_test_2 = collect(parameters.a_min:0.001:0.00001)
 σ(x) = 1 / (1 + exp(-x))
 logit(p) = log(p) - log1p(-p)
-S = logit.(clamp.(p, 1E-8, 1-1E-8))
+S = logit.(clamp.(p, 1E-8, 1 - 1E-8))
 Sitp = PCHIPInterpolation(S, a)
 Sitp_linear = LinearInterpolation(p, a)
 
@@ -130,7 +130,7 @@ logit(p) = log(p) - log1p(-p)
 
 x = parameters.a_grid_neg[1:(end-1)]
 y = p
-y_logit = logit.(clamp.(y, 1e-12, 1-1e-12))
+y_logit = logit.(clamp.(y, 1e-12, 1 - 1e-12))
 
 lin = LinearInterpolation(y, x)
 pch = PCHIPInterpolation(y, x)
@@ -145,11 +145,11 @@ t = -0.123  # some query inside [x[1], x[end]]
 ############
 using Interpolations
 A = reshape(collect(1.0:5.0), 5, 1, 1, 1)
-itp = linear_interpolation(collect(1:5), @view(A[:,1,1,1]), extrapolation_bc=Line())
+itp = linear_interpolation(collect(1:5), @view(A[:, 1, 1, 1]), extrapolation_bc=Line())
 v1 = itp(3.0)            # ~3.0
-A[:,1,1,1] .= 100:104
+A[:, 1, 1, 1] .= 100:104
 v2 = itp(3.0)            # still ~3.0  ← internally copied at construction
-itp.itp.coefs .= @view A[:,1,1,1]
+itp.itp.coefs .= @view A[:, 1, 1, 1]
 v3 = itp(3.0)            # now ~102.0  ← manual refresh fixed it
 
 #####
@@ -177,8 +177,8 @@ check_index_uniqueness(parameters.loop_a_pos_ν_e2_e1, "loop_a_pos_ν_e2_e1")
 using BenchmarkTools
 
 # Test with your typical array sizes
-Γ_sample = rand(3,4,5,6)
-V_sample = rand(3,4,5,6)
+Γ_sample = rand(3, 4, 5, 6)
+V_sample = rand(3, 4, 5, 6)
 
 # Single-threaded comparison
 @btime dot($Γ_sample, $V_sample)

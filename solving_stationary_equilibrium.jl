@@ -146,7 +146,9 @@ function initialize_parameters(;
     # loop_V = collect(Iterators.product(1:ν_size, 1:e3_size, 1:e2_size, 1:e1_size, 1:a_size))
     loop_e2_e1 = CartesianIndices((e2_size, e1_size))
     loop_a_neg_e2_e1 = CartesianIndices((a_size_neg, e2_size, e1_size))
+    loop_a_neg_e3_e1 = CartesianIndices((a_size_neg, e3_size, e1_size))
     loop_ν_e2_e1 = CartesianIndices((ν_size, e2_size, e1_size))
+    loop_e3_e2_e1 = CartesianIndices((e3_size, e2_size, e1_size))
     loop_a_ν_e2_e1 = CartesianIndices((a_size, ν_size, e2_size, e1_size))
     loop_a_neg_ν_e2_e1 = CartesianIndices((a_size_neg, ν_size, e2_size, e1_size))
     loop_a_pos_ν_e2_e1 = CartesianIndices((a_size_pos, ν_size, e2_size, e1_size))
@@ -266,7 +268,9 @@ function initialize_parameters(;
         w_λ=w_λ,
         loop_e2_e1=loop_e2_e1,
         loop_a_neg_e2_e1=loop_a_neg_e2_e1,
+        loop_a_neg_e3_e1=loop_a_neg_e3_e1,
         loop_ν_e2_e1=loop_ν_e2_e1,
+        loop_e3_e2_e1=loop_e3_e2_e1,
         loop_a_ν_e2_e1=loop_a_ν_e2_e1,
         loop_a_neg_ν_e2_e1=loop_a_neg_ν_e2_e1,
         loop_a_pos_ν_e2_e1=loop_a_pos_ν_e2_e1,
@@ -399,12 +403,16 @@ mutable struct MutableAggregateVariables{T}
 end
 
 mutable struct MutableVariables{T,
-    A3<:AbstractArray{T,3},A4<:AbstractArray{T,4},A5<:AbstractArray{T,5},A6<:AbstractArray{T,6}}
+    A2<:AbstractArray{T,2}, 
+    A3<:AbstractArray{T,3},
+    A4<:AbstractArray{T,4},
+    A5<:AbstractArray{T,5},
+    A6<:AbstractArray{T,6}}
     aggregate_variables::MutableAggregateVariables{T}
     R::A3
     q::A3
-    rbl_a::AbstractArray{T,2}
-    rbl_qa::AbstractArray{T,2}
+    rbl_a::A2
+    rbl_qa::A2
     V::A5
     V_d::A4
     V_nd::A5
@@ -437,9 +445,9 @@ end
 
     # ---- Prices / policy / model scalars
     @unpack ρ, r_f, τ, η, κ, w_λ,
-    R_bar, q_bar, Γ_e3_ν = parameters
+    R_bar, q_bar, Γ_e3_ν, W, c_d = parameters
 
-    @unpack loop_a_neg_e3_ν_e1, loop_a_neg_e2_e1, loop_e2_e1 = parameters
+    @unpack loop_a_neg_e3_ν_e1, loop_a_neg_e2_e1, loop_a_neg_e3_e1, loop_e3_e2_e1, loop_e2_e1 = parameters
 
     # -- Aggregates
     agg = MutableAggregateVariables{T}(
@@ -447,23 +455,25 @@ end
         zero(T), zero(T), zero(T), zero(T), zero(T),
         zero(T), zero(T), zero(T), zero(T), zero(T))
 
-    # -- Prices / schedules
     thres_a = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
-    thres_e2 = Array{T}(undef, a_size_neg, e3_size, ν_size, e1_size)
+    @batch for idx in loop_e3_e2_e1
+        e3_i, e2_i, e1_i = idx.I
+        W_ = W[e3_i, e2_i, e1_i]
+        c_d_ = c_d[e3_i, e2_i, e1_i]
+        thres_a[e3_i, :, e2_i, e1_i] .= c_d_ - W_
+    end
 
-    # --- Fill threshold_e2 with fused broadcasts (no inner scalar loops)
-    @batch for idx in loop_a_neg_e3_ν_e1
-        a_neg_i, e3_i, ν_i, e1_i = idx.I
+    thres_e2 = Array{T}(undef, a_size_neg, e3_size, ν_size, e1_size)
+    @batch for idx in loop_a_neg_e3_e1
+        a_neg_i, e3_i, e1_i = idx.I
         e1 = e1_grid[e1_i]
         e3 = e3_grid[e3_i]
         a_neg = a_grid_neg[a_neg_i]
-        thres_e2[a_neg_i, e3_i, ν_i, e1_i] = log_(-a_neg / w_λ) - e1 - e3
+        thres_e2[a_neg_i, e3_i, :, e1_i] .= log_((- a_neg - κ) / (η * w_λ)) - e1 - e3
     end
 
     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
     q = fill(q_bar, a_size, e2_size, e1_size)
-
-    # --- Compute R and q; find rbl via bounded 1d optimize
     @batch for idx in loop_a_neg_e2_e1
         a_p_i, e2_i, e1_i = idx.I
         thres_e2_ = thres_e2[a_p_i, :, :, e1_i]
@@ -505,7 +515,7 @@ end
     policy_a_pos = Array{T}(undef, a_size_pos, e3_size, ν_size, e2_size, e1_size)
 
     return MutableVariables{T,
-        typeof(R),typeof(V_d),typeof(V),typeof(μ)}(
+        typeof(rbl_a),typeof(R),typeof(V_d),typeof(V),typeof(μ)}(
         agg, R, q, rbl_a, rbl_qa, V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
         policy_a, policy_d, policy_a_pos, thres_a, thres_e2, μ
     )

@@ -68,6 +68,7 @@ function initialize_parameters(;
 
     # permanent endowment shock
     e1_grid, e1_Γ = adda_cooper(e1_size, 0.0, e1_σ)
+    exp_e1_grid = exp.(e1_grid)
     e1_Γ = e1_Γ[1, :]
     # e1_grid = [-e1_σ, e1_σ]
     # e1_Γ = Matrix(1.0I, e1_size, e1_size)
@@ -80,17 +81,26 @@ function initialize_parameters(;
     # e2_MC = rouwenhorst(e2_size, e2_ρ, e2_σ, 0.0)
     e2_Γ = e2_MC.p
     e2_grid = collect(e2_MC.state_values)
+    exp_e2_grid = exp.(e2_grid)
     # e2_grid, e2_Γ = adda_cooper(e2_size, e2_ρ, e2_σ)
     G_e2 = stationary_distributions(MarkovChain(e2_Γ, e2_grid))[1]
     # G_e2 = [1.0, 0.0, 0.0]
 
     # transitory endowment shock
     e3_grid, e3_Γ = adda_cooper(e3_size, 0.0, e3_σ)
+    exp_e3_grid = exp.(e3_grid)
     e3_Γ = e3_Γ[1, :]
     # e3_bar = sqrt((3 / 2) * e3_σ^2)
     # e3_grid = [-e3_bar, 0.0, e3_bar]
     # e3_Γ = [1.0 / e3_size for i = 1:e3_size]
     G_e3 = e3_Γ # [0.0, 1.0, 0.0]
+
+    # aggregate endowment shock
+    # e13_grid = exp.(e1_grid .+ e3_grid')
+    e13_grid = [e1 + e3 for e3 in e3_grid, e1 in e1_grid]
+    exp_e13_grid = exp.(e13_grid)
+    e123_grid = [e1 + e2 + e3 for e3 in e3_grid, e2 in e2_grid, e1 in e1_grid]
+    exp_e123_grid = exp.(e123_grid)
 
     # aggregate labor endowment
     E = 1.0
@@ -103,7 +113,7 @@ function initialize_parameters(;
 
     # asset holding grid for VFI
     # a_min = -1.0 * exp(e1_grid[end] + e2_grid[end] + e3_grid[end])
-    a_min = -1.0 * exp(e1_grid[end] + e2_grid[end])
+    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
     a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) / (a_size_neg - 1)) .^ a_degree_neg) * a_min
     a_grid_neg = a_grid_neg[1:(end-1)]
     a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) / (a_size_pos - 1)) .^ a_degree_pos) * a_max
@@ -160,26 +170,26 @@ function initialize_parameters(;
 
     W = zeros(e3_size, e2_size, e1_size)
     WA = zeros(a_size, e3_size, e2_size, e1_size)
+    c_d = zeros(e3_size, e2_size, e1_size)
     u_d = zeros(e3_size, e2_size, e1_size)
     for e1_i = 1:e1_size, e2_i = 1:e2_size, e3_i = 1:e3_size
-        e1 = e1_grid[e1_i]
-        e2 = e2_grid[e2_i]
-        e3 = e3_grid[e3_i]
-        W_temp = w_λ * exp(e1 + e2 + e3)
+        exp_e123 = exp_e123_grid[e3_i, e2_i, e1_i]
+        W_temp = w_λ * exp_e123
         W[e3_i, e2_i, e1_i] = W_temp
         WA[:, e3_i, e2_i, e1_i] .= W_temp .+ a_grid
-        u_d[e3_i, e2_i, e1_i] = utility((1.0 - η) * W_temp - κ, γ)
+        c_d_temp = (1.0 - η) * W_temp - κ
+        c_d[e3_i, e2_i, e1_i] = c_d_temp
+        u_d[e3_i, e2_i, e1_i] = utility(c_d_temp, γ)
     end
 
     e2_μ_grid = e2_ρ .* e2_grid
-    e2_μ_σ2_grid = e2_μ_grid .+ e2_σ^2.0
-    e2_μ_σ2_b2_grid = e2_μ_σ2_grid ./ 2.0
+    e2_μ_σ2_grid = e2_μ_grid .+ 0.5 * e2_σ^2.0
+    exp_e2_μ_σ2_grid = exp.(e2_μ_σ2_grid)
     Γ_default = zeros(e3_size, e2_size, e1_size)
     for e1_i = 1:e1_size, e2_i = 1:e2_size, e3_i = 1:e3_size
-        e1 = e1_grid[e1_i]
-        e2_μ_σ2_b2 = e2_μ_σ2_b2_grid[e2_i]
-        e3 = e3_grid[e3_i]
-        Γ_default[e3_i, e2_i, e1_i] = η * w_λ * exp(e1 + e3) * exp(e2_μ_σ2_b2)
+        exp_e13 = exp_e13_grid[e3_i, e1_i]
+        exp_e2_μ_σ2 = exp_e2_μ_σ2_grid[e2_i]
+        Γ_default[e3_i, e2_i, e1_i] = η * w_λ * exp_e13 * exp_e2_μ_σ2
     end
 
     # return values
@@ -202,6 +212,7 @@ function initialize_parameters(;
         e1_size=e1_size,
         e1_Γ=e1_Γ,
         e1_grid=e1_grid,
+        exp_e1_grid=exp_e1_grid,
         G_e1=G_e1,
         e2_ρ=e2_ρ,
         e2_σ=e2_σ,
@@ -209,12 +220,18 @@ function initialize_parameters(;
         e2_size=e2_size,
         e2_Γ=e2_Γ,
         e2_grid=e2_grid,
+        exp_e2_grid=exp_e2_grid,
         G_e2=G_e2,
         e3_σ=e3_σ,
         e3_size=e3_size,
         e3_Γ=e3_Γ,
         e3_grid=e3_grid,
+        exp_e3_grid=exp_e3_grid,
         G_e3=G_e3,
+        e13_grid=e13_grid,
+        exp_e13_grid=exp_e13_grid,
+        e123_grid=e123_grid,
+        exp_e123_grid=exp_e123_grid,
         E=E,
         ν_size=ν_size,
         ν_Γ=ν_Γ,
@@ -261,10 +278,10 @@ function initialize_parameters(;
         q_bar=q_bar,
         W=W,
         WA=WA,
+        c_d=c_d,
         u_d=u_d,
         e2_μ_grid=e2_μ_grid,
         e2_μ_σ2_grid=e2_μ_σ2_grid,
-        e2_μ_σ2_b2_grid=e2_μ_σ2_b2_grid,
         Γ_default=Γ_default,
     )
 end
@@ -351,14 +368,16 @@ end
     evaluate repayment analytically with and without wage garnishment
     """
 
-    @unpack a_grid_neg, inv_e2_σ, e2_μ_σ2_grid, Γ_default = parameters
+    @unpack e2_μ_grid, a_grid_neg, Γ_default, inv_e2_σ, e2_σ = parameters
 
-    e2_μ_σ2 = e2_μ_σ2_grid[e2_i]
+    e2_μ = e2_μ_grid[e2_i]
     a_p = a_grid_neg[a_p_i]
     Γ_e3 = Γ_default[:, e2_i, e1_i]
-    default_probs = normcdf.((thres_e2 .- e2_μ_σ2) .* inv_e2_σ)
-    total_amounts = -a_p .* (1.0 .- default_probs) .+ Γ_e3 .* default_probs
-    return clamp.(total_amounts, 0.0, -a_p)
+    z_e2 = (thres_e2 .- e2_μ) .* inv_e2_σ
+    repay_amount = (-a_p) .* normcdf.(-z_e2)
+    default_amount = Γ_e3 .* normcdf.(z_e2 .- e2_σ)
+    total_amount = repay_amount + default_amount
+    return clamp.(total_amount, 0.0, -a_p)
 end
 
 mutable struct MutableAggregateVariables{T}

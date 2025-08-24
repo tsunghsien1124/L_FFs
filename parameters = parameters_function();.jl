@@ -30,14 +30,16 @@ using LoopVectorization
 # using DataInterpolations
 using StatsFuns
 
-parameters = initialize_parameters(a_size_neg=151,a_degree_neg=1,a_degree_pos=2);
+parameters = initialize_parameters(a_size_neg=101,a_degree_neg=5,a_degree_pos=2,λ=0.05);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updating = 0.75);
+solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updating = 1.0);
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
 # @btime E_V_function!($V_p, $V_pos_p, $variables, $parameters);
+
+plot(1:parameters.a_size_neg, parameters.a_grid_neg, seriestype=:scatter)
 
 e1_i = parameters.e1_size
 e2_i = parameters.e2_size
@@ -52,8 +54,11 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end])
 
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i] .* parameters.a_grid_neg)
-plot!(variables.rbl_a[:, e1_i], variables.rbl_qa[:, e1_i], seriestype=:scatter)
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1] .* parameters.a_grid_neg)
+plot!(variables.rbl_a[:, 1], variables.rbl_qa[:, 1], seriestype=:scatter)
+
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end] .* parameters.a_grid_neg)
+plot!(variables.rbl_a[:, end], variables.rbl_qa[:, end], seriestype=:scatter)
 
 #####
 e1_i = parameters.e1_size

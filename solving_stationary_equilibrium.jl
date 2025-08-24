@@ -113,7 +113,7 @@ function initialize_parameters(;
 
     # asset holding grid for VFI
     # a_min = -1.0 * exp(e1_grid[end] + e2_grid[end] + e3_grid[end])
-    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
+    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
     a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) / (a_size_neg - 1)) .^ a_degree_neg) * a_min
     a_grid_neg = a_grid_neg[1:(end-1)]
     a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) / (a_size_pos - 1)) .^ a_degree_pos) * a_max
@@ -166,7 +166,6 @@ function initialize_parameters(;
         Γ_e3_ν[e3_p_i, ν_p_i] = e3_Γ[e3_p_i] * ν_Γ[ν_p_i]
     end
 
-    # precomputation of handy scalars and matrices
     R_bar = ρ ./ ((-a_grid_neg) .* (1.0 + r_f + τ + ι_λ))
     q_bar = ρ / (1.0 + r_f)
 
@@ -183,6 +182,7 @@ function initialize_parameters(;
         c_d[e3_i, e2_i, e1_i] = c_d_temp
         u_d[e3_i, e2_i, e1_i] = utility(c_d_temp, γ)
     end
+    u_d_ξ = u_d .- ξ
 
     e2_μ_grid = e2_ρ .* e2_grid
     e2_μ_σ2_grid = e2_μ_grid .+ 0.5 * e2_σ^2.0
@@ -284,6 +284,7 @@ function initialize_parameters(;
         WA=WA,
         c_d=c_d,
         u_d=u_d,
+        u_d_ξ=u_d_ξ,
         e2_μ_grid=e2_μ_grid,
         e2_μ_σ2_grid=e2_μ_σ2_grid,
         Γ_default=Γ_default,
@@ -430,26 +431,22 @@ end
 
 @views @inbounds function create_variables(parameters::NamedTuple; T::Type{<:Real}=Float64)
 
-    # ---- Assets / grids / sizes
     @unpack a_min, a_max,
     a_size, a_size_neg, a_size_pos,
     a_grid, a_grid_neg, a_grid_pos,
     a_ind_zero,
     a_size_μ, a_size_pos_μ, a_ind_zero_μ = parameters
 
-    # ---- Shocks: sizes, grids, transitions
     @unpack e1_size, e1_grid, e1_Γ,
     e2_size, e2_grid, e2_Γ, e2_ρ, e2_σ,
     e3_size, e3_grid, e3_Γ,
     ν_size, ν_Γ = parameters
 
-    # ---- Prices / policy / model scalars
     @unpack ρ, r_f, τ, η, κ, w_λ,
     R_bar, q_bar, Γ_e3_ν, W, c_d = parameters
 
     @unpack loop_a_neg_e3_ν_e1, loop_a_neg_e2_e1, loop_a_neg_e3_e1, loop_e3_e2_e1, loop_e2_e1 = parameters
 
-    # -- Aggregates
     agg = MutableAggregateVariables{T}(
         zero(T), zero(T), zero(T), zero(T), zero(T),
         zero(T), zero(T), zero(T), zero(T), zero(T),
@@ -485,7 +482,6 @@ end
 
     rbl_a = Array{T}(undef, e2_size, e1_size)
     rbl_qa = Array{T}(undef, e2_size, e1_size)
-
     @batch for idx in loop_e2_e1
         e2_i, e1_i = idx.I
         q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
@@ -494,25 +490,23 @@ end
         rbl_qa[e2_i, e1_i] = rbl_qa_
     end
 
-    # -- Value functions (undef if you fully set later; zeros if used before fill)
     V = zeros(T, a_size, e3_size, ν_size, e2_size, e1_size)
     V_d = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
     V_nd = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
     V_pos = zeros(T, a_size_pos, e3_size, ν_size, e2_size, e1_size)
+ 
+    policy_a = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
+    policy_d = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
+    policy_a_pos = Array{T}(undef, a_size_pos, e3_size, ν_size, e2_size, e1_size)
+ 
     EV = zeros(T, a_size, ν_size, e2_size, e1_size)
     EV_pos = zeros(T, a_size_pos, ν_size, e2_size, e1_size)
     EV_Ph = zeros(T, a_size_pos, ν_size, e2_size, e1_size)
 
-    # -- Distribution
     μ = zeros(T, a_size_μ, e1_size, e2_size, e3_size, ν_size, 2)
     μ_size = (a_size_μ + a_size_pos_μ) * e1_size * e2_size * e3_size * ν_size
     μ[:, :, :, :, :, 1] .= inv(T(μ_size))
     μ[a_ind_zero_μ:end, :, :, :, :, 2] .= inv(T(μ_size))
-
-    # -- Policies
-    policy_a = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
-    policy_d = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
-    policy_a_pos = Array{T}(undef, a_size_pos, e3_size, ν_size, e2_size, e1_size)
 
     return MutableVariables{T,
         typeof(rbl_a),typeof(R),typeof(V_d),typeof(V),typeof(μ)}(
@@ -594,20 +588,12 @@ function update_V_d!(variables::MutableVariables, parameters::NamedTuple)
     Update the default value function `V_d`
     """
 
-    # @unpack loop_ν_e2_e1, u_d, ξ = parameters
-    # @views @inbounds @batch for idx in loop_ν_e2_e1
-    #     ν_i, e2_i, e1_i = idx.I
-    #     EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
-    #     u_d_temp = u_d[:, e2_i, e1_i]
-    #     @. variables.V_d[:, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
-    # end
-
-    @unpack loop_e3_ν_e2_e1, u_d, ξ = parameters
+    @unpack loop_e3_ν_e2_e1, u_d_ξ = parameters
     @inbounds @batch for idx in loop_e3_ν_e2_e1
         e3_i, ν_i, e2_i, e1_i = idx.I
         EV_pos_zero = variables.EV_pos[1, ν_i, e2_i, e1_i]
-        u_d_temp = u_d[e3_i, e2_i, e1_i]
-        variables.V_d[e3_i, ν_i, e2_i, e1_i] = u_d_temp - ξ + EV_pos_zero
+        u_d_ξ_temp = u_d_ξ[e3_i, e2_i, e1_i]
+        variables.V_d[e3_i, ν_i, e2_i, e1_i] = u_d_ξ_temp + EV_pos_zero
     end
 
     return nothing
@@ -823,7 +809,7 @@ end
     return e2_star
 end
 
-@inline function sticky_update(old::Float64, new::Float64; ω::Float64=1.0, tol_hyst::Float64=1E-8)
+@inline function sticky_update(old::Float64, new::Float64; ω::Float64=1.0, tol_hyst::Float64=0.0) #1E-8
     if !isfinite(new)
         return old
     end
@@ -839,8 +825,7 @@ function find_thresholds!(thres_a_p::Array{Float64,4}, thres_e2_p::Array{Float64
     update default thresholds in assets and persistent endowments (e2)
     """
 
-    @unpack a_size_neg, a_grid_neg, e2_size, e2_grid, loop_e3_ν_e2_e1, loop_a_neg_e3_ν_e1 = parameters
-    @unpack γ, e1_grid, e3_grid, W, w_λ = parameters
+    @unpack γ, a_size_neg, a_grid_neg, e2_size, exp_e2_grid, loop_e3_ν_e2_e1, loop_a_neg_e3_ν_e1 = parameters
 
     @inbounds @views @batch for idx in loop_e3_ν_e2_e1
 
@@ -892,7 +877,13 @@ function find_thresholds!(thres_a_p::Array{Float64,4}, thres_e2_p::Array{Float64
             end
 
             m_fc = (V_nd_fc_1 - V_nd_fc_0) / (a_fc_1 - a_fc_0)
-            a_star = a_fc_1 - (V_nd_fc_1 - V_d_) / m_fc # a_star = a_fc_0 + (V_d_ - V_nd_fc_0) / m_fc
+            if m_fc > 1E-8
+                a_star = a_fc_1 - (V_nd_fc_1 - V_d_) / m_fc
+            else
+                a_star = (a_fc_0 + a_fc_1) / 2.0
+                println("m_fc = $m_fc at (e3_i, ν_i, e2_i, e1_i) = ($e3_i, $ν_i, $e2_i, $e1_i)")
+            end
+            # a_star = a_fc_0 + (V_d_ - V_nd_fc_0) / m_fc
         end
 
         a_star_old = thres_a_p[e3_i, ν_i, e2_i, e1_i]
@@ -905,10 +896,7 @@ function find_thresholds!(thres_a_p::Array{Float64,4}, thres_e2_p::Array{Float64
 
         a_neg_ = a_grid_neg[a_neg_i]
         thres_a_ = variables.thres_a[e3_i, ν_i, :, e1_i]
-        W_ = exp.(e2_grid)
-        # W_ = W[e3_i, :, e1_i]
-        # e1_ = e1_grid[e1_i]
-        # e3_ = e3_grid[e3_i]
+        W_ = exp_e2_grid
 
         crossing_idx = findfirst(i -> a_neg_ > thres_a_[i], 1:e2_size)
 
@@ -925,7 +913,6 @@ function find_thresholds!(thres_a_p::Array{Float64,4}, thres_e2_p::Array{Float64
 
         e2_star = compute_e2_star(W_fc_0, W_fc_1, thres_a_fc_0, thres_a_fc_1, a_neg_, crossing_idx)
         e2_star = log_(e2_star)
-        # e2_star = log_(e2_star / w_λ) - e1_ - e3_
 
         e2_star_old = thres_e2_p[a_neg_i, e3_i, ν_i, e1_i]
         variables.thres_e2[a_neg_i, e3_i, ν_i, e1_i] = sticky_update(e2_star_old, e2_star)
@@ -976,11 +963,11 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
     V_pos_crit = Inf
     q_crit = Inf
     crit = Inf
-    # prog = ProgressThresh(tol_eff, "Solving household and banking problems (one-loop): ")
+    prog = ProgressThresh(tol_eff, "Solving household and banking problems (one-loop): ")
 
     V_p = similar(variables.V)
-    V_nd_p = similar(variables.V_nd)
-    V_d_p = similar(variables.V_d)
+    # V_nd_p = similar(variables.V_nd)
+    # V_d_p = similar(variables.V_d)
     V_pos_p = similar(variables.V_pos)
     q_p = similar(variables.q)
     thres_a_p = similar(variables.thres_a)
@@ -989,8 +976,8 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
     while crit > tol_eff && search_iter < iter_max
 
         copyto!(V_p, variables.V)
-        copyto!(V_nd_p, variables.V_nd)
-        copyto!(V_d_p, variables.V_d)
+        # copyto!(V_nd_p, variables.V_nd)
+        # copyto!(V_d_p, variables.V_d)
         copyto!(V_pos_p, variables.V_pos)
         copyto!(q_p, variables.q)
         copyto!(thres_a_p, variables.thres_a)
@@ -1007,48 +994,49 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
         update_pricing_and_rbl_function!(variables, parameters)
 
         @. variables.V = ω_ * V_p + ω * variables.V
-        @. variables.V_nd = ω_ * V_nd_p + ω * variables.V_nd
-        @. variables.V_d = ω_ * V_d_p + ω * variables.V_d
+        # @. variables.V_nd = ω_ * V_nd_p + ω * variables.V_nd
+        # @. variables.V_d = ω_ * V_d_p + ω * variables.V_d
         @. variables.V_pos = ω_ * V_pos_p + ω * variables.V_pos
         @. variables.q = ω_ * q_p + ω * variables.q
-        @. variables.thres_a = ω_ * thres_a_p + ω * variables.thres_a
-        @. variables.thres_e2 = ω_ * thres_e2_p + ω * variables.thres_e2
+        # @. variables.thres_a = ω_ * thres_a_p + ω * variables.thres_a
+        # @. variables.thres_e2 = ω_ * thres_e2_p + ω * variables.thres_e2
 
         diffV = @. safe_abs.(variables.V - V_p)
-        diffVnd = @. safe_abs.(variables.V_nd - V_nd_p)
-        diffVd = @. safe_abs.(variables.V_d - V_d_p)
+        # diffVnd = @. safe_abs.(variables.V_nd - V_nd_p)
+        # diffVd = @. safe_abs.(variables.V_d - V_d_p)
         diffVpos = @. safe_abs.(variables.V_pos - V_pos_p)
         diffq = @. safe_abs.(variables.q - q_p)
-        diffthres_a = @. safe_abs.(variables.thres_a - thres_a_p)
-        diffthres_e2 = @. safe_abs.(variables.thres_e2 - thres_e2_p)
+        # diffthres_a = @. safe_abs.(variables.thres_a - thres_a_p)
+        # diffthres_e2 = @. safe_abs.(variables.thres_e2 - thres_e2_p)
 
         V_crit, V_linidx = findmax(diffV)
-        Vnd_crit, Vnd_linidx = findmax(diffVnd)
-        Vd_crit, Vd_linidx = findmax(diffVd)
+        # Vnd_crit, Vnd_linidx = findmax(diffVnd)
+        # Vd_crit, Vd_linidx = findmax(diffVd)
         V_pos_crit, V_pos_linidx = findmax(diffVpos)
         q_crit, q_linidx = findmax(diffq)
-        thres_a_crit, thres_a_linidx = findmax(diffthres_a)
-        thres_e2_crit, thres_e2_linidx = findmax(diffthres_e2)
-        crit = max(Vnd_crit, Vd_crit, q_crit, thres_a_crit, thres_e2_crit)
+        # thres_a_crit, thres_a_linidx = findmax(diffthres_a)
+        # thres_e2_crit, thres_e2_linidx = findmax(diffthres_e2)
+        # crit = max(Vnd_crit, Vd_crit, q_crit, thres_a_crit, thres_e2_crit)
+        crit = max(V_crit, V_pos_crit, q_crit)
 
         # Convert to Cartesian indices (multi-dim)
-        ciV = CartesianIndices(size(variables.V))[V_linidx]
-        ciVnd = CartesianIndices(size(variables.V_nd))[Vnd_linidx]
-        ciVd = CartesianIndices(size(variables.V_d))[Vd_linidx]
-        ciVpos = CartesianIndices(size(variables.V_pos))[V_pos_linidx]
-        ciq = CartesianIndices(size(variables.q))[q_linidx]
-        cithres_a = CartesianIndices(size(variables.thres_a))[thres_a_linidx]
-        cithres_e2 = CartesianIndices(size(variables.thres_e2))[thres_e2_linidx]
+        # ciV = CartesianIndices(size(variables.V))[V_linidx]
+        # ciVnd = CartesianIndices(size(variables.V_nd))[Vnd_linidx]
+        # ciVd = CartesianIndices(size(variables.V_d))[Vd_linidx]
+        # ciVpos = CartesianIndices(size(variables.V_pos))[V_pos_linidx]
+        # ciq = CartesianIndices(size(variables.q))[q_linidx]
+        # cithres_a = CartesianIndices(size(variables.thres_a))[thres_a_linidx]
+        # cithres_e2 = CartesianIndices(size(variables.thres_e2))[thres_e2_linidx]
 
         # println("iter=$(search_iter+1): |ΔV|∞=$V_crit at $ciV; |ΔV_pos|∞=$V_pos_crit at $ciVpos; |Δq|∞=$q_crit at $ciq; crit=$crit")
-        println("iter=$(search_iter+1): |ΔV|∞=$V_crit at $ciV; crit=$crit")
-        println("iter=$(search_iter+1): |ΔV_nd|∞=$Vnd_crit at $ciVnd; crit=$crit")
-        println("iter=$(search_iter+1): |ΔV_d|∞=$Vd_crit at $ciVd; crit=$crit")
-        println("iter=$(search_iter+1): |ΔV_pos|∞=$V_pos_crit at $ciVpos; crit=$crit")
-        println("iter=$(search_iter+1): |Δq|∞=$q_crit at $ciq; crit=$crit")
-        println("iter=$(search_iter+1): |Δthres_a|∞=$thres_a_crit at $cithres_a; crit=$crit")
-        println("iter=$(search_iter+1): |Δthres_e2|∞=$thres_e2_crit at $cithres_e2; crit=$crit")
-        # ProgressMeter.update!(prog, crit)
+        # println("iter=$(search_iter+1): |ΔV|∞=$V_crit at $ciV; crit=$crit")
+        # println("iter=$(search_iter+1): |ΔV_nd|∞=$Vnd_crit at $ciVnd; crit=$crit")
+        # println("iter=$(search_iter+1): |ΔV_d|∞=$Vd_crit at $ciVd; crit=$crit")
+        # println("iter=$(search_iter+1): |ΔV_pos|∞=$V_pos_crit at $ciVpos; crit=$crit")
+        # println("iter=$(search_iter+1): |Δq|∞=$q_crit at $ciq; crit=$crit")
+        # println("iter=$(search_iter+1): |Δthres_a|∞=$thres_a_crit at $cithres_a; crit=$crit")
+        # println("iter=$(search_iter+1): |Δthres_e2|∞=$thres_e2_crit at $cithres_e2; crit=$crit")
+        ProgressMeter.update!(prog, crit)
         search_iter += 1
     end
 
@@ -1157,7 +1145,7 @@ function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Arra
     return μ
 end
 
-function solve_stationary_distribution_function!(variables::Mutable_Variables, parameters::NamedTuple; tol::Float64=1E-8, iter_max::Int64=2000)
+function solve_stationary_distribution_function!(variables::MutableVariables, parameters::NamedTuple; tol::Float64=1E-8, iter_max::Int64=2000)
     """
     solve stationary distribution
     """
@@ -1467,7 +1455,7 @@ function solve_aggregate_variable_across_HH_function(
     return debt_to_earning_ratio, debt_to_earning_ratio_permanent_low, debt_to_earning_ratio_permanent_high, share_of_filers, share_of_filers_permanent_low, share_of_filers_permanent_high, share_in_debts, share_in_debts_permanent_low, share_in_debts_permanent_high, avg_loan_rate, avg_loan_rate_permanent_low, avg_loan_rate_permanent_high
 end
 
-function solve_economy_function!(variables::Mutable_Variables, parameters::NamedTuple; tol_h::Float64=1E-6, tol_μ::Float64=1E-8, slow_updating::Float64=1.0)
+function solve_economy_function!(variables::MutableVariables, parameters::NamedTuple; tol_h::Float64=1E-6, tol_μ::Float64=1E-8, slow_updating::Float64=1.0)
     """
     solve the economy with given liquidity multiplier ι
     """

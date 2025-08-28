@@ -18,7 +18,8 @@ using Roots
 using CSV
 using Tables
 using Plots
-using Random
+# using Random
+using Random123
 using GLM
 using DataFrames
 using Measures
@@ -30,10 +31,16 @@ using LoopVectorization
 # using DataInterpolations
 using StatsFuns
 
-parameters = initialize_parameters(a_size_neg=101,a_degree_neg=5,a_degree_pos=2,λ=0.05);
+parameters = initialize_parameters(a_size_neg = 201, a_degree_neg = 2, a_degree_pos = 2, λ = 0.00);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
 solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updating = 1.0);
+
+simul_itp_cache = build_simul_itp_cache(variables, parameters);
+simul_panel = initialize_panel(num_households = 50000, num_periods = 2000);
+simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
+
+histogram(reshape(simul_panel.asset_state[1001:end,:],:,1))
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -47,8 +54,6 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i], se
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i] .* parameters.a_grid_neg, seriestype=:scatter)
 plot!([variables.rbl_a[e2_i, e1_i]], [variables.rbl_qa[e2_i, e1_i]], seriestype=:scatter)
-
-plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, e1_i])
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
 
@@ -100,7 +105,7 @@ e3_i = 1 # parameters.e3_size
 
 plot(parameters.a_grid_pos, variables.V[parameters.a_ind_zero:end, e3_i, ν_i, :, e1_i])
 
-plot(parameters.a_grid_pos, V_p[parameters.a_ind_zero:end, e3_i, ν_i, :, e1_i])
+# plot(parameters.a_grid_pos, V_p[parameters.a_ind_zero:end, e3_i, ν_i, :, e1_i])
 
 plot(parameters.a_grid_pos[1:10], variables.V[parameters.a_ind_zero+1:parameters.a_ind_zero+10, e3_i, ν_i, :, e1_i])
 
@@ -123,13 +128,23 @@ e2_i = 1 # parameters.e2_size
 ν_i = 1 # parameters.ν_size
 e3_i = 1 # parameters.e3_size
 
+plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg, e3_i, ν_i, e2_i, :])
+
 plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg, e3_i, ν_i, :, e1_i])
 
+plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg, e3_i, :, e2_i, e1_i])
+
+plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg, :, ν_i, e2_i, e1_i])
+
 plot(parameters.a_grid_neg[60:end], variables.policy_a[60:parameters.a_size_neg, :, ν_i, e2_i, e1_i])
+
+plot(parameters.a_grid_neg[60:end], variables.policy_a[60:parameters.a_size_neg, e3_i, :, e2_i, e1_i])
 
 plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg, e3_i, ν_i, e2_i, :])
 
 plot(parameters.a_grid_neg, variables.policy_d[1:parameters.a_size_neg, e3_i, ν_i, e2_i, :])
+
+plot(parameters.a_grid_neg, variables.policy_d[1:parameters.a_size_neg, e3_i, :, e2_i, e1_i])
 
 plot(parameters.a_grid, variables.policy_a[:, e3_i, ν_i, :, e1_i])
 

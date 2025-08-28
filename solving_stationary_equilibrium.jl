@@ -73,7 +73,8 @@ function initialize_parameters(;
     # e1_grid = [-e1_σ, e1_σ]
     # e1_Γ = Matrix(1.0I, e1_size, e1_size)
     # G_e1 = [1.0 / e1_size for i = 1:e1_size]
-    G_e1 = e1_Γ
+    e1_G = e1_Γ
+    e1_Γ = Matrix{Float64}(I, e1_size, e1_size)
 
     # persistent endowment shock
     inv_e2_σ = 1.0 / e2_σ
@@ -83,7 +84,7 @@ function initialize_parameters(;
     e2_grid = collect(e2_MC.state_values)
     exp_e2_grid = exp.(e2_grid)
     # e2_grid, e2_Γ = adda_cooper(e2_size, e2_ρ, e2_σ)
-    G_e2 = stationary_distributions(MarkovChain(e2_Γ, e2_grid))[1]
+    e2_G = stationary_distributions(MarkovChain(e2_Γ, e2_grid))[1]
     # G_e2 = [1.0, 0.0, 0.0]
 
     # transitory endowment shock
@@ -93,7 +94,7 @@ function initialize_parameters(;
     # e3_bar = sqrt((3 / 2) * e3_σ^2)
     # e3_grid = [-e3_bar, 0.0, e3_bar]
     # e3_Γ = [1.0 / e3_size for i = 1:e3_size]
-    G_e3 = e3_Γ # [0.0, 1.0, 0.0]
+    e3_G = e3_Γ # [0.0, 1.0, 0.0]
 
     # aggregate endowment shock
     # e13_grid = exp.(e1_grid .+ e3_grid')
@@ -106,10 +107,10 @@ function initialize_parameters(;
     E = 1.0
 
     # preference schock
-    ν_grid = ones(ν_size)
+    ν_grid = [1.00, 0.90]
     ν_p_1 = 0.98
     ν_Γ = [ν_p_1, 1.0 - ν_p_1]
-    G_ν = ν_Γ
+    ν_G = ν_Γ
 
     # asset holding grid for VFI
     # a_min = -1.0 * exp(e1_grid[end] + e2_grid[end] + e3_grid[end])
@@ -215,7 +216,7 @@ function initialize_parameters(;
         e1_Γ=e1_Γ,
         e1_grid=e1_grid,
         exp_e1_grid=exp_e1_grid,
-        G_e1=G_e1,
+        e1_G=e1_G,
         e2_ρ=e2_ρ,
         e2_σ=e2_σ,
         inv_e2_σ=inv_e2_σ,
@@ -223,13 +224,13 @@ function initialize_parameters(;
         e2_Γ=e2_Γ,
         e2_grid=e2_grid,
         exp_e2_grid=exp_e2_grid,
-        G_e2=G_e2,
+        e2_G=e2_G,
         e3_σ=e3_σ,
         e3_size=e3_size,
         e3_Γ=e3_Γ,
         e3_grid=e3_grid,
         exp_e3_grid=exp_e3_grid,
-        G_e3=G_e3,
+        e3_G=e3_G,
         e13_grid=e13_grid,
         exp_e13_grid=exp_e13_grid,
         e123_grid=e123_grid,
@@ -238,7 +239,7 @@ function initialize_parameters(;
         ν_size=ν_size,
         ν_Γ=ν_Γ,
         ν_grid=ν_grid,
-        G_ν=G_ν,
+        ν_G=ν_G,
         a_min=a_min,
         a_max=a_max,
         a_grid=a_grid,
@@ -385,7 +386,7 @@ end
     return clamp.(total_amount, 0.0, -a_p)
 end
 
-mutable struct MutableAggregateVariables{T}
+struct MutableAggregateVariables{T}
     K::T
     L::T
     L_adj::T
@@ -403,7 +404,7 @@ mutable struct MutableAggregateVariables{T}
     avg_loan_rate_pw::T
 end
 
-mutable struct MutableVariables{T,
+struct MutableVariables{T,
     A2<:AbstractArray{T,2}, 
     A3<:AbstractArray{T,3},
     A4<:AbstractArray{T,4},
@@ -521,9 +522,9 @@ struct ItpCache{ItpQ,ItpEv,ItpEvPh}
     EV_Ph::Array{ItpEvPh,3}           # size: (ν_size, e2_size, e1_size)
 end
 
-@inline _build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Line())
+@inline build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Interpolations.Line())
 
-@views @inbounds function build_itp_cache(variables::MutableVariables, parameters::NamedTuple)
+@views @inbounds @views function build_itp_cache(variables::MutableVariables, parameters::NamedTuple)
     """
     construct the cached interpolants
     """
@@ -531,11 +532,11 @@ end
     @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size = parameters
 
     q_ = variables.q[:, 1, 1]
-    q_sample = linear_interpolation(a_grid, q_, extrapolation_bc=Line())
+    q_sample = build_itp(a_grid, q_)
     EV_ = variables.EV[:, 1, 1, 1]
-    EV_sample = linear_interpolation(a_grid, EV_, extrapolation_bc=Line())
+    EV_sample = build_itp(a_grid, EV_)
     EV_Ph_ = variables.EV_Ph[:, 1, 1, 1]
-    EV_Ph_sample = linear_interpolation(a_grid_pos, EV_Ph_, extrapolation_bc=Line())
+    EV_Ph_sample = build_itp(a_grid_pos, EV_Ph_)
 
     q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)
     EV_itp = Array{typeof(EV_sample)}(undef, ν_size, e2_size, e1_size)
@@ -543,12 +544,12 @@ end
 
     for e2_i in 1:e2_size, e1_i in 1:e1_size
         q_ = variables.q[:, e2_i, e1_i]
-        q_itp[e2_i, e1_i] = linear_interpolation(a_grid, q_, extrapolation_bc=Line())
+        q_itp[e2_i, e1_i] = build_itp(a_grid, q_)
         for ν_i in 1:ν_size
             EV_ = variables.EV[:, ν_i, e2_i, e1_i]
-            EV_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid, EV_, extrapolation_bc=Line())
+            EV_itp[ν_i, e2_i, e1_i] = build_itp(a_grid, EV_)
             EV_Ph_ = variables.EV_Ph[:, ν_i, e2_i, e1_i]
-            EV_Ph_itp[ν_i, e2_i, e1_i] = linear_interpolation(a_grid_pos, EV_Ph_, extrapolation_bc=Line())
+            EV_Ph_itp[ν_i, e2_i, e1_i] = build_itp(a_grid_pos, EV_Ph_)
         end
     end
 
@@ -1051,6 +1052,196 @@ function variables_function_update!(variables::MutableVariables, parameters::Nam
     # define aggregate prices
     ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ=λ)
     variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
+end
+
+struct SimulItpCache{ItpQ, ItpA, ItpAPos, T}
+    q_itp::Array{ItpQ,2}                       # size: (e2_size, e1_size)
+    policy_a_itp::Array{ItpA,4}                # size: (e3_size, ν_size, e2_size, e1_size)
+    policy_a_pos_itp::Array{ItpAPos,4}         # size: (e3_size, ν_size, e2_size, e1_size)
+    thres_a::Array{T,4}                        # size: (e3_size, ν_size, e2_size, e1_size)
+end
+
+@inline simul_build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Interpolations.Flat())
+
+@views @inbounds @views function build_simul_itp_cache(variables::MutableVariables, parameters::NamedTuple)
+    """
+    construct the cached interpolants
+    """
+
+    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size, e3_size = parameters
+
+    q_ = variables.q[:, 1, 1]
+    q_sample = simul_build_itp(a_grid, q_)
+    policy_a_ = variables.policy_a[:, 1, 1, 1, 1]
+    policy_a_sample = simul_build_itp(a_grid, policy_a_)
+    policy_a_pos_ = variables.policy_a_pos[:, 1, 1, 1, 1]
+    policy_a_pos_sample = simul_build_itp(a_grid_pos, policy_a_pos_)
+    thres_a_sample = variables.thres_a[1, 1, 1, 1]
+
+    q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)
+    policy_a_itp = Array{typeof(policy_a_sample)}(undef, e3_size, ν_size, e2_size, e1_size)
+    policy_a_pos_itp = Array{typeof(policy_a_pos_sample)}(undef, e3_size, ν_size, e2_size, e1_size)
+
+    for e2_i in 1:e2_size, e1_i in 1:e1_size
+        q_ = variables.q[:, e2_i, e1_i]
+        q_itp[e2_i, e1_i] = simul_build_itp(a_grid, q_)
+        for e3_i in 1:e3_size, ν_i in 1:ν_size
+            policy_a_ = variables.policy_a[:, e3_i, ν_i, e2_i, e1_i]
+            policy_a_itp[e3_i, ν_i, e2_i, e1_i] = simul_build_itp(a_grid, policy_a_)
+            policy_a_pos_ = variables.policy_a_pos[:, e3_i, ν_i, e2_i, e1_i]
+            policy_a_pos_itp[e3_i, ν_i, e2_i, e1_i] = simul_build_itp(a_grid_pos, policy_a_pos_)
+        end
+    end
+
+    return SimulItpCache{typeof(q_sample), typeof(policy_a_sample), typeof(policy_a_pos_sample), typeof(thres_a_sample)}(
+        q_itp, policy_a_itp, policy_a_pos_itp, variables.thres_a)
+end
+
+function make_thread_rngs(seed::Int, num_threads::Int)
+    key = (UInt64(seed), UInt64(0))
+    return [Philox4x(UInt64, key) for _ in 1:num_threads]
+end
+
+@inline base_counter(h_id::UInt64, t_id::UInt64)::UInt64 = (h_id << 44) | (t_id << 24)
+
+struct SimulatedPanel{TF<:AbstractFloat, TI<:Integer}
+    newborn        :: Matrix{Bool}
+    e1_state       :: Matrix{TI}
+    e2_state       :: Matrix{TI}
+    e3_state       :: Matrix{TI}
+    nu_state       :: Matrix{TI}
+    asset_state    :: Matrix{TF}
+    good_history   :: Matrix{Bool}
+    default_choice :: Matrix{Bool}
+    asset_choice   :: Matrix{TF}
+end
+
+@inline advance_rng!(rng::Philox4x{UInt64}) = (rand(rng); true)
+
+@inline function newborn_bundle_draw(rng::Philox4x{UInt64},
+    e1_cat::Categorical, e2_cat::Categorical, e3_cat::Categorical, ν_cat::Categorical)::NamedTuple
+    newborn_i       = advance_rng!(rng)
+    e1_i            = rand(rng, e1_cat)
+    e2_i            = rand(rng, e2_cat)
+    e3_i            = rand(rng, e3_cat)
+    ν_i             = rand(rng, ν_cat)
+    good_history_i  = advance_rng!(rng)
+    return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, ν=ν_i, good_history=good_history_i)
+end
+
+@inline @inbounds function newborn_assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int)
+    # @assert draw.newborn "Not newborn household"
+    panel.newborn[t_i, h_i] = draw.newborn
+    panel.e1_state[t_i, h_i] = draw.e1
+    panel.e2_state[t_i, h_i] = draw.e2
+    panel.e3_state[t_i, h_i] = draw.e3
+    panel.nu_state[t_i, h_i] = draw.ν
+    # panel.asset_state[t_i, h_i] = 0.0
+    # panel.good_history[t_i, h_i] = draw.good_history
+    # panel.default_choice[t_i, h_i] = 0.0 <= cache.thres_a[draw.e3, draw.ν, draw.e2, draw.e1]
+    panel.asset_choice[t_i, h_i] = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](0.0)
+    return nothing
+end
+
+@inline function bundle_draw(rng::Philox4x{UInt64}, ρ::Float64, Ph::Float64,
+    e1_cat::Categorical, e1_Γ_cat_::Categorical, e2_cat::Categorical, e2_Γ_cat_::Categorical, 
+    e3_cat::Categorical, ν_cat::Categorical)::NamedTuple
+    newborn_i       = rand(rng) > ρ
+    e1_i            = newborn_i ? rand(rng, e1_cat) : rand(rng, e1_Γ_cat_)
+    e2_i            = newborn_i ? rand(rng, e2_cat) : rand(rng, e2_Γ_cat_)
+    e3_i            = rand(rng, e3_cat)
+    ν_i             = rand(rng, ν_cat)
+    good_history_i  = newborn_i ? advance_rng!(rng) : rand(rng) <= Ph
+    return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, ν=ν_i, good_history=good_history_i)
+end
+
+@inline @inbounds function assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int)
+    # @assert !draw.newborn "Unexpected newborn household"
+    # panel.newborn[t_i, h_i] = draw.newborn
+    panel.e1_state[t_i, h_i] = draw.e1
+    panel.e2_state[t_i, h_i] = draw.e2
+    panel.e3_state[t_i, h_i] = draw.e3
+    panel.nu_state[t_i, h_i] = draw.ν
+    panel.asset_state[t_i, h_i] = panel.asset_choice[t_i-1, h_i]
+    # @assert !panel.good_history[t_i-1, h_i] & (panel.asset_state[t_i, h_i] >= 0.0) "Bad history HHs cannot borrow"
+    panel.good_history[t_i, h_i] = panel.good_history[t_i-1, h_i] | draw.good_history
+    if panel.good_history[t_i, h_i]
+        panel.default_choice[t_i, h_i] = panel.asset_state[t_i, h_i] <= cache.thres_a[draw.e3, draw.ν, draw.e2, draw.e1]
+        if panel.default_choice[t_i, h_i]
+            panel.asset_choice[t_i, h_i] = 0.0
+            panel.good_history[t_i, h_i] = false
+        else
+            panel.asset_choice[t_i, h_i] = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+        end
+    else
+        panel.asset_choice[t_i, h_i] = cache.policy_a_pos_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+    end
+    return nothing
+end
+
+function initialize_panel(;num_households::Int64=50000, num_periods::Int64=2000, 
+    FloT::Type{<:AbstractFloat}=Float64, IntT::Type{<:Integer}=Int64)
+
+    @assert 0 < num_households <= 2^20  "The number of households exceeds 20-bit capacity"
+    @assert 0 < num_periods    <= 2^20  "The number of periods exceeds 20-bit capacity"
+
+    newborn        = fill(false, num_periods, num_households) # falses(num_periods, num_households)
+    e1_state       = Matrix{IntT}(undef, num_periods, num_households)
+    e2_state       = Matrix{IntT}(undef, num_periods, num_households)
+    e3_state       = Matrix{IntT}(undef, num_periods, num_households)
+    nu_state       = Matrix{IntT}(undef, num_periods, num_households)
+    asset_state    = zeros(FloT, num_periods, num_households)
+    good_history   = fill(true, num_periods, num_households) # trues(num_periods, num_households)
+    default_choice = fill(false, num_periods, num_households) # falses(num_periods, num_households)
+    asset_choice   = zeros(FloT, num_periods, num_households)
+
+    return SimulatedPanel{FloT,IntT}(
+        newborn, e1_state, e2_state, e3_state, nu_state, asset_state, 
+        good_history, default_choice, asset_choice, 
+        )
+end
+
+@inbounds function simulate_household_panel!(parameters::NamedTuple, simul_itp_cache::SimulItpCache, simul_panel::SimulatedPanel; seed::Int=1124)
+
+    num_periods, num_households = size(simul_panel.newborn)
+    num_threads = Threads.nthreads()    
+    rngs = make_thread_rngs(seed, num_threads)
+
+    @unpack ρ, Ph, e1_G, e1_Γ, e1_size, e2_G, e2_Γ, e2_size, e3_G, ν_G = parameters
+
+    e1_cat   = Categorical(e1_G)
+    e1_Γ_cat = [Categorical(e1_Γ[e1_i,:]) for e1_i in 1:e1_size]
+    e2_cat   = Categorical(e2_G)
+    e2_Γ_cat = [Categorical(e2_Γ[e2_i,:]) for e2_i in 1:e2_size]
+    e3_cat   = Categorical(e3_G)
+    ν_cat    = Categorical(ν_G)
+
+    @batch for h_i in 1:num_households
+
+        thread_id = Threads.threadid()
+        rng = rngs[thread_id]
+        h_id = UInt64(h_i)
+        h1_id = base_counter(h_id, UInt64(1))
+        set_counter!(rng, h1_id)
+        draw = newborn_bundle_draw(rng, e1_cat, e2_cat, e3_cat, ν_cat)
+        newborn_assignment!(simul_itp_cache, simul_panel, draw, 1, h_i)
+
+        for t_i in 2:num_periods
+
+            ht_id = base_counter(h_id, UInt64(t_i))
+            set_counter!(rng, ht_id)
+            e1_Γ_cat_ = e1_Γ_cat[simul_panel.e1_state[t_i-1,h_i]]
+            e2_Γ_cat_ = e2_Γ_cat[simul_panel.e2_state[t_i-1,h_i]]
+            draw = bundle_draw(rng, ρ, Ph, e1_cat, e1_Γ_cat_, e2_cat, e2_Γ_cat_, e3_cat, ν_cat)
+
+            if draw.newborn
+                newborn_assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i)
+            else
+                assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i)
+            end
+        end
+    end
+    return nothing
 end
 
 function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Array{Float64,5}, threshold_a::Array{Float64,4}, policy_pos_a::Array{Float64,5}, policy_pos_d::Array{Float64,5}, parameters::NamedTuple)
@@ -1569,3 +1760,4 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float
     # return results
     return variables_λ_min, variables_λ_optimal, 3, crit_V_optimal, crit_μ_optimal
 end
+

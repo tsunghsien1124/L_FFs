@@ -1109,11 +1109,13 @@ struct SimulatedPanel{TF<:AbstractFloat, TI<:Integer}
     e1_state       :: Matrix{TI}
     e2_state       :: Matrix{TI}
     e3_state       :: Matrix{TI}
+    earnings_state :: Matrix{TF}
     nu_state       :: Matrix{TI}
     asset_state    :: Matrix{TF}
     good_history   :: Matrix{Bool}
     default_choice :: Matrix{Bool}
     asset_choice   :: Matrix{TF}
+    interest_rate  :: Matrix{TF}
 end
 
 @inline advance_rng!(rng::Philox4x{UInt64}) = (rand(rng); true)
@@ -1129,17 +1131,21 @@ end
     return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, ν=ν_i, good_history=good_history_i)
 end
 
-@inline @inbounds function newborn_assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int)
+@inline @inbounds function newborn_assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int, W::AbstractArray{Float64,3})
     # @assert draw.newborn "Not newborn household"
     panel.newborn[t_i, h_i] = draw.newborn
     panel.e1_state[t_i, h_i] = draw.e1
     panel.e2_state[t_i, h_i] = draw.e2
     panel.e3_state[t_i, h_i] = draw.e3
+    panel.earnings_state[t_i, h_i] = W[draw.e3, draw.e2, draw.e1]
     panel.nu_state[t_i, h_i] = draw.ν
     # panel.asset_state[t_i, h_i] = 0.0
     # panel.good_history[t_i, h_i] = draw.good_history
     # panel.default_choice[t_i, h_i] = 0.0 <= cache.thres_a[draw.e3, draw.ν, draw.e2, draw.e1]
-    panel.asset_choice[t_i, h_i] = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](0.0)
+    asset_choice_itp = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](0.0)
+    panel.asset_choice[t_i, h_i] = asset_choice_itp
+    # panel.asset_choice[t_i, h_i] = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](0.0)
+    panel.interest_rate[t_i, h_i] = 1.0 / cache.q_itp[draw.e2, draw.e1](asset_choice_itp) - 1.0
     return nothing
 end
 
@@ -1155,12 +1161,13 @@ end
     return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, ν=ν_i, good_history=good_history_i)
 end
 
-@inline @inbounds function assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int)
+@inline @inbounds function assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int, W::AbstractArray{Float64,3})
     # @assert !draw.newborn "Unexpected newborn household"
     # panel.newborn[t_i, h_i] = draw.newborn
     panel.e1_state[t_i, h_i] = draw.e1
     panel.e2_state[t_i, h_i] = draw.e2
     panel.e3_state[t_i, h_i] = draw.e3
+    panel.earnings_state[t_i, h_i] = W[draw.e3, draw.e2, draw.e1]
     panel.nu_state[t_i, h_i] = draw.ν
     panel.asset_state[t_i, h_i] = panel.asset_choice[t_i-1, h_i]
     # @assert !panel.good_history[t_i-1, h_i] & (panel.asset_state[t_i, h_i] >= 0.0) "Bad history HHs cannot borrow"
@@ -1171,10 +1178,16 @@ end
             panel.asset_choice[t_i, h_i] = 0.0
             panel.good_history[t_i, h_i] = false
         else
-            panel.asset_choice[t_i, h_i] = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+            asset_choice_itp = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+            panel.asset_choice[t_i, h_i] = asset_choice_itp
+            # panel.asset_choice[t_i, h_i] = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+            panel.interest_rate[t_i, h_i] = 1.0 / cache.q_itp[draw.e2, draw.e1](asset_choice_itp) - 1.0
         end
     else
-        panel.asset_choice[t_i, h_i] = cache.policy_a_pos_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+        asset_choice_itp = cache.policy_a_pos_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+        panel.asset_choice[t_i, h_i] = asset_choice_itp
+        # panel.asset_choice[t_i, h_i] = cache.policy_a_pos_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+        panel.interest_rate[t_i, h_i] = 1.0 / cache.q_itp[draw.e2, draw.e1](asset_choice_itp) - 1.0
     end
     return nothing
 end
@@ -1189,15 +1202,17 @@ function initialize_panel(;num_households::Int64=50000, num_periods::Int64=2000,
     e1_state       = Matrix{IntT}(undef, num_periods, num_households)
     e2_state       = Matrix{IntT}(undef, num_periods, num_households)
     e3_state       = Matrix{IntT}(undef, num_periods, num_households)
+    earnings_state = zeros(FloT, num_periods, num_households)
     nu_state       = Matrix{IntT}(undef, num_periods, num_households)
     asset_state    = zeros(FloT, num_periods, num_households)
     good_history   = fill(true, num_periods, num_households) # trues(num_periods, num_households)
     default_choice = fill(false, num_periods, num_households) # falses(num_periods, num_households)
     asset_choice   = zeros(FloT, num_periods, num_households)
+    interest_rate  = zeros(FloT, num_periods, num_households)
 
     return SimulatedPanel{FloT,IntT}(
-        newborn, e1_state, e2_state, e3_state, nu_state, asset_state, 
-        good_history, default_choice, asset_choice, 
+        newborn, e1_state, e2_state, e3_state, earnings_state, nu_state, asset_state, 
+        good_history, default_choice, asset_choice, interest_rate,
         )
 end
 
@@ -1207,7 +1222,7 @@ end
     num_threads = Threads.nthreads()    
     rngs = make_thread_rngs(seed, num_threads)
 
-    @unpack ρ, Ph, e1_G, e1_Γ, e1_size, e2_G, e2_Γ, e2_size, e3_G, ν_G = parameters
+    @unpack ρ, Ph, e1_G, e1_Γ, e1_size, e2_G, e2_Γ, e2_size, e3_G, ν_G, W = parameters
 
     e1_cat   = Categorical(e1_G)
     e1_Γ_cat = [Categorical(e1_Γ[e1_i,:]) for e1_i in 1:e1_size]
@@ -1224,7 +1239,7 @@ end
         h1_id = base_counter(h_id, UInt64(1))
         set_counter!(rng, h1_id)
         draw = newborn_bundle_draw(rng, e1_cat, e2_cat, e3_cat, ν_cat)
-        newborn_assignment!(simul_itp_cache, simul_panel, draw, 1, h_i)
+        newborn_assignment!(simul_itp_cache, simul_panel, draw, 1, h_i, W)
 
         for t_i in 2:num_periods
 
@@ -1235,13 +1250,55 @@ end
             draw = bundle_draw(rng, ρ, Ph, e1_cat, e1_Γ_cat_, e2_cat, e2_Γ_cat_, e3_cat, ν_cat)
 
             if draw.newborn
-                newborn_assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i)
+                newborn_assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i, W)
             else
-                assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i)
+                assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i, W)
             end
         end
     end
     return nothing
+end
+
+function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache, simul_panel::SimulatedPanel; burnin::Int = 500)
+
+    num_periods, num_households = size(simul_panel.newborn)
+    burin_ = burnin + 1
+    num_periods_ = num_periods - burnin
+
+    adj_factor_th = 1.0 / (num_periods_ * num_households)
+
+    newborn_        = simul_panel.newborn[burin_:num_periods, :]
+    e1_state_       = simul_panel.e1_state[burin_:num_periods, :]
+    e2_state_       = simul_panel.e2_state[burin_:num_periods, :]
+    e3_state_       = simul_panel.e3_state[burin_:num_periods, :]
+    earnings_state_ = simul_panel.earnings_state[burin_:num_periods, :]
+    nu_state_       = simul_panel.nu_state[burin_:num_periods, :]
+    asset_state_    = simul_panel.asset_state[burin_:num_periods, :]
+    good_history_   = simul_panel.good_history[burin_:num_periods, :]
+    default_choice_ = simul_panel.default_choice[burin_:num_periods, :]
+    asset_choice_   = simul_panel.asset_choice[burin_:num_periods, :]
+    interest_rate_  = simul_panel.interest_rate[burin_:num_periods, :]
+
+    L = sum((asset_state_ .< 0.0) .* asset_state_) * adj_factor_th * (-1.0)
+    D = sum((asset_state_ .> 0.0) .* asset_state_) * adj_factor_th
+
+    plot([sum((simul_panel.asset_state[t_i, :] .< 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
+    plot([sum((asset_state_[t_i, :] .< 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
+
+    plot([sum((simul_panel.asset_state[t_i, :] .> 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
+    plot([sum((asset_state_[t_i, :] .> 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
+
+    share_of_filers = sum(default_choice_ .== true) * adj_factor_th * 100
+    share_in_debts = sum(asset_state_ .< 0.0) * adj_factor_th * 100
+
+    plot([sum(simul_panel.earnings_state[t_i, :]) / num_households for t_i in 1:num_periods])
+
+    debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* (asset_state_ ./ earnings_state_)) / sum(asset_state_ .< 0.0) * (-1.0)
+    debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* asset_state_) * (-1.0) / sum((asset_state_ .< 0.0) .* earnings_state_)
+
+    avg_loan_rate = sum((asset_choice_ .< 0.0) .* interest_rate_) / sum(asset_choice_ .< 0.0) * 100
+
+    aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 end
 
 function stationary_distribution_function(μ_p::Array{Float64,6}, policy_a::Array{Float64,5}, threshold_a::Array{Float64,4}, policy_pos_a::Array{Float64,5}, policy_pos_d::Array{Float64,5}, parameters::NamedTuple)

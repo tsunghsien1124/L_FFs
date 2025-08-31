@@ -38,9 +38,9 @@ solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updatin
 
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households = 50000, num_periods = 2000);
-simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
+@btime simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
 
-histogram(reshape(simul_panel.asset_state[1001:end,:],:,1))
+histogram(reshape(simul_panel.asset_state[1001:end,:],:,1), bins=100, normalize=:pdf)
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));

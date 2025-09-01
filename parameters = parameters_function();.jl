@@ -42,8 +42,8 @@ simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
 simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
 
-a_range = range(-2, 10, length=101)
-histogram(reshape(simul_panel.asset_state[1001:end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
+a_range = range(-2, 12, length=101)
+# histogram(reshape(simul_panel.asset_state[1001:end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
 histogram(reshape(simul_panel.asset_state[end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
 
 # V_p = rand(Float64, size(similar(variables.V)));

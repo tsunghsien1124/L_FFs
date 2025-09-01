@@ -186,7 +186,7 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     r_f::Float64=0.04,                  # risk-free rate
     β::Float64=1.0 / (ρ * (1.0 + r_f)), # discount factor (households)
     β_f::Float64=β,                     # discount factor (bank)
-    τ::Float64=0.00,                    # transaction cost
+    τ::Float64=0.04,                    # transaction cost
     γ::Float64=3.00,                    # CRRA coefficient
     δ::Float64=0.10,                    # depreciation rate
     α::Float64=0.36,                    # capital share
@@ -196,8 +196,8 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     η::Float64=0.30,                    # wage garnishment rate
     ξ::Float64=0.00,                    # stigma utility filing cost
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost
-    ν::Float64=0.70,                    # magnitude of preference shock
-    ν_p::Float64=0.20,                  # probability of preference shock
+    ν::Float64=0.80,                    # magnitude of preference shock
+    ν_p::Float64=0.10,                  # probability of preference shock
     λ::Float64=0.0                      # multiplier
 )
 
@@ -210,14 +210,23 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     ν_G = [1.0 - ν_p, ν_p]
     ν_Γ = ν_G
 
+    q_bar = ρ / (1.0 + r_f)
     ξ_λ = (1.0 - ψ) / (1.0 - λ - ψ)
     Λ_λ = β_f * (1.0 - ψ + ψ * ξ_λ)
     LR_λ = ξ_λ / θ
     KL2D_λ = LR_λ / (LR_λ - 1.0)
     ι_λ = λ * θ / Λ_λ
-    r_k_λ = r_f + ι_λ
+    r_k_λ = (1.0 / q_bar - 1.0) + ι_λ
     K_λ = E * ((r_k_λ + δ) / α)^(1.0 / (α - 1.0))
     w_λ = (1.0 - α) * (K_λ / E)^α
+
+    R_bar = ρ ./ ((-a_grid_neg) .* (1.0 + r_f + τ + ι_λ))
+    Γ_default = zeros(e3_size, e2_size, e1_size)
+    for e1_i = 1:e1_size, e2_i = 1:e2_size, e3_i = 1:e3_size
+        exp_e13 = exp_e13_grid[e3_i, e1_i]
+        exp_e2_μ_σ2 = exp_e2_μ_σ2_grid[e2_i]
+        Γ_default[e3_i, e2_i, e1_i] = η * w_λ * exp_e13 * exp_e2_μ_σ2
+    end
 
     W = zeros(e3_size, e2_size, e1_size)
     WA = zeros(a_size, e3_size, e2_size, e1_size)
@@ -244,15 +253,6 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
         Γ_e3_ν[e3_p_i, ν_p_i] = e3_Γ[e3_p_i] * ν_Γ[ν_p_i]
     end
 
-    R_bar = ρ ./ ((-a_grid_neg) .* (1.0 + r_f + τ + ι_λ))
-    q_bar = ρ / (1.0 + r_f)
-    Γ_default = zeros(e3_size, e2_size, e1_size)
-    for e1_i = 1:e1_size, e2_i = 1:e2_size, e3_i = 1:e3_size
-        exp_e13 = exp_e13_grid[e3_i, e1_i]
-        exp_e2_μ_σ2 = exp_e2_μ_σ2_grid[e2_i]
-        Γ_default[e3_i, e2_i, e1_i] = η * w_λ * exp_e13 * exp_e2_μ_σ2
-    end
-
     return (
         β=β,
         ρ=ρ,
@@ -270,7 +270,9 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
         κ=κ,
         ν_grid=ν_grid,
         ν_G=ν_G,
-        ν_Γ=ν_Γ, λ=λ,
+        ν_Γ=ν_Γ,
+        q_bar=q_bar,
+        λ=λ,
         ξ_λ=ξ_λ,
         Λ_λ=Λ_λ,
         LR_λ=LR_λ,
@@ -278,16 +280,16 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
         ι_λ=ι_λ,
         r_k_λ=r_k_λ,
         K_λ=K_λ,
-        w_λ=w_λ, W=W,
+        w_λ=w_λ,
+        R_bar=R_bar,
+        Γ_default=Γ_default,
+        W=W,
         WA=WA,
         c_d=c_d,
         u_d=u_d,
         u_d_ξ=u_d_ξ,
         Γ=Γ,
         Γ_e3_ν=Γ_e3_ν,
-        R_bar=R_bar,
-        q_bar=q_bar,
-        Γ_default=Γ_default,
     )
 end
 
@@ -932,7 +934,7 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
         q_crit = maximum(abs, @. variables.q - q_p)
         # crit = max(V_crit, V_pos_crit, q_crit)
         crit = q_crit
-        
+
         ProgressMeter.update!(prog, crit)
         search_iter += 1
 
@@ -1185,9 +1187,9 @@ function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache,
     discounted_price_ = simul_panel.discounted_price[burin_:num_periods, :]
     interest_rate_ = simul_panel.interest_rate[burin_:num_periods, :]
 
-    L = sum((asset_state_ .< 0.0) .* asset_state_) * adj_factor_th * (-1.0)
-    D = sum((asset_state_ .> 0.0) .* asset_state_) * adj_factor_th
-    
+    L = mean(max.(-asset_state_, 0.0))
+    D = mean(max.(asset_state_, 0.0))
+
     # L_p = sum((asset_choice_ .< 0.0) .* asset_choice_ .* discounted_price_) * adj_factor_th * (-1.0)
     # D_p = sum((asset_choice_ .> 0.0) .* asset_choice_ .* discounted_price_) * adj_factor_th
 
@@ -1197,15 +1199,17 @@ function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache,
     plot([sum((simul_panel.asset_state[t_i, :] .> 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
     plot([sum((asset_state_[t_i, :] .> 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
 
-    share_of_filers = sum(default_choice_ .== true) * adj_factor_th * 100
-    share_in_debts = sum(asset_state_ .< 0.0) * adj_factor_th * 100
+    share_of_filers = mean(default_choice_) * 100
+    share_in_debts = mean(asset_state_ .< 0.0) * 100
 
     plot([sum(simul_panel.earnings_state[t_i, :]) / num_households for t_i in 1:num_periods])
 
     debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* (asset_state_ ./ earnings_state_)) / sum(asset_state_ .< 0.0) * (-1.0)
     debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* asset_state_) * (-1.0) / sum((asset_state_ .< 0.0) .* earnings_state_)
 
-    avg_loan_rate = sum((asset_choice_ .< 0.0) .* interest_rate_) / sum(asset_choice_ .< 0.0) * 100
+    avg_loan_rate_count = sum((asset_choice_ .< 0.0) .* interest_rate_) / sum(asset_choice_ .< 0.0) * 100
+    avg_loan_rate_value = sum(max.(-asset_choice_, 0.0) .* interest_rate_) / sum(max.(-asset_choice_, 0.0)) * 100
+    avg_loan_rate_pvalue = sum(discounted_price_ .* max.(-asset_choice_, 0.0) .* interest_rate_) / sum(discounted_price_ .* max.(-asset_choice_, 0.0)) * 100
 
     aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 end

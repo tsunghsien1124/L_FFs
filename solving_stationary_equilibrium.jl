@@ -75,6 +75,7 @@ function initialize_static_parameters(;
     e1_grid, e1_G = adda_cooper(e1_size, 0.0, e1_σ)
     e1_Γ = Matrix{Float64}(I, e1_size, e1_size)
     exp_e1_grid = exp.(e1_grid)
+    # exp_e1_grid = exp_e1_grid ./ sum(exp_e1_grid .* e1_G)
 
     inv_e2_σ = 1.0 / e2_σ
     e2_MC = tauchen(e2_size, e2_ρ, e2_σ, 0.0, 3)
@@ -82,15 +83,20 @@ function initialize_static_parameters(;
     e2_G = stationary_distributions(e2_MC)[1]
     e2_grid = collect(e2_MC.state_values)
     exp_e2_grid = exp.(e2_grid)
+    # exp_e2_grid = exp_e2_grid ./ sum(exp_e2_grid .* e2_G)
 
     e3_grid, e3_G = adda_cooper(e3_size, 0.0, e3_σ)
     e3_Γ = e3_G
     exp_e3_grid = exp.(e3_grid)
+    # exp_e3_grid = exp_e3_grid ./ sum(exp_e3_grid .* e3_G)
 
     e13_grid = [e1 + e3 for e3 in e3_grid, e1 in e1_grid]
     exp_e13_grid = exp.(e13_grid)
+    # exp_e13_grid = [exp_e1 * exp_e3 for exp_e3 in exp_e3_grid, exp_e1 in exp_e1_grid]
+
     e123_grid = [e1 + e2 + e3 for e3 in e3_grid, e2 in e2_grid, e1 in e1_grid]
     exp_e123_grid = exp.(e123_grid)
+    # exp_e123_grid = [exp_e1 * exp_e2 * exp_e3 for exp_e3 in exp_e3_grid, exp_e2 in exp_e2_grid, exp_e1 in exp_e1_grid]
 
     E = sum(exp_e123_grid .*
             reshape(e1_G, (1, 1, e1_size)) .*
@@ -884,7 +890,7 @@ end
 safe_abs(x) = ifelse(isnan(x), 0.0, abs(x))
 
 function solve_value_and_pricing_function!(variables::MutableVariables, parameters::NamedTuple, itp_cache::ItpCache;
-    tol::Float64=1e-6, iter_max::Int64=1000, relax::Float64=1.0, bellman_step::Int64=1)
+    tol::Float64=1E-6, iter_max::Int64=1000, relax::Float64=1.0, bellman_step::Int64=1)
 
     @assert 0.0 < relax <= 1.0 "relaxation must be in (0,1]; got $relax"
     @assert bellman_step >= 1 "bellman step has to be larger than or equal to one; got $bellman_step"

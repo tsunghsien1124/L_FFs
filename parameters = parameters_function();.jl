@@ -36,10 +36,10 @@ tuned_parameters = initialize_tuned_parameters(static_parameters); # kwargs = (Î
 parameters = (; static_parameters..., tuned_parameters...)
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_pricing_function!(variables, parameters, itp_cache; relax=0.5, bellman_step=5);
+solve_value_and_pricing_function!(variables, parameters, itp_cache; tol=1E-6, relax=1.0, bellman_step=1);
 
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
-simul_panel = initialize_panel(num_households=50000, num_periods=2000);
+simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
 simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
 
 a_range = range(-2, 10, length=101)

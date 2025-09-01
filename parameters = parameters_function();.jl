@@ -31,10 +31,12 @@ using LoopVectorization
 # using DataInterpolations
 using StatsFuns
 
-parameters = initialize_parameters(a_size_neg=101, a_degree_neg=5, a_degree_pos=2, λ=0.00);
+static_parameters = initialize_static_parameters();
+tuned_parameters = initialize_tuned_parameters(static_parameters); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+parameters = (; static_parameters..., tuned_parameters...)
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updating=1.0);
+solve_value_and_pricing_function!(variables, parameters, itp_cache; relax=0.5, bellman_step=5);
 
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=50000, num_periods=2000);
@@ -43,10 +45,6 @@ simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
 a_range = range(-2, 10, length=101)
 histogram(reshape(simul_panel.asset_state[1001:end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
 histogram(reshape(simul_panel.asset_state[end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
-
-# sum(parameters.e123_grid .* reshape(parameters.e1_G, (1, 1, parameters.e1_size)) .* reshape(parameters.e2_G, (1, parameters.e2_size, 1)) .* reshape(parameters.e3_G, (parameters.e3_size, 1, 1)))
-# parameters.w_λ * sum(parameters.exp_e123_grid .* reshape(parameters.e1_G, (1, 1, parameters.e1_size)) .* reshape(parameters.e2_G, (1, parameters.e2_size, 1)) .* reshape(parameters.e3_G, (parameters.e3_size, 1, 1)))
-# sum(parameters.W .* reshape(parameters.e1_G, (1, 1, parameters.e1_size)) .* reshape(parameters.e2_G, (1, parameters.e2_size, 1)) .* reshape(parameters.e3_G, (parameters.e3_size, 1, 1)))
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -63,10 +61,15 @@ plot!([variables.rbl_a[e2_i, e1_i]], [variables.rbl_qa[e2_i, e1_i]], seriestype=
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
 
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end-1])
+
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end])
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1] .* parameters.a_grid_neg)
 plot!(variables.rbl_a[:, 1], variables.rbl_qa[:, 1], seriestype=:scatter)
+
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end-1] .* parameters.a_grid_neg)
+plot!(variables.rbl_a[:, end-1], variables.rbl_qa[:, end-1], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end] .* parameters.a_grid_neg)
 plot!(variables.rbl_a[:, end], variables.rbl_qa[:, end], seriestype=:scatter)

@@ -2,29 +2,84 @@
 # Solve stationary equlibrium #
 #=============================#
 
-function adda_cooper(N::Int64, ρ::Float64, σ::Float64; μ::Float64=0.0)
-    """
-    Approximation of an autoregression process with a Markov chain proposed by Adda and Cooper (2003)
-    """
+# function adda_cooper(N::Int64, ρ::Float64, σ::Float64; μ::Float64=0.0)
+#     """
+#     Approximation of an autoregression process with a Markov chain proposed by Adda and Cooper (2003)
+#     """
 
-    σ_ϵ = σ / sqrt(1.0 - ρ^2.0)
-    ϵ = σ_ϵ .* quantile.(Normal(), range(0.0, 1.0, length=N + 1)) .+ μ
-    z = zeros(N)
-    for i = 1:N
-        if i != (N + 1) / 2
-            z[i] = N * σ_ϵ * (pdf(Normal(), (ϵ[i] - μ) / σ_ϵ) - pdf(Normal(), (ϵ[i+1] - μ) / σ_ϵ)) + μ
-        end
+#     σ_ϵ = σ / sqrt(1.0 - ρ^2.0)
+#     ϵ = σ_ϵ .* quantile.(Normal(), range(0.0, 1.0, length=N + 1)) .+ μ
+#     z = zeros(N)
+#     for i = 1:N
+#         if i != (N + 1) / 2
+#             z[i] = N * σ_ϵ * (pdf(Normal(), (ϵ[i] - μ) / σ_ϵ) - pdf(Normal(), (ϵ[i+1] - μ) / σ_ϵ)) + μ
+#         end
+#     end
+#     Π = zeros(N, N)
+#     if ρ == 0.0
+#         Π .= 1.0 / N
+#     else
+#         for i = 1:N, j = 1:N
+#             f(u) = exp(-(u - μ)^2.0 / (2.0 * σ_ϵ^2.0)) * (cdf(Normal(), (ϵ[j+1] - μ * (1.0 - ρ) - ρ * u) / σ) - cdf(Normal(), (ϵ[j] - μ * (1.0 - ρ) - ρ * u) / σ))
+#             integral = quadgk(u -> f(u), ϵ[i], ϵ[i+1])[1]
+#             Π[i, j] = (N / sqrt(2.0 * π * σ_ϵ^2.0)) * integral
+#         end
+#     end
+#     return z, Π
+# end
+
+function adda_cooper(N::Integer, ρ::T, σ::T; μ::T=zero(T), rtol::Real=1e-10, atol::Real=0.0) where {T<:AbstractFloat}
+
+    N ≥ 2 || throw(ArgumentError("N ≥ 2 required"))
+    abs(ρ) < one(T) || throw(ArgumentError("|ρ| < 1 required for stationarity"))
+    σ > zero(T) || throw(ArgumentError("σ > 0 required"))
+
+    Φ⁻¹(x::T) = T(norminvcdf(Float64(x)))
+    ϕ(x::T) = T(normpdf(Float64(x)))
+    Φ(x::T) = T(normcdf(Float64(x)))
+
+    σ_z = σ / sqrt(one(T) - ρ * ρ)
+    invσ_z = one(T) / σ_z
+
+    q = range(zero(T), one(T); length=N + 1)
+    m = μ .+ σ_z .* (Φ⁻¹).(q)
+
+    z = Vector{T}(undef, N)
+    @inbounds for i in 1:N
+        lo = (m[i] - μ) * invσ_z
+        hi = (m[i+1] - μ) * invσ_z
+        z[i] = μ - σ_z * T(N) * (ϕ(hi) - ϕ(lo))
     end
-    Π = zeros(N, N)
-    if ρ == 0.0
-        Π .= 1.0 / N
-    else
-        for i = 1:N, j = 1:N
-            f(u) = exp(-(u - μ)^2.0 / (2.0 * σ_ϵ^2.0)) * (cdf(Normal(), (ϵ[j+1] - μ * (1.0 - ρ) - ρ * u) / σ) - cdf(Normal(), (ϵ[j] - μ * (1.0 - ρ) - ρ * u) / σ))
-            integral = quadgk(u -> f(u), ϵ[i], ϵ[i+1])[1]
-            Π[i, j] = (N / sqrt(2.0 * π * σ_ϵ^2.0)) * integral
-        end
+
+    if isodd(N)
+        z[(N+1)÷2] = μ
     end
+
+    if iszero(ρ)
+        π = fill(inv(T(N)), N)
+        return z, π
+    end
+
+    dens_z = (zv::T) -> ϕ((zv - μ) * invσ_z) * invσ_z
+    drift = μ * (one(T) - ρ)
+
+    Π = Matrix{T}(undef, N, N)
+    @inbounds for i in 1:N, j in 1:N
+        integrand = function (zv::T)
+            lo = (m[j] - drift - ρ * zv) / σ
+            hi = (m[j+1] - drift - ρ * zv) / σ
+            pj = Φ(hi) - Φ(lo)
+            return dens_z(zv) * pj
+        end
+        val = quadgk(integrand, m[i], m[i+1]; rtol=rtol, atol=atol)[1]
+        Π[i, j] = T(N) * val
+    end
+
+    @inbounds for i in 1:N
+        s = sum(Π[i, :])
+        Π[i, :] ./= s
+    end
+
     return z, Π
 end
 
@@ -67,13 +122,8 @@ function initialize_parameters(;
     """
 
     # permanent endowment shock
-    e1_grid, e1_Γ = adda_cooper(e1_size, 0.0, e1_σ)
+    e1_grid, e1_G = adda_cooper(e1_size, 0.0, e1_σ)
     exp_e1_grid = exp.(e1_grid)
-    e1_Γ = e1_Γ[1, :]
-    # e1_grid = [-e1_σ, e1_σ]
-    # e1_Γ = Matrix(1.0I, e1_size, e1_size)
-    # G_e1 = [1.0 / e1_size for i = 1:e1_size]
-    e1_G = e1_Γ
     e1_Γ = Matrix{Float64}(I, e1_size, e1_size)
 
     # persistent endowment shock
@@ -88,13 +138,9 @@ function initialize_parameters(;
     # G_e2 = [1.0, 0.0, 0.0]
 
     # transitory endowment shock
-    e3_grid, e3_Γ = adda_cooper(e3_size, 0.0, e3_σ)
+    e3_grid, e3_G = adda_cooper(e3_size, 0.0, e3_σ)
     exp_e3_grid = exp.(e3_grid)
-    e3_Γ = e3_Γ[1, :]
-    # e3_bar = sqrt((3 / 2) * e3_σ^2)
-    # e3_grid = [-e3_bar, 0.0, e3_bar]
-    # e3_Γ = [1.0 / e3_size for i = 1:e3_size]
-    e3_G = e3_Γ # [0.0, 1.0, 0.0]
+    e3_Γ = e3_G
 
     # aggregate endowment shock
     # e13_grid = exp.(e1_grid .+ e3_grid')
@@ -104,7 +150,10 @@ function initialize_parameters(;
     exp_e123_grid = exp.(e123_grid)
 
     # aggregate labor endowment
-    E = 1.0
+    # E = 1.0
+    # E = exp(sum(e1_grid .* e1_G) + sum(e2_grid .* e2_G) + sum(e3_grid .* e3_G))
+    # E = exp(sum(e123_grid .* reshape(e1_G, (1, 1, e1_size)) .* reshape(e2_G, (1, e2_size, 1)) .* reshape(e3_G, (e3_size, 1, 1))))
+    E = sum(exp_e123_grid .* reshape(e1_G, (1, 1, e1_size)) .* reshape(e2_G, (1, e2_size, 1)) .* reshape(e3_G, (e3_size, 1, 1)))
 
     # preference schock
     ν_grid = [1.00, 0.90]
@@ -405,7 +454,7 @@ struct MutableAggregateVariables{T}
 end
 
 struct MutableVariables{T,
-    A2<:AbstractArray{T,2}, 
+    A2<:AbstractArray{T,2},
     A3<:AbstractArray{T,3},
     A4<:AbstractArray{T,4},
     A5<:AbstractArray{T,5},
@@ -467,7 +516,7 @@ end
         e1 = e1_grid[e1_i]
         e3 = e3_grid[e3_i]
         a_neg = a_grid_neg[a_neg_i]
-        thres_e2[a_neg_i, e3_i, :, e1_i] .= log_((- a_neg - κ) / (η * w_λ)) - e1 - e3
+        thres_e2[a_neg_i, e3_i, :, e1_i] .= log_((-a_neg - κ) / (η * w_λ)) - e1 - e3
     end
 
     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
@@ -495,11 +544,11 @@ end
     V_d = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
     V_nd = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
     V_pos = zeros(T, a_size_pos, e3_size, ν_size, e2_size, e1_size)
- 
+
     policy_a = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
     policy_d = Array{T}(undef, a_size, e3_size, ν_size, e2_size, e1_size)
     policy_a_pos = Array{T}(undef, a_size_pos, e3_size, ν_size, e2_size, e1_size)
- 
+
     EV = zeros(T, a_size, ν_size, e2_size, e1_size)
     EV_pos = zeros(T, a_size_pos, ν_size, e2_size, e1_size)
     EV_Ph = zeros(T, a_size_pos, ν_size, e2_size, e1_size)
@@ -817,7 +866,7 @@ end
     if abs(new - old) <= tol_hyst
         return old
     end
-    return ω*new + (1.0-ω)*old
+    return ω * new + (1.0 - ω) * old
 end
 
 function find_thresholds!(thres_a_p::Array{Float64,4}, thres_e2_p::Array{Float64,4},
@@ -1054,7 +1103,7 @@ function variables_function_update!(variables::MutableVariables, parameters::Nam
     variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
 end
 
-struct SimulItpCache{ItpQ, ItpA, ItpAPos, T}
+struct SimulItpCache{ItpQ,ItpA,ItpAPos,T}
     q_itp::Array{ItpQ,2}                       # size: (e2_size, e1_size)
     policy_a_itp::Array{ItpA,4}                # size: (e3_size, ν_size, e2_size, e1_size)
     policy_a_pos_itp::Array{ItpAPos,4}         # size: (e3_size, ν_size, e2_size, e1_size)
@@ -1093,7 +1142,7 @@ end
         end
     end
 
-    return SimulItpCache{typeof(q_sample), typeof(policy_a_sample), typeof(policy_a_pos_sample), typeof(thres_a_sample)}(
+    return SimulItpCache{typeof(q_sample),typeof(policy_a_sample),typeof(policy_a_pos_sample),typeof(thres_a_sample)}(
         q_itp, policy_a_itp, policy_a_pos_itp, variables.thres_a)
 end
 
@@ -1104,30 +1153,30 @@ end
 
 @inline base_counter(h_id::UInt64, t_id::UInt64)::UInt64 = (h_id << 44) | (t_id << 24)
 
-struct SimulatedPanel{TF<:AbstractFloat, TI<:Integer}
-    newborn        :: Matrix{Bool}
-    e1_state       :: Matrix{TI}
-    e2_state       :: Matrix{TI}
-    e3_state       :: Matrix{TI}
-    earnings_state :: Matrix{TF}
-    nu_state       :: Matrix{TI}
-    asset_state    :: Matrix{TF}
-    good_history   :: Matrix{Bool}
-    default_choice :: Matrix{Bool}
-    asset_choice   :: Matrix{TF}
-    interest_rate  :: Matrix{TF}
+struct SimulatedPanel{TF<:AbstractFloat,TI<:Integer}
+    newborn::Matrix{Bool}
+    e1_state::Matrix{TI}
+    e2_state::Matrix{TI}
+    e3_state::Matrix{TI}
+    earnings_state::Matrix{TF}
+    nu_state::Matrix{TI}
+    asset_state::Matrix{TF}
+    good_history::Matrix{Bool}
+    default_choice::Matrix{Bool}
+    asset_choice::Matrix{TF}
+    interest_rate::Matrix{TF}
 end
 
 @inline advance_rng!(rng::Philox4x{UInt64}) = (rand(rng); true)
 
 @inline function newborn_bundle_draw(rng::Philox4x{UInt64},
     e1_cat::Categorical, e2_cat::Categorical, e3_cat::Categorical, ν_cat::Categorical)::NamedTuple
-    newborn_i       = advance_rng!(rng)
-    e1_i            = rand(rng, e1_cat)
-    e2_i            = rand(rng, e2_cat)
-    e3_i            = rand(rng, e3_cat)
-    ν_i             = rand(rng, ν_cat)
-    good_history_i  = advance_rng!(rng)
+    newborn_i = advance_rng!(rng)
+    e1_i = rand(rng, e1_cat)
+    e2_i = rand(rng, e2_cat)
+    e3_i = rand(rng, e3_cat)
+    ν_i = rand(rng, ν_cat)
+    good_history_i = advance_rng!(rng)
     return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, ν=ν_i, good_history=good_history_i)
 end
 
@@ -1150,14 +1199,14 @@ end
 end
 
 @inline function bundle_draw(rng::Philox4x{UInt64}, ρ::Float64, Ph::Float64,
-    e1_cat::Categorical, e1_Γ_cat_::Categorical, e2_cat::Categorical, e2_Γ_cat_::Categorical, 
+    e1_cat::Categorical, e1_Γ_cat_::Categorical, e2_cat::Categorical, e2_Γ_cat_::Categorical,
     e3_cat::Categorical, ν_cat::Categorical)::NamedTuple
-    newborn_i       = rand(rng) > ρ
-    e1_i            = newborn_i ? rand(rng, e1_cat) : rand(rng, e1_Γ_cat_)
-    e2_i            = newborn_i ? rand(rng, e2_cat) : rand(rng, e2_Γ_cat_)
-    e3_i            = rand(rng, e3_cat)
-    ν_i             = rand(rng, ν_cat)
-    good_history_i  = newborn_i ? advance_rng!(rng) : rand(rng) <= Ph
+    newborn_i = rand(rng) > ρ
+    e1_i = newborn_i ? rand(rng, e1_cat) : rand(rng, e1_Γ_cat_)
+    e2_i = newborn_i ? rand(rng, e2_cat) : rand(rng, e2_Γ_cat_)
+    e3_i = rand(rng, e3_cat)
+    ν_i = rand(rng, ν_cat)
+    good_history_i = newborn_i ? advance_rng!(rng) : rand(rng) <= Ph
     return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, ν=ν_i, good_history=good_history_i)
 end
 
@@ -1192,44 +1241,44 @@ end
     return nothing
 end
 
-function initialize_panel(;num_households::Int64=50000, num_periods::Int64=2000, 
+function initialize_panel(; num_households::Int64=50000, num_periods::Int64=2000,
     FloT::Type{<:AbstractFloat}=Float64, IntT::Type{<:Integer}=Int64)
 
-    @assert 0 < num_households <= 2^20  "The number of households exceeds 20-bit capacity"
-    @assert 0 < num_periods    <= 2^20  "The number of periods exceeds 20-bit capacity"
+    @assert 0 < num_households <= 2^20 "The number of households exceeds 20-bit capacity"
+    @assert 0 < num_periods <= 2^20 "The number of periods exceeds 20-bit capacity"
 
-    newborn        = fill(false, num_periods, num_households) # falses(num_periods, num_households)
-    e1_state       = Matrix{IntT}(undef, num_periods, num_households)
-    e2_state       = Matrix{IntT}(undef, num_periods, num_households)
-    e3_state       = Matrix{IntT}(undef, num_periods, num_households)
+    newborn = fill(false, num_periods, num_households) # falses(num_periods, num_households)
+    e1_state = Matrix{IntT}(undef, num_periods, num_households)
+    e2_state = Matrix{IntT}(undef, num_periods, num_households)
+    e3_state = Matrix{IntT}(undef, num_periods, num_households)
     earnings_state = zeros(FloT, num_periods, num_households)
-    nu_state       = Matrix{IntT}(undef, num_periods, num_households)
-    asset_state    = zeros(FloT, num_periods, num_households)
-    good_history   = fill(true, num_periods, num_households) # trues(num_periods, num_households)
+    nu_state = Matrix{IntT}(undef, num_periods, num_households)
+    asset_state = zeros(FloT, num_periods, num_households)
+    good_history = fill(true, num_periods, num_households) # trues(num_periods, num_households)
     default_choice = fill(false, num_periods, num_households) # falses(num_periods, num_households)
-    asset_choice   = zeros(FloT, num_periods, num_households)
-    interest_rate  = zeros(FloT, num_periods, num_households)
+    asset_choice = zeros(FloT, num_periods, num_households)
+    interest_rate = zeros(FloT, num_periods, num_households)
 
     return SimulatedPanel{FloT,IntT}(
-        newborn, e1_state, e2_state, e3_state, earnings_state, nu_state, asset_state, 
+        newborn, e1_state, e2_state, e3_state, earnings_state, nu_state, asset_state,
         good_history, default_choice, asset_choice, interest_rate,
-        )
+    )
 end
 
 @inbounds function simulate_household_panel!(parameters::NamedTuple, simul_itp_cache::SimulItpCache, simul_panel::SimulatedPanel; seed::Int=1124)
 
     num_periods, num_households = size(simul_panel.newborn)
-    num_threads = Threads.nthreads()    
+    num_threads = Threads.nthreads()
     rngs = make_thread_rngs(seed, num_threads)
 
     @unpack ρ, Ph, e1_G, e1_Γ, e1_size, e2_G, e2_Γ, e2_size, e3_G, ν_G, W = parameters
 
-    e1_cat   = Categorical(e1_G)
-    e1_Γ_cat = [Categorical(e1_Γ[e1_i,:]) for e1_i in 1:e1_size]
-    e2_cat   = Categorical(e2_G)
-    e2_Γ_cat = [Categorical(e2_Γ[e2_i,:]) for e2_i in 1:e2_size]
-    e3_cat   = Categorical(e3_G)
-    ν_cat    = Categorical(ν_G)
+    e1_cat = Categorical(e1_G)
+    e1_Γ_cat = [Categorical(e1_Γ[e1_i, :]) for e1_i in 1:e1_size]
+    e2_cat = Categorical(e2_G)
+    e2_Γ_cat = [Categorical(e2_Γ[e2_i, :]) for e2_i in 1:e2_size]
+    e3_cat = Categorical(e3_G)
+    ν_cat = Categorical(ν_G)
 
     @batch for h_i in 1:num_households
 
@@ -1245,8 +1294,8 @@ end
 
             ht_id = base_counter(h_id, UInt64(t_i))
             set_counter!(rng, ht_id)
-            e1_Γ_cat_ = e1_Γ_cat[simul_panel.e1_state[t_i-1,h_i]]
-            e2_Γ_cat_ = e2_Γ_cat[simul_panel.e2_state[t_i-1,h_i]]
+            e1_Γ_cat_ = e1_Γ_cat[simul_panel.e1_state[t_i-1, h_i]]
+            e2_Γ_cat_ = e2_Γ_cat[simul_panel.e2_state[t_i-1, h_i]]
             draw = bundle_draw(rng, ρ, Ph, e1_cat, e1_Γ_cat_, e2_cat, e2_Γ_cat_, e3_cat, ν_cat)
 
             if draw.newborn
@@ -1259,7 +1308,7 @@ end
     return nothing
 end
 
-function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache, simul_panel::SimulatedPanel; burnin::Int = 500)
+function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache, simul_panel::SimulatedPanel; burnin::Int=500)
 
     num_periods, num_households = size(simul_panel.newborn)
     burin_ = burnin + 1
@@ -1267,17 +1316,17 @@ function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache,
 
     adj_factor_th = 1.0 / (num_periods_ * num_households)
 
-    newborn_        = simul_panel.newborn[burin_:num_periods, :]
-    e1_state_       = simul_panel.e1_state[burin_:num_periods, :]
-    e2_state_       = simul_panel.e2_state[burin_:num_periods, :]
-    e3_state_       = simul_panel.e3_state[burin_:num_periods, :]
+    # newborn_        = simul_panel.newborn[burin_:num_periods, :]
+    # e1_state_       = simul_panel.e1_state[burin_:num_periods, :]
+    # e2_state_       = simul_panel.e2_state[burin_:num_periods, :]
+    # e3_state_       = simul_panel.e3_state[burin_:num_periods, :]
     earnings_state_ = simul_panel.earnings_state[burin_:num_periods, :]
-    nu_state_       = simul_panel.nu_state[burin_:num_periods, :]
-    asset_state_    = simul_panel.asset_state[burin_:num_periods, :]
-    good_history_   = simul_panel.good_history[burin_:num_periods, :]
+    # nu_state_       = simul_panel.nu_state[burin_:num_periods, :]
+    asset_state_ = simul_panel.asset_state[burin_:num_periods, :]
+    # good_history_   = simul_panel.good_history[burin_:num_periods, :]
     default_choice_ = simul_panel.default_choice[burin_:num_periods, :]
-    asset_choice_   = simul_panel.asset_choice[burin_:num_periods, :]
-    interest_rate_  = simul_panel.interest_rate[burin_:num_periods, :]
+    asset_choice_ = simul_panel.asset_choice[burin_:num_periods, :]
+    interest_rate_ = simul_panel.interest_rate[burin_:num_periods, :]
 
     L = sum((asset_state_ .< 0.0) .* asset_state_) * adj_factor_th * (-1.0)
     D = sum((asset_state_ .> 0.0) .* asset_state_) * adj_factor_th

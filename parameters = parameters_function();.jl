@@ -31,16 +31,22 @@ using LoopVectorization
 # using DataInterpolations
 using StatsFuns
 
-parameters = initialize_parameters(a_size_neg = 201, a_degree_neg = 2, a_degree_pos = 2, λ = 0.00);
+parameters = initialize_parameters(a_size_neg=101, a_degree_neg=5, a_degree_pos=2, λ=0.00);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updating = 1.0);
+solve_value_and_pricing_function!(variables, parameters, itp_cache; slow_updating=1.0);
 
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
-simul_panel = initialize_panel(num_households = 50000, num_periods = 2000);
-@btime simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
+simul_panel = initialize_panel(num_households=50000, num_periods=2000);
+simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
 
-histogram(reshape(simul_panel.asset_state[1001:end,:],:,1), bins=100, normalize=:pdf)
+a_range = range(-2, 10, length=101)
+histogram(reshape(simul_panel.asset_state[1001:end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
+histogram(reshape(simul_panel.asset_state[end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
+
+# sum(parameters.e123_grid .* reshape(parameters.e1_G, (1, 1, parameters.e1_size)) .* reshape(parameters.e2_G, (1, parameters.e2_size, 1)) .* reshape(parameters.e3_G, (parameters.e3_size, 1, 1)))
+# parameters.w_λ * sum(parameters.exp_e123_grid .* reshape(parameters.e1_G, (1, 1, parameters.e1_size)) .* reshape(parameters.e2_G, (1, parameters.e2_size, 1)) .* reshape(parameters.e3_G, (parameters.e3_size, 1, 1)))
+# sum(parameters.W .* reshape(parameters.e1_G, (1, 1, parameters.e1_size)) .* reshape(parameters.e2_G, (1, parameters.e2_size, 1)) .* reshape(parameters.e3_G, (parameters.e3_size, 1, 1)))
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -91,7 +97,7 @@ plot(exp.(parameters.e2_grid), variables.thres_a[e3_i, ν_i, :, e1_i])
 scatter!([exp(variables.thres_e2[a_p_i, e3_i, ν_i, e1_i])], [parameters.a_grid_neg[a_p_i]])
 
 W_ = parameters.w_λ * exp(variables.thres_e2[a_p_i, e3_i, ν_i, e1_i] + e1_ + e3_)
-plot(parameters.W[e3_i,:,e1_i], variables.thres_a[e3_i, ν_i, :, e1_i])
+plot(parameters.W[e3_i, :, e1_i], variables.thres_a[e3_i, ν_i, :, e1_i])
 scatter!([W_], [parameters.a_grid_neg[a_p_i]])
 
 plot(parameters.a_grid_neg, exp.(variables.thres_e2[:, e3_i, ν_i, :]))
@@ -158,7 +164,7 @@ a_test_1 = collect(parameters.a_min:1:0.00001)
 a_test_2 = collect(parameters.a_min:0.001:0.00001)
 σ(x) = 1 / (1 + exp(-x))
 logit(p) = log(p) - log1p(-p)
-S = logit.(clamp.(p, 1E-8, 1-1E-8))
+S = logit.(clamp.(p, 1E-8, 1 - 1E-8))
 Sitp = PCHIPInterpolation(S, a)
 Sitp_linear = LinearInterpolation(p, a)
 
@@ -181,7 +187,7 @@ logit(p) = log(p) - log1p(-p)
 
 x = parameters.a_grid_neg[1:(end-1)]
 y = p
-y_logit = logit.(clamp.(y, 1e-12, 1-1e-12))
+y_logit = logit.(clamp.(y, 1e-12, 1 - 1e-12))
 
 lin = LinearInterpolation(y, x)
 pch = PCHIPInterpolation(y, x)
@@ -196,11 +202,11 @@ t = -0.123  # some query inside [x[1], x[end]]
 ############
 using Interpolations
 A = reshape(collect(1.0:5.0), 5, 1, 1, 1)
-itp = linear_interpolation(collect(1:5), @view(A[:,1,1,1]), extrapolation_bc=Line())
+itp = linear_interpolation(collect(1:5), @view(A[:, 1, 1, 1]), extrapolation_bc=Line())
 v1 = itp(3.0)            # ~3.0
-A[:,1,1,1] .= 100:104
+A[:, 1, 1, 1] .= 100:104
 v2 = itp(3.0)            # still ~3.0  ← internally copied at construction
-itp.itp.coefs .= @view A[:,1,1,1]
+itp.itp.coefs .= @view A[:, 1, 1, 1]
 v3 = itp(3.0)            # now ~102.0  ← manual refresh fixed it
 
 #####
@@ -228,8 +234,8 @@ check_index_uniqueness(parameters.loop_a_pos_ν_e2_e1, "loop_a_pos_ν_e2_e1")
 using BenchmarkTools
 
 # Test with your typical array sizes
-Γ_sample = rand(3,4,5,6)
-V_sample = rand(3,4,5,6)
+Γ_sample = rand(3, 4, 5, 6)
+V_sample = rand(3, 4, 5, 6)
 
 # Single-threaded comparison
 @btime dot($Γ_sample, $V_sample)

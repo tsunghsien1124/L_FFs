@@ -1,24 +1,20 @@
 #=================#
 # Import packages #
 #=================#
-# using Dierckx
-# using FLOWMath
 using Distributions
 using QuadGK
 using JLD2: @save, @load
 using LinearAlgebra
 BLAS.set_num_threads(1)
 using Optim
-# using BlackBoxOptim
 using Parameters: @unpack
 using PrettyTables
 using ProgressMeter
-using QuantEcon: gridmake, rouwenhorst, tauchen, stationary_distributions, MarkovChain
+using QuantEcon: rouwenhorst, tauchen, stationary_distributions, MarkovChain
 using Roots
 using CSV
 using Tables
 using Plots
-# using Random
 using Random123
 using GLM
 using DataFrames
@@ -28,7 +24,6 @@ using Polyester
 using Interpolations
 using FastGaussQuadrature
 using LoopVectorization
-# using DataInterpolations
 using StatsFuns
 
 static_parameters = initialize_static_parameters();

@@ -1168,6 +1168,8 @@ end
 
 function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache, simul_panel::SimulatedPanel; burnin::Int=500)
 
+    @unpack K_λ = parameters
+
     num_periods, num_households = size(simul_panel.newborn)
     burin_ = burnin + 1
     num_periods_ = num_periods - burnin
@@ -1187,31 +1189,39 @@ function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache,
     discounted_price_ = simul_panel.discounted_price[burin_:num_periods, :]
     interest_rate_ = simul_panel.interest_rate[burin_:num_periods, :]
 
+    K = K_λ
     L = mean(max.(-asset_state_, 0.0))
     D = mean(max.(asset_state_, 0.0))
+    A = K + L
+    N = A - D
+    LR = A / N
+    KL2D = A / D
 
-    # L_p = sum((asset_choice_ .< 0.0) .* asset_choice_ .* discounted_price_) * adj_factor_th * (-1.0)
-    # D_p = sum((asset_choice_ .> 0.0) .* asset_choice_ .* discounted_price_) * adj_factor_th
+    profit = ι * A + (1.0 + r_f) * N
+    # ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
+    # ω = N / (ψ * profit)
+    # ω = (N - ψ * profit) / ((1.0 - ψ) * (K + L))
+    ω = (N - ψ * profit) / (K + L)
+
+    share_of_filers = mean(default_choice_) * 100
+    share_in_debts = mean(asset_state_ .< 0.0) * 100
+
+    debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* (asset_state_ ./ earnings_state_)) / sum(asset_state_ .< 0.0) * (-1.0)
+    debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* asset_state_) * (-1.0) / sum((asset_state_ .< 0.0) .* earnings_state_)
+
+    avg_loan_rate = sum((asset_choice_ .< 0.0) .* interest_rate_) / sum(asset_choice_ .< 0.0) * 100
+    # avg_loan_rate_value = sum(max.(-asset_choice_, 0.0) .* interest_rate_) / sum(max.(-asset_choice_, 0.0)) * 100
+    # avg_loan_rate_pvalue = sum(discounted_price_ .* max.(-asset_choice_, 0.0) .* interest_rate_) / sum(discounted_price_ .* max.(-asset_choice_, 0.0)) * 100
+
+    aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+
+    plot([sum(simul_panel.earnings_state[t_i, :]) / num_households for t_i in 1:num_periods])
 
     plot([sum((simul_panel.asset_state[t_i, :] .< 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
     plot([sum((asset_state_[t_i, :] .< 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
 
     plot([sum((simul_panel.asset_state[t_i, :] .> 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
     plot([sum((asset_state_[t_i, :] .> 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
-
-    share_of_filers = mean(default_choice_) * 100
-    share_in_debts = mean(asset_state_ .< 0.0) * 100
-
-    plot([sum(simul_panel.earnings_state[t_i, :]) / num_households for t_i in 1:num_periods])
-
-    debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* (asset_state_ ./ earnings_state_)) / sum(asset_state_ .< 0.0) * (-1.0)
-    debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* asset_state_) * (-1.0) / sum((asset_state_ .< 0.0) .* earnings_state_)
-
-    avg_loan_rate_count = sum((asset_choice_ .< 0.0) .* interest_rate_) / sum(asset_choice_ .< 0.0) * 100
-    avg_loan_rate_value = sum(max.(-asset_choice_, 0.0) .* interest_rate_) / sum(max.(-asset_choice_, 0.0)) * 100
-    avg_loan_rate_pvalue = sum(discounted_price_ .* max.(-asset_choice_, 0.0) .* interest_rate_) / sum(discounted_price_ .* max.(-asset_choice_, 0.0)) * 100
-
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
 end
 
 function solve_aggregate_variable_function(

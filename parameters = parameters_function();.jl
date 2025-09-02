@@ -1,30 +1,27 @@
 #=================#
 # Import packages #
 #=================#
-using Distributions
-using QuadGK
-using JLD2: @save, @load
+using Distributions, StatsFuns, QuadGK
+# using JLD2: @save, @load
 using LinearAlgebra
-BLAS.set_num_threads(1)
 using Optim
 using Parameters: @unpack
-using PrettyTables
+# using PrettyTables
 using ProgressMeter
 using QuantEcon: rouwenhorst, tauchen, stationary_distributions, MarkovChain
-using Roots
-using CSV
-using Tables
+# using Roots
+# using CSV
+# using Tables
 using Plots
 using Random123
-using GLM
-using DataFrames
-using Measures
+# using GLM
+# using DataFrames
+# using Measures
 using BenchmarkTools, Profile
 using Polyester
 using Interpolations
-using FastGaussQuadrature
-using LoopVectorization
-using StatsFuns
+# using FastGaussQuadrature
+# using LoopVectorization
 
 static_parameters = initialize_static_parameters();
 tuned_parameters = initialize_tuned_parameters(static_parameters); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
@@ -36,8 +33,9 @@ solve_value_and_pricing_function!(variables, parameters, itp_cache; tol=1E-6, re
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
 simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
+compute_moments!(variables, parameters, simul_panel; burnin=500);
 
-a_range = range(-2, 12, length=101)
+a_range = range(-2, 40, length=101)
 # histogram(reshape(simul_panel.asset_state[1001:end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
 histogram(reshape(simul_panel.asset_state[end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
 

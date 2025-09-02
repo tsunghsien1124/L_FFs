@@ -65,7 +65,7 @@ function initialize_static_parameters(;
     e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     ν_size::Int64=2,            # number of preference shock states
-    a_max::Float64=500.0,       # max asset on positive grid
+    a_max::Float64=800.0,       # max asset on positive grid
     a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
     a_size_pos::Int64=101,      # count of (≥0) asset grid points for VFI
     a_degree_neg::Int64=3,      # curvature exponent for negative grid
@@ -78,10 +78,12 @@ function initialize_static_parameters(;
     # exp_e1_grid = exp_e1_grid ./ sum(exp_e1_grid .* e1_G)
 
     inv_e2_σ = 1.0 / e2_σ
-    e2_MC = tauchen(e2_size, e2_ρ, e2_σ, 0.0, 3)
+    e2_MC = tauchen(e2_size, e2_ρ, e2_σ, 0.0, 4.0)
     e2_Γ = e2_MC.p
     e2_G = stationary_distributions(e2_MC)[1]
     e2_grid = collect(e2_MC.state_values)
+    # e2_grid, e2_Γ = adda_cooper(e2_size, e2_ρ, e2_σ)
+    # e2_G = stationary_distributions(MarkovChain(e2_Γ, e2_grid))[1]
     exp_e2_grid = exp.(e2_grid)
     # exp_e2_grid = exp_e2_grid ./ sum(exp_e2_grid .* e2_G)
 
@@ -103,7 +105,7 @@ function initialize_static_parameters(;
             reshape(e2_G, (1, e2_size, 1)) .*
             reshape(e3_G, (e3_size, 1, 1)))
 
-    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
+    a_min = -0.8 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
     a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) ./ (a_size_neg - 1)) .^ a_degree_neg) .* a_min
     a_grid_neg = a_grid_neg[1:end-1]
     a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) ./ (a_size_pos - 1)) .^ a_degree_pos) .* a_max
@@ -210,17 +212,17 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     ν_G = [1.0 - ν_p, ν_p]
     ν_Γ = ν_G
 
-    q_bar = ρ / (1.0 + r_f)
     ξ_λ = (1.0 - ψ) / (1.0 - λ - ψ)
     Λ_λ = β_f * (1.0 - ψ + ψ * ξ_λ)
     LR_λ = ξ_λ / θ
     KL2D_λ = LR_λ / (LR_λ - 1.0)
     ι_λ = λ * θ / Λ_λ
-    r_k_λ = (1.0 / q_bar - 1.0) + ι_λ
+    r_k_λ = r_f + ι_λ
     K_λ = E * ((r_k_λ + δ) / α)^(1.0 / (α - 1.0))
     w_λ = (1.0 - α) * (K_λ / E)^α
 
-    R_bar = ρ ./ ((-a_grid_neg) .* (1.0 + r_f + τ + ι_λ))
+    q_bar = ρ / (1.0 + r_f)
+    R_bar = ρ ./ ((-a_grid_neg) .* ((1.0 + r_f) * (1.0 + τ) + ι_λ))
     Γ_default = zeros(e3_size, e2_size, e1_size)
     for e1_i = 1:e1_size, e2_i = 1:e2_size, e3_i = 1:e3_size
         exp_e13 = exp_e13_grid[e3_i, e1_i]
@@ -338,25 +340,23 @@ end
     return clamp.(total_amount, 0.0, -a_p)
 end
 
-struct MutableAggregateVariables{T}
+mutable struct MutableAggregateVariables{T}
     K::T
     L::T
-    L_adj::T
+    A::T
     D::T
     N::T
+    LR::T
+    AD::T
     profit::T
     ω::T
-    LR::T
-    KL2D::T
-    debt_to_earning_ratio::T
     share_of_filers::T
-    share_of_involuntary_filers::T
     share_in_debts::T
+    debt_to_earning_ratio::T
     avg_loan_rate::T
-    avg_loan_rate_pw::T
 end
 
-struct MutableVariables{T,
+mutable struct MutableVariables{T,
     A2<:AbstractArray{T,2},
     A3<:AbstractArray{T,3},
     A4<:AbstractArray{T,4},
@@ -387,10 +387,10 @@ end
     @unpack loop_a_neg_e2_e1, loop_a_neg_e3_e1, loop_e3_e2_e1, loop_e2_e1 = parameters
     @unpack η, κ, w_λ, R_bar, q_bar, Γ_e3_ν, W, c_d = parameters
 
-    agg = MutableAggregateVariables{T}(
+    aggregate_variables = MutableAggregateVariables{T}(
         zero(T), zero(T), zero(T), zero(T), zero(T),
         zero(T), zero(T), zero(T), zero(T), zero(T),
-        zero(T), zero(T), zero(T), zero(T), zero(T))
+        zero(T), zero(T), zero(T))
 
     thres_a = Array{T}(undef, e3_size, ν_size, e2_size, e1_size)
     @batch for idx in loop_e3_e2_e1
@@ -445,7 +445,7 @@ end
 
     return MutableVariables{T,
         typeof(rbl_a),typeof(R),typeof(V_d),typeof(V)}(
-        agg,
+        aggregate_variables,
         thres_a, thres_e2, R, q, rbl_a, rbl_qa,
         V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
         policy_a, policy_d, policy_a_pos,
@@ -899,13 +899,15 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
 
     r0, r1 = 1.0 - relax, relax
     search_iter = 0
-    V_crit = Inf
-    V_pos_crit = Inf
+    # V_crit = Inf
+    # V_pos_crit = Inf
     q_crit = Inf
     crit = Inf
     prog = ProgressThresh(tol, "Solving household problems (one-loop): ")
 
     V_p = similar(variables.V)
+    # V_nd_p = similar(variables.V_nd)
+    # V_d_p = similar(variables.V_d)
     V_pos_p = similar(variables.V_pos)
     q_p = similar(variables.q)
     thres_a_p = similar(variables.thres_a)
@@ -914,6 +916,8 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
     while crit > tol && search_iter < iter_max
 
         copyto!(V_p, variables.V)
+        # copyto!(V_nd_p, variables.V_nd)
+        # copyto!(V_d_p, variables.V_d)
         copyto!(V_pos_p, variables.V_pos)
         copyto!(q_p, variables.q)
         copyto!(thres_a_p, variables.thres_a)
@@ -929,10 +933,13 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
         find_thresholds!(thres_a_p, thres_e2_p, variables, parameters; indIU=true, relax=relax)
         update_pricing_and_rbl_function!(variables, parameters)
 
-        # V_crit = maximum(abs, @. variables.V - V_p)
-        # V_pos_crit = maximum(abs, @. variables.V_pos - V_pos_p)
-        q_crit = maximum(abs, @. variables.q - q_p)
+        # V_crit = maximum(safe_abs, @. variables.V - V_p)
+        # V_nd_crit = maximum(safe_abs, @. variables.V_nd - V_nd_p)
+        # V_d_crit = maximum(safe_abs, @. variables.V_d - V_d_p)
+        # V_pos_crit = maximum(safe_abs, @. variables.V_pos - V_pos_p)
+        q_crit = maximum(safe_abs, @. variables.q - q_p)
         # crit = max(V_crit, V_pos_crit, q_crit)
+        # crit = max(V_nd_crit, V_d_crit, V_pos_crit, q_crit)
         crit = q_crit
 
         ProgressMeter.update!(prog, crit)
@@ -1166,62 +1173,110 @@ end
     return nothing
 end
 
-function compute_moments(parameters::NamedTuple, simul_itp_cache::SimulItpCache, simul_panel::SimulatedPanel; burnin::Int=500)
+# @inbounds @views function compute_moments(parameters::NamedTuple, simul_panel::SimulatedPanel; burnin::Int=500)
 
-    @unpack K_λ = parameters
+#     @unpack r_f, ψ, K_λ, ι_λ = parameters
 
-    num_periods, num_households = size(simul_panel.newborn)
-    burin_ = burnin + 1
-    num_periods_ = num_periods - burnin
+#     num_periods = size(simul_panel.newborn)[1]
+#     burin_ = burnin + 1
+#     # num_periods_ = num_periods - burnin
 
-    adj_factor_th = 1.0 / (num_periods_ * num_households)
+#     earnings_state_ = simul_panel.earnings_state[burin_:num_periods, :]
+#     asset_state_ = simul_panel.asset_state[burin_:num_periods, :]
+#     default_choice_ = simul_panel.default_choice[burin_:num_periods, :]
+#     asset_choice_ = simul_panel.asset_choice[burin_:num_periods, :]
+#     # discounted_price_ = simul_panel.discounted_price[burin_:num_periods, :]
+#     interest_rate_ = simul_panel.interest_rate[burin_:num_periods, :]
 
-    # newborn_        = simul_panel.newborn[burin_:num_periods, :]
-    # e1_state_       = simul_panel.e1_state[burin_:num_periods, :]
-    # e2_state_       = simul_panel.e2_state[burin_:num_periods, :]
-    # e3_state_       = simul_panel.e3_state[burin_:num_periods, :]
-    earnings_state_ = simul_panel.earnings_state[burin_:num_periods, :]
-    # nu_state_       = simul_panel.nu_state[burin_:num_periods, :]
-    asset_state_ = simul_panel.asset_state[burin_:num_periods, :]
-    # good_history_   = simul_panel.good_history[burin_:num_periods, :]
-    default_choice_ = simul_panel.default_choice[burin_:num_periods, :]
-    asset_choice_ = simul_panel.asset_choice[burin_:num_periods, :]
-    discounted_price_ = simul_panel.discounted_price[burin_:num_periods, :]
-    interest_rate_ = simul_panel.interest_rate[burin_:num_periods, :]
+#     K = K_λ
+#     L = mean(max.(-asset_state_, 0.0))
+#     D = mean(max.(asset_state_, 0.0))
+#     A = K + L
+#     N = A - D
+#     LR = A / N
+#     AD = A / D
+#     profit = ι_λ * A + (1.0 + r_f) * N
+#     ω = (N - ψ * profit) / A
 
-    K = K_λ
-    L = mean(max.(-asset_state_, 0.0))
-    D = mean(max.(asset_state_, 0.0))
-    A = K + L
-    N = A - D
-    LR = A / N
-    KL2D = A / D
+#     share_of_filers = mean(default_choice_) * 100
+#     share_in_debts = mean(asset_state_ .< 0.0) * 100
 
-    profit = ι * A + (1.0 + r_f) * N
-    # ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
-    # ω = N / (ψ * profit)
-    # ω = (N - ψ * profit) / ((1.0 - ψ) * (K + L))
-    ω = (N - ψ * profit) / (K + L)
+#     # debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* (asset_state_ ./ earnings_state_)) / sum(asset_state_ .< 0.0) * (-1.0)
+#     debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* asset_state_) * (-1.0) / sum((asset_state_ .< 0.0) .* earnings_state_)
 
-    share_of_filers = mean(default_choice_) * 100
-    share_in_debts = mean(asset_state_ .< 0.0) * 100
+#     avg_loan_rate = sum((asset_choice_ .< 0.0) .* interest_rate_) / sum(asset_choice_ .< 0.0) * 100
+#     # avg_loan_rate_value = sum(max.(-asset_choice_, 0.0) .* interest_rate_) / sum(max.(-asset_choice_, 0.0)) * 100
+#     # avg_loan_rate_pvalue = sum(discounted_price_ .* max.(-asset_choice_, 0.0) .* interest_rate_) / sum(discounted_price_ .* max.(-asset_choice_, 0.0)) * 100
 
-    debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* (asset_state_ ./ earnings_state_)) / sum(asset_state_ .< 0.0) * (-1.0)
-    debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* asset_state_) * (-1.0) / sum((asset_state_ .< 0.0) .* earnings_state_)
+#     return MutableAggregateVariables(K, L, A, D, N, LR, AD, profit, ω, share_of_filers, share_in_debts, debt_to_earning_ratio, avg_loan_rate)
 
-    avg_loan_rate = sum((asset_choice_ .< 0.0) .* interest_rate_) / sum(asset_choice_ .< 0.0) * 100
-    # avg_loan_rate_value = sum(max.(-asset_choice_, 0.0) .* interest_rate_) / sum(max.(-asset_choice_, 0.0)) * 100
-    # avg_loan_rate_pvalue = sum(discounted_price_ .* max.(-asset_choice_, 0.0) .* interest_rate_) / sum(discounted_price_ .* max.(-asset_choice_, 0.0)) * 100
+#     # plot([sum(simul_panel.earnings_state[t_i, :]) / num_households for t_i in 1:num_periods])
 
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+#     # plot([sum((simul_panel.asset_state[t_i, :] .< 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
+#     # plot([sum((asset_state_[t_i, :] .< 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
 
-    plot([sum(simul_panel.earnings_state[t_i, :]) / num_households for t_i in 1:num_periods])
+#     # plot([sum((simul_panel.asset_state[t_i, :] .> 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
+#     # plot([sum((asset_state_[t_i, :] .> 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
+# end
 
-    plot([sum((simul_panel.asset_state[t_i, :] .< 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
-    plot([sum((asset_state_[t_i, :] .< 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
+@inbounds @views function compute_moments!(variables::MutableVariables, parameters::NamedTuple, simul_panel::SimulatedPanel; burnin::Int=500)
 
-    plot([sum((simul_panel.asset_state[t_i, :] .> 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
-    plot([sum((asset_state_[t_i, :] .> 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
+    @unpack r_f, ψ, K_λ, ι_λ = parameters
+
+    num_periods = size(simul_panel.newborn)[1]
+    burnin_ = burnin + 1
+
+    earnings_state_ = simul_panel.earnings_state[burnin_:num_periods, :]
+    asset_state_ = simul_panel.asset_state[burnin_:num_periods, :]
+    default_choice_ = simul_panel.default_choice[burnin_:num_periods, :]
+    asset_choice_ = simul_panel.asset_choice[burnin_:num_periods, :]
+    interest_rate_ = simul_panel.interest_rate[burnin_:num_periods, :]
+
+    n = length(asset_state_)
+
+    L_sum = 0.0
+    D_sum = 0.0
+    debt_count = 0
+    debt_earnings_sum = 0.0
+    default_sum = 0.0
+    loan_rate_sum = 0.0
+    loan_count = 0
+
+    for i in eachindex(asset_state_)
+        asset_val = asset_state_[i]
+
+        if asset_val < 0.0
+            L_sum += -asset_val
+            debt_count += 1
+            debt_earnings_sum += earnings_state_[i]
+        else
+            D_sum += asset_val
+        end
+
+        if asset_choice_[i] < 0.0
+            loan_rate_sum += interest_rate_[i]
+            loan_count += 1
+        end
+
+        default_sum += default_choice_[i]
+    end
+
+    agg = variables.aggregate_variables
+    agg.K = K_λ
+    agg.L = L_sum / n
+    agg.D = D_sum / n
+    agg.A = agg.K + agg.L
+    agg.N = agg.A - agg.D
+    agg.LR = agg.A / agg.N
+    agg.AD = agg.A / agg.D
+    agg.profit = ι_λ * agg.A + (1.0 + r_f) * agg.N
+    agg.ω = (agg.N - ψ * agg.profit) / agg.A
+    agg.share_of_filers = (default_sum / n) * 100.0
+    agg.share_in_debts = (debt_count / n) * 100.0
+    agg.debt_to_earning_ratio = L_sum / debt_earnings_sum
+    agg.avg_loan_rate = (loan_rate_sum / loan_count) * 100.0
+
+    return nothing
 end
 
 function solve_aggregate_variable_function(
@@ -1373,7 +1428,7 @@ function solve_aggregate_variable_function(
     share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, :, :, 1])
 
     # return results
-    aggregate_variables = Mutable_Aggregate_Variables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
+    aggregate_variables = MutableAggregateVariables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
     return aggregate_variables
 end
 

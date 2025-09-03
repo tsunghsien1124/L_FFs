@@ -6,7 +6,7 @@ using Distributions, StatsFuns, QuadGK
 using LinearAlgebra
 using Optim
 using Parameters: @unpack
-# using PrettyTables
+using PrettyTables
 using ProgressMeter
 using QuantEcon: rouwenhorst, tauchen, stationary_distributions, MarkovChain
 # using Roots
@@ -24,16 +24,18 @@ using Interpolations
 # using LoopVectorization
 
 static_parameters = initialize_static_parameters();
-tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.01); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
-parameters = (; static_parameters..., tuned_parameters...)
+tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_pricing_function!(variables, parameters, itp_cache; tol=1E-6, relax=1.0, bellman_step=1);
-
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
-simulate_household_panel!(parameters, simul_itp_cache, simul_panel);
-compute_moments!(variables, parameters, simul_panel; burnin=500);
+solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
+
+# solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);
+# update_simul_itp_cache!(simul_itp_cache, variables, parameters);
+# simulate_household_panel!(simul_panel, parameters, simul_itp_cache);
+# compute_moments!(variables, parameters, simul_panel; burnin=500);
 
 a_range = range(-2, 40, length=101)
 # histogram(reshape(simul_panel.asset_state[1001:end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
@@ -69,17 +71,17 @@ plot!(variables.rbl_a[:, end], variables.rbl_qa[:, end], seriestype=:scatter)
 
 #####
 e1_i = parameters.e1_size
-e2_i = 2 #parameters.e2_size
-ν_i = parameters.ν_size
-e3_i = parameters.e3_size
+e2_i = parameters.e2_size
+ν_i = 1 # parameters.ν_size
+e3_i = 1:2 # parameters.e3_size
 
 plot(parameters.a_grid_neg, variables.V_nd[1:parameters.a_size_neg, e3_i, ν_i, e2_i, e1_i])
 hline!([variables.V_d[e3_i, ν_i, e2_i, e1_i]])
 scatter!([variables.thres_a[e3_i, ν_i, e2_i, e1_i]], [variables.V_d[e3_i, ν_i, e2_i, e1_i]])
 
 plot(parameters.a_grid_neg, inverse_utility.(variables.V_nd[1:parameters.a_size_neg, e3_i, ν_i, e2_i, e1_i], parameters.γ))
-hline!([inverse_utility(variables.V_d[e3_i, ν_i, e2_i, e1_i], parameters.γ)])
-scatter!([variables.thres_a[e3_i, ν_i, e2_i, e1_i]], [inverse_utility(variables.V_d[e3_i, ν_i, e2_i, e1_i], parameters.γ)])
+hline!([inverse_utility.(variables.V_d[e3_i, ν_i, e2_i, e1_i], parameters.γ)])
+scatter!([variables.thres_a[e3_i, ν_i, e2_i, e1_i]], [inverse_utility.(variables.V_d[e3_i, ν_i, e2_i, e1_i], parameters.γ)])
 
 a_p_i = 50 # parameters.a_size_neg
 a_p_ = parameters.a_grid_neg[a_p_i]

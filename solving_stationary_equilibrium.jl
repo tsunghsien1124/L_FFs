@@ -68,7 +68,7 @@ function initialize_static_parameters(;
     a_max::Float64=800.0,       # max asset on positive grid
     a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
     a_size_pos::Int64=101,      # count of (≥0) asset grid points for VFI
-    a_degree_neg::Int64=3,      # curvature exponent for negative grid
+    a_degree_neg::Int64=1,      # curvature exponent for negative grid
     a_degree_pos::Int64=3       # curvature exponent for positive grid
 )
 
@@ -78,7 +78,8 @@ function initialize_static_parameters(;
     # exp_e1_grid = exp_e1_grid ./ sum(exp_e1_grid .* e1_G)
 
     inv_e2_σ = 1.0 / e2_σ
-    e2_MC = tauchen(e2_size, e2_ρ, e2_σ, 0.0, 4.0)
+    e2_MC = rouwenhorst(e2_size, e2_ρ, e2_σ, 0.0)
+    # e2_MC = tauchen(e2_size, e2_ρ, e2_σ, 0.0, 4.0)
     e2_Γ = e2_MC.p
     e2_G = stationary_distributions(e2_MC)[1]
     e2_grid = collect(e2_MC.state_values)
@@ -105,7 +106,7 @@ function initialize_static_parameters(;
             reshape(e2_G, (1, e2_size, 1)) .*
             reshape(e3_G, (e3_size, 1, 1)))
 
-    a_min = -0.8 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
+    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
     a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) ./ (a_size_neg - 1)) .^ a_degree_neg) .* a_min
     a_grid_neg = a_grid_neg[1:end-1]
     a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) ./ (a_size_pos - 1)) .^ a_degree_pos) .* a_max
@@ -188,18 +189,18 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     r_f::Float64=0.04,                  # risk-free rate
     β::Float64=1.0 / (ρ * (1.0 + r_f)), # discount factor (households)
     β_f::Float64=β,                     # discount factor (bank)
-    τ::Float64=0.04,                    # transaction cost
+    τ::Float64=4.00,                    # transaction cost
     γ::Float64=3.00,                    # CRRA coefficient
     δ::Float64=0.10,                    # depreciation rate
     α::Float64=0.36,                    # capital share
     ψ::Float64=0.972^4,                 # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Float64=1.0 / (4.57 * 0.75),     # diverting fraction # 1.0 / 3.0
     Ph::Float64=1.0 / 6.0,              # prob. of history erased
-    η::Float64=0.30,                    # wage garnishment rate
+    η::Float64=0.35,                    # wage garnishment rate
     ξ::Float64=0.00,                    # stigma utility filing cost
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost
-    ν::Float64=0.80,                    # magnitude of preference shock
-    ν_p::Float64=0.10,                  # probability of preference shock
+    ν::Float64=1.0,                     # magnitude of preference shock
+    ν_p::Float64=0.1,                   # probability of preference shock
     λ::Float64=0.0                      # multiplier
 )
 
@@ -215,9 +216,10 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     ξ_λ = (1.0 - ψ) / (1.0 - λ - ψ)
     Λ_λ = β_f * (1.0 - ψ + ψ * ξ_λ)
     LR_λ = ξ_λ / θ
-    KL2D_λ = LR_λ / (LR_λ - 1.0)
+    AD_λ = LR_λ / (LR_λ - 1.0)
     ι_λ = λ * θ / Λ_λ
     r_k_λ = r_f + ι_λ
+    # E = 1.0
     K_λ = E * ((r_k_λ + δ) / α)^(1.0 / (α - 1.0))
     w_λ = (1.0 - α) * (K_λ / E)^α
 
@@ -278,7 +280,7 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
         ξ_λ=ξ_λ,
         Λ_λ=Λ_λ,
         LR_λ=LR_λ,
-        KL2D_λ=KL2D_λ,
+        AD_λ=AD_λ,
         ι_λ=ι_λ,
         r_k_λ=r_k_λ,
         K_λ=K_λ,
@@ -862,10 +864,7 @@ function find_thresholds!(thres_a_p::Array{Float64,4}, thres_e2_p::Array{Float64
     return nothing
 end
 
-function update_pricing_and_rbl_function!(variables::MutableVariables, parameters::NamedTuple)
-    """
-    update discounted borrowing price and borrowing risky limit
-    """
+function update_pricing_and_rbl_functions!(variables::MutableVariables, parameters::NamedTuple)
 
     @unpack loop_a_neg_e2_e1, Γ_e3_ν, R_bar, loop_e2_e1, a_size_neg, a_grid_neg = parameters
 
@@ -891,8 +890,8 @@ end
 
 safe_abs(x) = ifelse(isnan(x), 0.0, abs(x))
 
-function solve_value_and_pricing_function!(variables::MutableVariables, parameters::NamedTuple, itp_cache::ItpCache;
-    tol::Float64=1E-6, iter_max::Int64=1000, relax::Float64=1.0, bellman_step::Int64=1)
+function solve_value_and_policy_functions!(variables::MutableVariables, itp_cache::ItpCache, parameters::NamedTuple;
+    tol::Float64=1E-6, iter_max::Int64=500, relax::Float64=1.0, bellman_step::Int64=1)
 
     @assert 0.0 < relax <= 1.0 "relaxation must be in (0,1]; got $relax"
     @assert bellman_step >= 1 "bellman step has to be larger than or equal to one; got $bellman_step"
@@ -903,7 +902,7 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
     # V_pos_crit = Inf
     q_crit = Inf
     crit = Inf
-    prog = ProgressThresh(tol, "Solving household problems (one-loop): ")
+    prog = ProgressThresh(tol, "Solving value and policy functions (one-loop): ")
 
     V_p = similar(variables.V)
     # V_nd_p = similar(variables.V_nd)
@@ -930,8 +929,8 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
         else
             update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
         end
-        find_thresholds!(thres_a_p, thres_e2_p, variables, parameters; indIU=true, relax=relax)
-        update_pricing_and_rbl_function!(variables, parameters)
+        find_thresholds!(thres_a_p, thres_e2_p, variables, parameters; indIU=false, relax=relax)
+        update_pricing_and_rbl_functions!(variables, parameters)
 
         # V_crit = maximum(safe_abs, @. variables.V - V_p)
         # V_nd_crit = maximum(safe_abs, @. variables.V_nd - V_nd_p)
@@ -953,16 +952,6 @@ function solve_value_and_pricing_function!(variables::MutableVariables, paramete
     return crit
 end
 
-function variables_function_update!(variables::MutableVariables, parameters::NamedTuple; λ::Float64)
-    """
-    construct a mutable object containing endogenous variables
-    """
-
-    # define aggregate prices
-    ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ = aggregate_prices_λ_funtion(parameters; λ=λ)
-    variables.aggregate_prices = Mutable_Aggregate_Prices(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_λ, w_λ)
-end
-
 struct SimulItpCache{ItpQ,ItpA,ItpAPos,T}
     q_itp::Array{ItpQ,2}                       # size: (e2_size, e1_size)
     policy_a_itp::Array{ItpA,4}                # size: (e3_size, ν_size, e2_size, e1_size)
@@ -973,9 +962,6 @@ end
 @inline simul_build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Interpolations.Flat())
 
 @views @inbounds @views function build_simul_itp_cache(variables::MutableVariables, parameters::NamedTuple)
-    """
-    construct the cached interpolants
-    """
 
     @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size, e3_size = parameters
 
@@ -991,19 +977,26 @@ end
     policy_a_itp = Array{typeof(policy_a_sample)}(undef, e3_size, ν_size, e2_size, e1_size)
     policy_a_pos_itp = Array{typeof(policy_a_pos_sample)}(undef, e3_size, ν_size, e2_size, e1_size)
 
-    for e2_i in 1:e2_size, e1_i in 1:e1_size
-        q_ = variables.q[:, e2_i, e1_i]
-        q_itp[e2_i, e1_i] = simul_build_itp(a_grid, q_)
-        for e3_i in 1:e3_size, ν_i in 1:ν_size
-            policy_a_ = variables.policy_a[:, e3_i, ν_i, e2_i, e1_i]
-            policy_a_itp[e3_i, ν_i, e2_i, e1_i] = simul_build_itp(a_grid, policy_a_)
-            policy_a_pos_ = variables.policy_a_pos[:, e3_i, ν_i, e2_i, e1_i]
-            policy_a_pos_itp[e3_i, ν_i, e2_i, e1_i] = simul_build_itp(a_grid_pos, policy_a_pos_)
-        end
-    end
-
     return SimulItpCache{typeof(q_sample),typeof(policy_a_sample),typeof(policy_a_pos_sample),typeof(thres_a_sample)}(
         q_itp, policy_a_itp, policy_a_pos_itp, variables.thres_a)
+end
+
+@views @inbounds @views function update_simul_itp_cache!(simul_itp_cache::SimulItpCache, variables::MutableVariables, parameters::NamedTuple)
+
+    @unpack a_grid, a_grid_pos, e1_size, e2_size, ν_size, e3_size = parameters
+
+    for e2_i in 1:e2_size, e1_i in 1:e1_size
+        q_ = variables.q[:, e2_i, e1_i]
+        simul_itp_cache.q_itp[e2_i, e1_i] = simul_build_itp(a_grid, q_)
+        for e3_i in 1:e3_size, ν_i in 1:ν_size
+            policy_a_ = variables.policy_a[:, e3_i, ν_i, e2_i, e1_i]
+            simul_itp_cache.policy_a_itp[e3_i, ν_i, e2_i, e1_i] = simul_build_itp(a_grid, policy_a_)
+            policy_a_pos_ = variables.policy_a_pos[:, e3_i, ν_i, e2_i, e1_i]
+            simul_itp_cache.policy_a_pos_itp[e3_i, ν_i, e2_i, e1_i] = simul_build_itp(a_grid_pos, policy_a_pos_)
+        end
+    end
+    copyto!(simul_itp_cache.thres_a, variables.thres_a)
+    return nothing
 end
 
 function make_thread_rngs(seed::Int, num_threads::Int)
@@ -1049,9 +1042,9 @@ end
     panel.e3_state[t_i, h_i] = draw.e3
     panel.earnings_state[t_i, h_i] = W[draw.e3, draw.e2, draw.e1]
     panel.nu_state[t_i, h_i] = draw.ν
-    # panel.asset_state[t_i, h_i] = 0.0
-    # panel.good_history[t_i, h_i] = draw.good_history
-    # panel.default_choice[t_i, h_i] = 0.0 <= cache.thres_a[draw.e3, draw.ν, draw.e2, draw.e1]
+    panel.asset_state[t_i, h_i] = 0.0
+    panel.good_history[t_i, h_i] = true
+    panel.default_choice[t_i, h_i] = false
     asset_choice_itp = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](0.0)
     panel.asset_choice[t_i, h_i] = asset_choice_itp
     discounted_price_itp = cache.q_itp[draw.e2, draw.e1](asset_choice_itp)
@@ -1074,7 +1067,7 @@ end
 
 @inline @inbounds function assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int, W::AbstractArray{Float64,3})
     # @assert !draw.newborn "Unexpected newborn household"
-    # panel.newborn[t_i, h_i] = draw.newborn
+    panel.newborn[t_i, h_i] = false
     panel.e1_state[t_i, h_i] = draw.e1
     panel.e2_state[t_i, h_i] = draw.e2
     panel.e3_state[t_i, h_i] = draw.e3
@@ -1130,7 +1123,7 @@ function initialize_panel(; num_households::Int64=50000, num_periods::Int64=2000
     )
 end
 
-@inbounds function simulate_household_panel!(parameters::NamedTuple, simul_itp_cache::SimulItpCache, simul_panel::SimulatedPanel; seed::Int=1124)
+@inbounds function simulate_household_panel!(simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple; seed::Int=1124)
 
     num_periods, num_households = size(simul_panel.newborn)
     num_threads = Threads.nthreads()
@@ -1145,7 +1138,9 @@ end
     e3_cat = Categorical(e3_G)
     ν_cat = Categorical(ν_G)
 
-    @showprogress Threads.@threads for h_i in 1:num_households
+    # @showprogress
+    prog_bar = Progress(num_households; dt=0.1, desc="Simulation progress:", barglyphs=BarGlyphs("[=> ]"))
+    Threads.@threads for h_i in 1:num_households
 
         thread_id = Threads.threadid()
         rng = rngs[thread_id]
@@ -1169,7 +1164,10 @@ end
                 assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i, W)
             end
         end
+        next!(prog_bar)
     end
+    finish!(prog_bar)
+
     return nothing
 end
 
@@ -1219,7 +1217,7 @@ end
 #     # plot([sum((asset_state_[t_i, :] .> 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
 # end
 
-@inbounds @views function compute_moments!(variables::MutableVariables, parameters::NamedTuple, simul_panel::SimulatedPanel; burnin::Int=500)
+@inbounds @views function compute_moments!(variables::MutableVariables, simul_panel::SimulatedPanel, parameters::NamedTuple; burnin::Int=500)
 
     @unpack r_f, ψ, K_λ, ι_λ = parameters
 
@@ -1279,317 +1277,35 @@ end
     return nothing
 end
 
-function solve_aggregate_variable_function(
-    policy_a::Array{Float64,5},
-    threshold_a::Array{Float64,4},
-    policy_pos_a::Array{Float64,5},
-    policy_pos_d::Array{Float64,5},
-    q::Array{Float64,3},
-    rbl::Array{Float64,3},
-    μ::Array{Float64,6},
-    K::Float64,
-    w::Float64,
-    ι::Float64,
-    parameters::NamedTuple,
-)
-    """
-    compute equlibrium aggregate variables
-    """
+function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    # unpack parameters
-    @unpack e1_size, e1_grid, e2_size, e2_grid, e3_size, e3_grid, ν_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ, r_f, τ, ψ, η = parameters
+    solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1)
+    update_simul_itp_cache!(simul_itp_cache, variables, parameters)
+    simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
+    compute_moments!(variables, simul_panel, parameters; burnin=500)
 
-    # initialize container
-    K = K
-    L = 0.0
-    L_adj = 0.0
-    D = 0.0
-    N = 0.0
-    profit = 0.0
-    ω = 0.0
-    leverage_ratio = 0.0
-    KL_to_D_ratio = 0.0
-    debt_to_earning_ratio = 0.0
-    debt_to_earning_ratio_num = 0.0
-    debt_to_earning_ratio_den = 0.0
-    share_of_filers = 0.0
-    share_of_involuntary_filers = 0.0
-    share_in_debts = 0.0
-    avg_loan_rate = 0.0
-    avg_loan_rate_num = 0.0
-    avg_loan_rate_den = 0.0
-    avg_loan_rate_pw = 0.0
-    avg_loan_rate_pw_num = 0.0
-    avg_loan_rate_pw_den = 0.0
-
-    # total loans, deposits, share of filers, nad debt-to-earning ratio
-    for e1_i = 1:e1_size, e2_i = 1:e2_size, e3_i = 1:e3_size, ν_i = 1:ν_size
-
-        # interpolated decision rules
-        @inbounds @views policy_a_Non_Inf = findall(policy_a[:, e3_i, e2_i, e1_i, ν_i] .!= -Inf)
-        @inbounds policy_a_itp = Akima(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf, e3_i, e2_i, e1_i, ν_i])
-        # @inbounds policy_d_itp = Akima(a_grid, policy_d[:, e3_i, e2_i, e1_i, ν_i])
-        @inbounds policy_d_itp(x) = x < threshold_a[e3_i, e2_i, e1_i, ν_i] ? 1.0 : 0.0
-        @inbounds policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e3_i, e2_i, e1_i, ν_i])
-        @inbounds policy_pos_d_itp = Akima(a_grid_pos, policy_pos_d[:, e3_i, e2_i, e1_i, ν_i])
-
-        # interpolated discounted borrowing amount
-        @inbounds @views q_e = q[:, e1_i, e2_i]
-        q_function_itp = Akima(a_grid, q_e)
-        qa_function_itp = Akima(a_grid, q_e .* a_grid)
-
-        # loop over the dimension of asset holding
-        for a_μ_i = 1:a_size_μ
-
-            # extract wealth and compute asset choice
-            @inbounds a_μ = a_grid_μ[a_μ_i]
-            @inbounds a_p = clamp(policy_a_itp(a_μ), a_grid[1], a_grid[end])
-
-            if a_p < 0.0
-                # total loans
-                @inbounds L += -(μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
-
-                # average loan rate
-                avg_loan_rate_num += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
-                avg_loan_rate_den += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
-
-                # average loan rate (persons-weighted)
-                avg_loan_rate_pw_num += (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
-                avg_loan_rate_pw_den += 1
-            else
-                # total deposits
-                if a_p > 0.0
-                    @inbounds D += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * qa_function_itp(a_p))
-                    # @inbounds D += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * qa_function_itp(a_p))
-
-                end
-            end
-
-            if a_μ >= 0.0
-                @inbounds a_pos_p = clamp(policy_pos_a_itp(a_μ), 0.0, a_grid[end])
-                @inbounds d_p = clamp(policy_pos_d_itp(a_μ), 0.0, 1.0)
-                if a_pos_p > 0.0
-                    @inbounds D += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 2] * qa_function_itp(a_pos_p))
-                end
-                @inbounds share_of_filers += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 2] * d_p)
-            end
-
-            if a_μ < 0.0
-                # share of filers
-                @inbounds share_of_filers += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * policy_d_itp(a_μ))
-
-                # share of involuntary filers
-                if w * exp(e1_grid[e1_i] + e2_grid[e2_i] + e3_grid[e3_i]) + a_μ - rbl[e1_i, e2_i, 2] < 0.0
-                    @inbounds share_of_involuntary_filers += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * policy_d_itp(a_μ))
-                end
-
-                # debt-to-earning ratio
-                # @inbounds debt_to_earning_ratio += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (-a_μ / (w * exp(e1_grid[e1_i] + e2_grid[e2_i] + e3_grid[e3_i])))
-                @inbounds debt_to_earning_ratio_num += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (-a_μ)
-                # @inbounds debt_to_earning_ratio_den += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (w * exp(e1_grid[e1_i] + e2_grid[e2_i] + e3_grid[e3_i]))
-
-                # loans returned
-                L_adj += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * ((-a_μ) * (1.0 - policy_d_itp(a_μ)) + policy_d_itp(a_μ) * η * w * exp(e1_grid[e1_i] + e2_grid[e2_i] + e3_grid[e3_i]))
-            end
-
-            @inbounds debt_to_earning_ratio_den += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (w * exp(e1_grid[e1_i] + e2_grid[e2_i] + e3_grid[e3_i]))
-            @inbounds debt_to_earning_ratio_den += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 2] * (w * exp(e1_grid[e1_i] + e2_grid[e2_i] + e3_grid[e3_i]))
-        end
-    end
-
-    # net worth
-    N = (K + L) - D
-
-    # exogenous dividend policy
-    # profit = (1.0 + r_f + ι) * K + (1.0 + τ + ι) * L - (1.0 + r_f) * D
-    profit = ι * (K + L) + (1.0 + r_f) * N
-    # ω = (N - ψ * profit) / ((1.0 - ψ) * profit)
-    # ω = N / (ψ * profit)
-    # ω = (N - ψ * profit) / ((1.0 - ψ) * (K + L))
-    ω = (N - ψ * profit) / (K + L)
-    # ω = N - ψ * profit
-
-    # leverage ratio
-    leverage_ratio = (K + L) / N
-
-    # capital-loan-to-deposit ratio
-    KL_to_D_ratio = (K + L) / D
-
-    # debt-to-earning ratio
-    # debt_to_earning_ratio = debt_to_earning_ratio_num / debt_to_earning_ratio_den
-    # debt_to_earning_ratio = L / w
-    debt_to_earning_ratio = debt_to_earning_ratio_num / w
-
-    # average loan rate
-    avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
-    avg_loan_rate_pw = avg_loan_rate_pw_num / avg_loan_rate_pw_den
-
-    # share in debt
-    share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, :, :, 1])
-
-    # return results
-    aggregate_variables = MutableAggregateVariables(K, L, L_adj, D, N, profit, ω, leverage_ratio, KL_to_D_ratio, debt_to_earning_ratio, share_of_filers, share_of_involuntary_filers, share_in_debts, avg_loan_rate, avg_loan_rate_pw)
-    return aggregate_variables
-end
-
-function solve_aggregate_variable_across_HH_function(
-    policy_a::Array{Float64,5},
-    policy_d::Array{Float64,5},
-    policy_pos_a::Array{Float64,5},
-    policy_pos_d::Array{Float64,5},
-    q::Array{Float64,3},
-    μ::Array{Float64,6},
-    w::Float64,
-    parameters::NamedTuple,
-)
-    """
-    compute equlibrium aggregate variables
-    """
-
-    # unpack parameters
-    @unpack e1_size, e1_grid, e2_size, e2_grid, e3_size, e3_grid, ν_size, a_grid, a_grid_neg, a_grid_pos, a_ind_zero_μ, a_grid_pos_μ, a_grid_neg_μ, a_size_neg_μ, a_grid_μ, a_size_μ, r_f, τ, ψ, η = parameters
-
-    # initialize container
-    debt_to_earning_ratio = 0.0
-    debt_to_earning_ratio_permanent_low = 0.0
-    debt_to_earning_ratio_permanent_high = 0.0
-
-    debt_to_earning_ratio_num = 0.0
-    debt_to_earning_ratio_num_permanent_low = 0.0
-    debt_to_earning_ratio_num_permanent_high = 0.0
-
-    share_of_filers = 0.0
-    share_of_filers_permanent_low = 0.0
-    share_of_filers_permanent_high = 0.0
-
-    share_in_debts = 0.0
-    share_in_debts_permanent_low = 0.0
-    share_in_debts_permanent_high = 0.0
-
-    avg_loan_rate = 0.0
-    avg_loan_rate_num = 0.0
-    avg_loan_rate_den = 0.0
-
-    avg_loan_rate_permanent_low = 0.0
-    avg_loan_rate_num_permanent_low = 0.0
-    avg_loan_rate_den_permanent_low = 0.0
-
-    avg_loan_rate_permanent_high = 0.0
-    avg_loan_rate_num_permanent_high = 0.0
-    avg_loan_rate_den_permanent_high = 0.0
-
-    # total loans, deposits, share of filers, nad debt-to-earning ratio
-    for e1_i = 1:e1_size, e2_i = 1:e2_size, e3_i = 1:e3_size, ν_i = 1:ν_size
-
-        # interpolated decision rules
-        @inbounds @views policy_a_Non_Inf = findall(policy_a[:, e3_i, e2_i, e1_i, ν_i] .!= -Inf)
-        @inbounds policy_a_itp = Akima(a_grid[policy_a_Non_Inf], policy_a[policy_a_Non_Inf, e3_i, e2_i, e1_i, ν_i])
-        @inbounds policy_d_itp = Akima(a_grid, policy_d[:, e3_i, e2_i, e1_i, ν_i])
-        @inbounds policy_pos_a_itp = Akima(a_grid_pos, policy_pos_a[:, e3_i, e2_i, e1_i, ν_i])
-        @inbounds policy_pos_d_itp = Akima(a_grid_pos, policy_pos_d[:, e3_i, e2_i, e1_i, ν_i])
-
-        # interpolated discounted borrowing amount
-        @inbounds @views q_e = q[:, e1_i, e2_i]
-        q_function_itp = Akima(a_grid, q_e)
-
-        # loop over the dimension of asset holding
-        for a_μ_i = 1:a_size_μ
-
-            # extract wealth and compute asset choice
-            @inbounds a_μ = a_grid_μ[a_μ_i]
-            @inbounds a_p = clamp(policy_a_itp(a_μ), a_grid[1], a_grid[end])
-
-            if a_p < 0.0
-                # average loan rate
-                avg_loan_rate_num += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
-                avg_loan_rate_den += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
-                if (e1_i == 1) && (e2_i == 2)
-                    avg_loan_rate_num_permanent_low += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
-                    avg_loan_rate_den_permanent_low += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
-                end
-                if (e1_i == 2) && (e2_i == 2)
-                    avg_loan_rate_num_permanent_high += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ)) * (1.0 / q_function_itp(a_p) - 1.0)
-                    avg_loan_rate_den_permanent_high += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (1.0 - policy_d_itp(a_μ))
-                end
-            end
-
-            if a_μ < 0.0
-                # share of filers
-                @inbounds share_of_filers += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * policy_d_itp(a_μ))
-                if (e1_i == 1) && (e2_i == 2)
-                    share_of_filers_permanent_low += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * policy_d_itp(a_μ)) / sum(μ[:, e1_i, e2_i, :, :, :])
-                end
-                if (e1_i == 2) && (e2_i == 2)
-                    share_of_filers_permanent_high += (μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * policy_d_itp(a_μ)) / sum(μ[:, e1_i, e2_i, :, :, :])
-                end
-
-                # debt-to-earning ratio
-                @inbounds debt_to_earning_ratio_num += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (-a_μ)
-                if (e1_i == 1) && (e2_i == 2)
-                    @inbounds debt_to_earning_ratio_num_permanent_low += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (-a_μ) / sum(μ[:, e1_i, e2_i, :, :, :])
-                end
-                if (e1_i == 2) && (e2_i == 2)
-                    @inbounds debt_to_earning_ratio_num_permanent_high += μ[a_μ_i, e3_i, e2_i, e1_i, ν_i, 1] * (-a_μ) / sum(μ[:, e1_i, e2_i, :, :, :])
-                end
-            end
-        end
-    end
-
-    # debt-to-earning ratio
-    debt_to_earning_ratio = debt_to_earning_ratio_num / w
-    debt_to_earning_ratio_permanent_low = debt_to_earning_ratio_num_permanent_low / (w * exp(e1_grid[1]))
-    debt_to_earning_ratio_permanent_high = debt_to_earning_ratio_num_permanent_high / (w * exp(e1_grid[2]))
-
-    # average loan rate
-    avg_loan_rate = avg_loan_rate_num / avg_loan_rate_den
-    avg_loan_rate_permanent_low = avg_loan_rate_num_permanent_low / avg_loan_rate_den_permanent_low
-    avg_loan_rate_permanent_high = avg_loan_rate_num_permanent_high / avg_loan_rate_den_permanent_high
-
-    # share in debt
-    share_in_debts = sum(μ[1:(a_ind_zero_μ-1), :, :, :, :, 1])
-    share_in_debts_permanent_low = sum(μ[1:(a_ind_zero_μ-1), 1, 2, :, :, 1]) ./ sum(μ[:, 1, 2, :, :, :])
-    share_in_debts_permanent_high = sum(μ[1:(a_ind_zero_μ-1), 2, 2, :, :, 1]) ./ sum(μ[:, 2, 2, :, :, :])
-
-    # return results
-    return debt_to_earning_ratio, debt_to_earning_ratio_permanent_low, debt_to_earning_ratio_permanent_high, share_of_filers, share_of_filers_permanent_low, share_of_filers_permanent_high, share_in_debts, share_in_debts_permanent_low, share_in_debts_permanent_high, avg_loan_rate, avg_loan_rate_permanent_low, avg_loan_rate_permanent_high
-end
-
-function solve_economy_function!(variables::MutableVariables, parameters::NamedTuple; tol_h::Float64=1E-6, tol_μ::Float64=1E-8, slow_updating::Float64=1.0)
-    """
-    solve the economy with given liquidity multiplier ι
-    """
-
-    # solve household and banking problems
-    crit_V = solve_value_and_pricing_function!(variables, parameters; tol=tol_h, iter_max=500, slow_updating=slow_updating)
-
-    # solve the cross-sectional distribution
-    crit_μ = solve_stationary_distribution_function!(variables, parameters; tol=tol_μ, iter_max=1000)
-
-    # compute aggregate variables
-    variables.aggregate_variables = solve_aggregate_variable_function(variables.policy_a, variables.threshold_a, variables.policy_pos_a, variables.policy_pos_d, variables.q, variables.rbl, variables.μ, variables.aggregate_prices.K_λ, variables.aggregate_prices.w_λ, variables.aggregate_prices.ι_λ, parameters)
-
-    # compute the difference between demand and supply sides
-    ED_KL_to_D_ratio = variables.aggregate_variables.KL_to_D_ratio - variables.aggregate_prices.KL_to_D_ratio_λ
-    ED_leverage_ratio = variables.aggregate_variables.leverage_ratio - variables.aggregate_prices.leverage_ratio_λ
+    agg = variables.aggregate_variables
+    diff_AD = agg.AD - parameters.AD_λ
+    diff_LR = agg.LR - parameters.LR_λ
 
     # printout results
     data_spec = Any[
-        "Effective Discount Factor" parameters.β variables.aggregate_variables.share_in_debts*100 40.14 #=1=#
-        "Wage Garnishment Rate" parameters.η variables.aggregate_variables.share_of_filers*100 0.99 #=2=#
-        "Bank Survival Rate" parameters.ψ variables.aggregate_variables.leverage_ratio 4.57 #=3=#
-        "Diverting Fraction" parameters.θ variables.aggregate_variables.avg_loan_rate*100 9.26 #=4=#
-        "Liquidity Multiplier" variables.aggregate_prices.λ "" "" #=5=#
-        "Asset-to-Debt Ratio (Demand)" variables.aggregate_variables.KL_to_D_ratio "" "" #=6=#
-        "Asset-to-Debt Ratio (Supply)" variables.aggregate_prices.KL_to_D_ratio_λ "" "" #=7=#
-        "Difference" ED_KL_to_D_ratio "" "" #=8=#
-        "Leverage Ratio (Demand)" variables.aggregate_variables.leverage_ratio "" "" #=9=#
-        "Leverage Ratio (Supply)" variables.aggregate_prices.leverage_ratio_λ "" "" #=10=#
-        "Difference" ED_leverage_ratio "" "" #=11=#
+        "Effective Discount Factor" parameters.β agg.share_in_debts 40.14 
+        "Wage Garnishment Rate" parameters.η agg.share_of_filers 0.99 
+        "Bank Survival Rate" parameters.ψ agg.LR 4.57 
+        "Diverting Fraction" parameters.θ agg.avg_loan_rate 9.26 
+        "Liquidity Multiplier" parameters.λ "" "" 
+        "Asset-to-Debt Ratio (Demand)" agg.AD "" ""
+        "Asset-to-Debt Ratio (Supply)" parameters.AD_λ "" "" 
+        "Difference" diff_AD "" ""
+        "Leverage Ratio (Demand)" agg.LR "" "" 
+        "Leverage Ratio (Supply)" parameters.LR_λ "" "" 
+        "Difference" diff_LR "" ""
     ]
     pretty_table(data_spec; header=["Name", "Value", "Model Moment", "Data Moment"], alignment=[:l, :r, :r, :r], formatters=ft_round(8), body_hlines=[5, 8])
 
     # return excess demand
-    return ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ
+    # return ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ
 end
 
 function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float64=-Inf, λ_max_adhoc::Float64=Inf, tol::Float64=1E-5, iter_max::Float64=200, slow_updating::Float64=1.0)

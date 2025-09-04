@@ -28,8 +28,6 @@ tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0); # k
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);
-
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
 solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
@@ -148,7 +146,7 @@ plot(parameters.a_grid_neg[60:end], variables.policy_a[60:parameters.a_size_neg,
 
 plot(parameters.a_grid_neg, variables.policy_a[1:parameters.a_size_neg, e3_i, ν_i, e2_i, :])
 
-plot(parameters.a_grid_neg[80:end], variables.policy_d[80:parameters.a_size_neg, e3_i, ν_i, e2_i, :], seriestype=:scatter)
+plot(parameters.a_grid_neg, variables.policy_d[1:parameters.a_size_neg, e3_i, ν_i, e2_i, :])
 
 plot(parameters.a_grid_neg, variables.policy_d[1:parameters.a_size_neg, e3_i, :, e2_i, e1_i])
 

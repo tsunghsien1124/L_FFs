@@ -59,15 +59,15 @@ end
 function initialize_static_parameters(;
     e1_size::Int64=3,           # number of permanent shock states
     e1_σ::Float64=0.448,        # std. dev. of permanent shock
-    e2_size::Int64=3,           # number of persistent shock states
+    e2_size::Int64=7,           # number of persistent shock states
     e2_ρ::Float64=0.957,        # persistence of AR(1) shock
     e2_σ::Float64=0.129,        # std. dev. of AR(1) innovation
-    e3_size::Int64=3,           # number of transitory shock states
+    e3_size::Int64=7,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
     a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
     a_size_pos::Int64=101,      # count of (≥0) asset grid points for VFI
-    a_degree_neg::Int64=2,      # curvature exponent for negative grid
+    a_degree_neg::Int64=3,      # curvature exponent for negative grid
     a_degree_pos::Int64=2       # curvature exponent for positive grid
 )
 
@@ -105,7 +105,7 @@ function initialize_static_parameters(;
             reshape(e2_G, (1, e2_size, 1)) .*
             reshape(e3_G, (e3_size, 1, 1)))
 
-    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
+    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
     a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) ./ (a_size_neg - 1)) .^ a_degree_neg) .* a_min
     a_grid_neg = a_grid_neg[1:end-1]
     a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) ./ (a_size_pos - 1)) .^ a_degree_pos) .* a_max
@@ -178,17 +178,17 @@ end
 function initialize_tuned_parameters(static_parameters::NamedTuple;
     ρ::Float64=0.975,                   # survival rate (40 years)
     r_f::Float64=0.04,                  # risk-free rate
-    β::Float64=1.0 / (ρ * (1.0 + r_f)), # discount factor (households)
+    β::Float64=0.92,                    # discount factor (households) # 1.0 / (ρ * (1.0 + r_f))
     β_f::Float64=β,                     # discount factor (bank)
     τ::Float64=0.04,                    # transaction cost
-    γ::Float64=2.00,                    # CRRA coefficient
+    γ::Float64=3.00,                    # CRRA coefficient
     δ::Float64=0.10,                    # depreciation rate
     α::Float64=0.36,                    # capital share
     ψ::Float64=0.972^4,                 # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Float64=1.0 / (4.57 * 0.75),     # diverting fraction # 1.0 / 3.0
     Ph::Float64=1.0 / 6.0,              # prob. of history erased
     η::Float64=0.10,                    # wage garnishment rate
-    ζ::Float64=0.01,                    # EV shock scale
+    ζ::Float64=0.002,                   # EV shock scale
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost
     λ::Float64=0.0                      # multiplier
 )
@@ -222,7 +222,7 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
         Γ[e3_p_i, e2_p_i, e2_i] = e3_Γ[e3_p_i] * e2_Γ[e2_i, e2_p_i]
     end
     Γ_ρβ = ρβ .* Γ
-    bellman_factor = 1.0 # - ρβ
+    bellman_factor = 1.0 - ρβ
 
     W = zeros(e3_size, e2_size, e1_size)
     WA = zeros(a_size, e3_size, e2_size, e1_size)
@@ -366,11 +366,26 @@ mutable struct MutableVariables{T,
     policy_a_pos::A4
 end
 
+@inline @views @inbounds function repayment_mat(thres_e2::Float64, a_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple)
+
+    @unpack e2_μ_grid, inv_e2_σ, e2_σ, a_grid_neg, Γ_default = parameters
+
+    e2_μ = e2_μ_grid[e2_i]
+    a_p = a_grid_neg[a_p_i]
+    z_e2 = (thres_e2 - e2_μ) * inv_e2_σ
+    repay_amount = (-a_p) * normcdf(-z_e2)
+    default_amount = Γ_default[end, e2_i, e1_i] * normcdf(z_e2 - e2_σ)
+    total_amount = repay_amount + default_amount
+    return clamp(total_amount, 0.0, -a_p)
+end
+
+@inline log_(thres_e::Float64) = thres_e > 0.0 ? log(thres_e) : -Inf
+
 @views @inbounds function create_variables(parameters::NamedTuple; T::Type{<:Real}=Float64)
 
     @unpack a_size, a_size_neg, a_size_pos, a_grid_neg = parameters
-    @unpack e1_size, e2_size, e3_size = parameters
-    @unpack q_bar = parameters
+    @unpack e1_size, e1_grid, e2_size, e3_size = parameters
+    @unpack q_bar, R_bar, κ, η, w_λ, loop_a_neg_e2_e1, loop_e2_e1 = parameters
 
     aggregate_variables = MutableAggregateVariables{T}(
         zero(T), zero(T), zero(T), zero(T), zero(T),
@@ -379,8 +394,25 @@ end
 
     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
     q = fill(T(q_bar), a_size, e2_size, e1_size)
-    rbl_a = fill(T(a_grid_neg[1]), e2_size, e1_size)
-    rbl_qa = fill(T(q_bar * a_grid_neg[1]), e2_size, e1_size)
+    @batch for idx in loop_a_neg_e2_e1
+        a_p_i, e2_i, e1_i = idx.I
+        e1 = e1_grid[e1_i]
+        a_neg = a_grid_neg[a_p_i]
+        thres_e2_ = log_((-a_neg - κ) / (η * w_λ)) - e1
+        R_temp = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
+        R[a_p_i, e2_i, e1_i] = R_temp
+        q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
+    end
+
+    rbl_a = Array{T}(undef, e2_size, e1_size)
+    rbl_qa = Array{T}(undef, e2_size, e1_size)
+    @batch for idx in loop_e2_e1
+        e2_i, e1_i = idx.I
+        q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
+        rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
+        rbl_a[e2_i, e1_i] = rbl_a_
+        rbl_qa[e2_i, e1_i] = rbl_qa_
+    end
 
     V = zeros(T, a_size, e3_size, e2_size, e1_size)
     V_d = Array{T}(undef, e3_size, e2_size, e1_size)

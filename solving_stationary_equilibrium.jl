@@ -59,15 +59,15 @@ end
 function initialize_static_parameters(;
     e1_size::Int64=3,           # number of permanent shock states
     e1_σ::Float64=0.448,        # std. dev. of permanent shock
-    e2_size::Int64=7,           # number of persistent shock states
+    e2_size::Int64=3,           # number of persistent shock states
     e2_ρ::Float64=0.957,        # persistence of AR(1) shock
     e2_σ::Float64=0.129,        # std. dev. of AR(1) innovation
-    e3_size::Int64=7,           # number of transitory shock states
+    e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
     a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
     a_size_pos::Int64=101,      # count of (≥0) asset grid points for VFI
-    a_degree_neg::Int64=3,      # curvature exponent for negative grid
+    a_degree_neg::Int64=2,      # curvature exponent for negative grid
     a_degree_pos::Int64=2       # curvature exponent for positive grid
 )
 
@@ -188,7 +188,7 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     θ::Float64=1.0 / (4.57 * 0.75),     # diverting fraction # 1.0 / 3.0
     Ph::Float64=1.0 / 6.0,              # prob. of history erased
     η::Float64=0.10,                    # wage garnishment rate
-    ζ::Float64=0.002,                   # EV shock scale
+    ζ::Float64=0.001,                   # EV shock scale
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost
     λ::Float64=0.0                      # multiplier
 )
@@ -475,14 +475,14 @@ function update_EV!(V_p::Array{Float64,4}, V_pos_p::Array{Float64,4}, variables:
 
     @unpack a_ind_zero, Ph, Γ_ρβ, loop_a_e2_e1, loop_a_pos_e2_e1 = parameters
 
-    @views @inbounds for idx in loop_a_e2_e1
+    @views @inbounds @batch for idx in loop_a_e2_e1
         a_p_i, e2_i, e1_i = idx.I
         Γ_ρβ_temp = Γ_ρβ[:, :, e2_i]
         V_p_temp = V_p[a_p_i, :, :, e1_i]
         variables.EV[a_p_i, e2_i, e1_i] = sum(Γ_ρβ_temp .* V_p_temp)
     end
 
-    @views @inbounds for idx in loop_a_pos_e2_e1
+    @views @inbounds @batch for idx in loop_a_pos_e2_e1
         a_pos_p_i, e2_i, e1_i = idx.I
         a_p_i = a_pos_p_i + a_ind_zero - 1
         EV_temp = variables.EV[a_p_i, e2_i, e1_i]
@@ -500,7 +500,7 @@ function update_V_d!(variables::MutableVariables, parameters::NamedTuple)
 
     @unpack loop_e3_e2_e1, u_d = parameters
 
-    @inbounds for idx in loop_e3_e2_e1
+    @inbounds @batch for idx in loop_e3_e2_e1
         e3_i, e2_i, e1_i = idx.I
         EV_pos_zero = variables.EV_pos[1, e2_i, e1_i]
         u_d_temp = u_d[e3_i, e2_i, e1_i]
@@ -578,7 +578,7 @@ function update_value_and_policy_functions!(
     update_EV!(V_p, V_pos_p, variables, parameters)
     update_V_d!(variables, parameters)
 
-    @views @inbounds for idx in loop_e2_e1
+    @views @inbounds @batch for idx in loop_e2_e1
 
         e2_i, e1_i = idx.I
 
@@ -672,7 +672,7 @@ function update_pricing_and_rbl_functions!(variables::MutableVariables, paramete
 
     @unpack loop_a_neg_e2_e1, Γ, R_bar, loop_e2_e1, a_size_neg, a_grid_neg = parameters
 
-    @views @inbounds for idx in loop_a_neg_e2_e1
+    @views @inbounds @batch for idx in loop_a_neg_e2_e1
         a_p_i, e2_i, e1_i = idx.I
         policy_d_ = variables.policy_d[a_p_i, :, :, e1_i]
         Γ_ = Γ[:, :, e2_i]
@@ -682,7 +682,7 @@ function update_pricing_and_rbl_functions!(variables::MutableVariables, paramete
         variables.q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
     end
 
-    @views @inbounds for idx in loop_e2_e1
+    @views @inbounds @batch for idx in loop_e2_e1
         e2_i, e1_i = idx.I
         q_grid_neg = variables.q[1:a_size_neg, e2_i, e1_i]
         rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)

@@ -59,15 +59,15 @@ end
 function initialize_static_parameters(;
     e1_size::Int64=3,           # number of permanent shock states
     e1_σ::Float64=0.448,        # std. dev. of permanent shock
-    e2_size::Int64=3,           # number of persistent shock states
+    e2_size::Int64=5,           # number of persistent shock states
     e2_ρ::Float64=0.957,        # persistence of AR(1) shock
     e2_σ::Float64=0.129,        # std. dev. of AR(1) innovation
-    e3_size::Int64=3,           # number of transitory shock states
+    e3_size::Int64=5,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
     a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
     a_size_pos::Int64=101,      # count of (≥0) asset grid points for VFI
-    a_degree_neg::Int64=2,      # curvature exponent for negative grid
+    a_degree_neg::Int64=3,      # curvature exponent for negative grid
     a_degree_pos::Int64=2       # curvature exponent for positive grid
 )
 
@@ -187,8 +187,8 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     ψ::Float64=0.972^4,                 # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Float64=1.0 / (4.57 * 0.75),     # diverting fraction # 1.0 / 3.0
     Ph::Float64=1.0 / 6.0,              # prob. of history erased
-    η::Float64=0.10,                    # wage garnishment rate
-    ζ::Float64=0.001,                   # EV shock scale
+    η::Float64=0.30,                    # wage garnishment rate
+    ζ::Float64=0.005,                   # EV shock scale
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost
     λ::Float64=0.0                      # multiplier
 )
@@ -317,12 +317,12 @@ end
 
         f0 = a0 * q0
         if f0 < best_f
-            best_f, best_a, i = f0, a0, i
+            best_f, best_a, best_i = f0, a0, i
         end
 
         f1 = a1 * q1
         if f1 < best_f
-            best_f, best_a, i = f1, a1, i
+            best_f, best_a, best_i = f1, a1, i
         end
     end
 
@@ -630,14 +630,22 @@ function update_value_and_policy_functions!(
                     else
                         Δ = (V_d_ - V_nd_) * inv_ζ
                         t = exp(-abs(Δ))
-                        policy_d_ = (Δ >= 0.0) ? 1.0 / (1.0 + t) : t / (1.0 + t)
-                        V_ = V_d_ + ζ * (log1p(t) + max(-Δ, 0.0))
+                        # policy_d_ = (Δ >= 0.0) ? 1.0 / (1.0 + t) : t / (1.0 + t)
+                        policy_d_ = (Δ ≥ 0.0) ? inv(1.0 + t) : (t * inv(1.0 + t))
+                        # V_ = V_d_ + ζ * (log1p(t) + max(-Δ, 0.0))
+                        V_ = muladd(ζ, log1p(t) + max(-Δ, 0.0), V_d_)
+
+                        # δ_d = exp(V_d_ * inv_ζ)
+                        # δ_nd = exp(V_nd_ * inv_ζ)
+                        # δ_ = δ_d + δ_nd 
+                        # policy_d_ = δ_d / δ_
+                        # V_ = ζ * log(δ_)
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = policy_d_
                     end
-                    if status_nd == 2
-                        lb_nd = a_star_nd
-                    end
+                    #if status_nd == 2
+                    #    lb_pos = a_star_nd
+                    #end
                 end
 
                 if a_i >= a_ind_zero
@@ -645,9 +653,9 @@ function update_value_and_policy_functions!(
                     V_pos_, a_star_pos, status_pos = solve_DP(DP_Problem_pos, a, W_; lb=lb_pos, ub=ub_q)
                     variables.V_pos[a_pos_i, e3_i, e2_i, e1_i] = V_pos_
                     variables.policy_a_pos[a_pos_i, e3_i, e2_i, e1_i] = a_star_pos
-                    if status_pos == 2
-                        lb_pos = a_star_pos
-                    end
+                    #if status_pos == 2
+                    #    lb_pos = a_star_pos
+                    #end
                 end
             end
         end
@@ -727,6 +735,7 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         update_pricing_and_rbl_functions!(variables, parameters)
 
         V_crit = maximum(abs, @. variables.V - V_p)
+        # V_crit, V_crit_i = findmax(@. abs(variables.V - V_p))
         # V_nd_crit = maximum(safe_abs, @. variables.V_nd - V_nd_p)
         # V_d_crit = maximum(safe_abs, @. variables.V_d - V_d_p)
         V_pos_crit = maximum(abs, @. variables.V_pos - V_pos_p)
@@ -741,6 +750,8 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         @. variables.V = r0 * V_p + r1 * variables.V
         @. variables.V_pos = r0 * V_pos_p + r1 * variables.V_pos
         @. variables.q = r0 * q_p + r1 * variables.q
+
+        # println("$V_crit at $V_crit_i")
     end
 
     println("$V_crit, $V_pos_crit, $q_crit")

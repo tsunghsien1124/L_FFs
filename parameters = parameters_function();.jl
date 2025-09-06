@@ -28,7 +28,7 @@ tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0); # k
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=0.5, bellman_step=1);
+solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);
 
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
@@ -48,6 +48,7 @@ histogram(reshape(simul_panel.asset_state[end, :], :, 1), bins=a_range, normaliz
 # @btime E_V_function!($V_p, $V_pos_p, $variables, $parameters);
 
 plot(1:parameters.a_size_neg, parameters.a_grid_neg, seriestype=:scatter)
+plot(1:parameters.a_size_pos, parameters.a_grid_pos, seriestype=:scatter)
 
 e1_i = parameters.e1_size
 e2_i = parameters.e2_size

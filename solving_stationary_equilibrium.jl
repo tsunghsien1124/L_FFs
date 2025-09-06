@@ -59,16 +59,16 @@ end
 function initialize_static_parameters(;
     e1_size::Int64=3,           # number of permanent shock states
     e1_σ::Float64=0.448,        # std. dev. of permanent shock
-    e2_size::Int64=5,           # number of persistent shock states
+    e2_size::Int64=3,           # number of persistent shock states
     e2_ρ::Float64=0.957,        # persistence of AR(1) shock
     e2_σ::Float64=0.129,        # std. dev. of AR(1) innovation
-    e3_size::Int64=5,           # number of transitory shock states
+    e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
     a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
     a_size_pos::Int64=101,      # count of (≥0) asset grid points for VFI
     a_degree_neg::Int64=3,      # curvature exponent for negative grid
-    a_degree_pos::Int64=2       # curvature exponent for positive grid
+    a_degree_pos::Int64=3       # curvature exponent for positive grid
 )
 
     e1_grid, e1_G = adda_cooper(e1_size, 0.0, e1_σ)
@@ -573,7 +573,7 @@ function update_value_and_policy_functions!(
     @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero, a_min = parameters
     @unpack e1_size, e1_grid, e1_Γ, e2_size, e2_grid, e2_Γ, e3_size, e3_grid, e3_Γ = parameters
     @unpack ρ, β, γ, r_f, Ph, η, κ, W, q_bar, ζ, inv_ζ, bellman_factor = parameters
-    @unpack loop_e2_e1 = parameters
+    @unpack c_d, loop_e2_e1 = parameters
 
     update_EV!(V_p, V_pos_p, variables, parameters)
     update_V_d!(variables, parameters)
@@ -606,6 +606,8 @@ function update_value_and_policy_functions!(
             W_ = W[e3_i, e2_i, e1_i]
             V_d_ = variables.V_d[e3_i, e2_i, e1_i]
 
+            c_d_ = c_d[e3_i, e2_i, e1_i]
+
             lb_nd = rbl_a_
             lb_pos = 0.0
 
@@ -624,16 +626,21 @@ function update_value_and_policy_functions!(
                     V_nd_, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
-                    if a >= 0.0
+                    if (a >= 0.0) || (CoH >= c_d_ + 1E-3)
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_nd_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = 0.0
                     else
                         Δ = (V_d_ - V_nd_) * inv_ζ
-                        t = exp(-abs(Δ))
+                        # t = exp(-abs(Δ))
                         # policy_d_ = (Δ >= 0.0) ? 1.0 / (1.0 + t) : t / (1.0 + t)
-                        policy_d_ = (Δ ≥ 0.0) ? inv(1.0 + t) : (t * inv(1.0 + t))
+                        # policy_d_ = (Δ ≥ 0.0) ? inv(1.0 + t) : (t * inv(1.0 + t))
                         # V_ = V_d_ + ζ * (log1p(t) + max(-Δ, 0.0))
-                        V_ = muladd(ζ, log1p(t) + max(-Δ, 0.0), V_d_)
+                        # V_ = muladd(ζ, log1p(t) + max(-Δ, 0.0), V_d_)
+
+                        x  = -abs(Δ)
+                        m  = max(V_d_, V_nd_)
+                        V_ = m + ζ * log1p(exp(x))
+                        policy_d_ = 0.5 * (1 + tanh(0.5*Δ))
 
                         # δ_d = exp(V_d_ * inv_ζ)
                         # δ_nd = exp(V_nd_ * inv_ζ)
@@ -734,8 +741,8 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
         update_pricing_and_rbl_functions!(variables, parameters)
 
-        V_crit = maximum(abs, @. variables.V - V_p)
-        # V_crit, V_crit_i = findmax(@. abs(variables.V - V_p))
+        # V_crit = maximum(abs, @. variables.V - V_p)
+        V_crit, V_crit_i = findmax(@. abs(variables.V - V_p))
         # V_nd_crit = maximum(safe_abs, @. variables.V_nd - V_nd_p)
         # V_d_crit = maximum(safe_abs, @. variables.V_d - V_d_p)
         V_pos_crit = maximum(abs, @. variables.V_pos - V_pos_p)
@@ -747,11 +754,11 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         ProgressMeter.update!(prog, crit)
         search_iter += 1
 
+        println("$V_crit at $V_crit_i")
+
         @. variables.V = r0 * V_p + r1 * variables.V
         @. variables.V_pos = r0 * V_pos_p + r1 * variables.V_pos
         @. variables.q = r0 * q_p + r1 * variables.q
-
-        # println("$V_crit at $V_crit_i")
     end
 
     println("$V_crit, $V_pos_crit, $q_crit")

@@ -67,7 +67,7 @@ function initialize_static_parameters(;
     a_max::Float64=800.0,       # max asset on positive grid
     a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
     a_size_pos::Int64=101,      # count of (≥0) asset grid points for VFI
-    a_degree_neg::Int64=3,      # curvature exponent for negative grid
+    a_degree_neg::Int64=1,      # curvature exponent for negative grid
     a_degree_pos::Int64=3       # curvature exponent for positive grid
 )
 
@@ -106,8 +106,10 @@ function initialize_static_parameters(;
             reshape(e3_G, (e3_size, 1, 1)))
 
     a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
-    a_grid_neg = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) ./ (a_size_neg - 1)) .^ a_degree_neg) .* a_min
-    a_grid_neg = a_grid_neg[1:end-1]
+    a_grid_neg_2 = collect(-1.0:0.01:0.0)
+    a_grid_neg_1 = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) ./ (a_size_neg - 1)) .^ a_degree_neg) .* (a_min + 1.0) .- 1.0
+    a_grid_neg = vcat(a_grid_neg_1[1:end-1], a_grid_neg_2[1:end-1])
+    a_size_neg = length(a_grid_neg) + 1
     a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) ./ (a_size_pos - 1)) .^ a_degree_pos) .* a_max
     a_grid = vcat(a_grid_neg, a_grid_pos)
     a_size = length(a_grid)
@@ -626,7 +628,7 @@ function update_value_and_policy_functions!(
                     V_nd_, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
-                    if (a >= 0.0) || (CoH >= c_d_ + 1E-3)
+                    if (a >= 0.0) # || (CoH >= c_d_ + 1E-3)
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_nd_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = 0.0
                     else

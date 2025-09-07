@@ -61,10 +61,13 @@ plot(parameters.a_grid_neg[25:end], variables.q[25:parameters.a_size_neg, :, 1])
 plot(parameters.a_grid_neg[25:end], variables.q[25:parameters.a_size_neg, :, 1], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end-1])
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end-1], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end])
+plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1] .* parameters.a_grid_neg)
 plot!(variables.rbl_a[:, 1], variables.rbl_qa[:, 1], seriestype=:scatter)

@@ -59,10 +59,10 @@ end
 function initialize_static_parameters(;
     e1_size::Int64=3,           # number of permanent shock states
     e1_σ::Float64=0.448,        # std. dev. of permanent shock
-    e2_size::Int64=3,           # number of persistent shock states
+    e2_size::Int64=5,           # number of persistent shock states
     e2_ρ::Float64=0.957,        # persistence of AR(1) shock
     e2_σ::Float64=0.129,        # std. dev. of AR(1) innovation
-    e3_size::Int64=3,           # number of transitory shock states
+    e3_size::Int64=5,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
     a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
@@ -610,7 +610,7 @@ function update_value_and_policy_functions!(
 
             c_d_ = c_d[e3_i, e2_i, e1_i]
 
-            lb_nd = rbl_a_
+            lb_nd = rbl_a_ - 1E-2
             lb_pos = 0.0
 
             for a_i = 1:a_size
@@ -625,7 +625,7 @@ function update_value_and_policy_functions!(
                     variables.policy_d[a_i, e3_i, e2_i, e1_i] = 1.0
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = 0.0
                 else
-                    V_nd_, a_star_nd, status_nd = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
+                    V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
                     if (a >= 0.0) # || (CoH >= c_d_ + 1E-3)
@@ -659,7 +659,7 @@ function update_value_and_policy_functions!(
 
                 if a_i >= a_ind_zero
                     a_pos_i = a_i - a_ind_zero + 1
-                    V_pos_, a_star_pos, status_pos = solve_DP(DP_Problem_pos, a, W_; lb=lb_pos, ub=ub_q)
+                    V_pos_, a_star_pos, _ = solve_DP(DP_Problem_pos, a, W_; lb=lb_pos, ub=ub_q)
                     variables.V_pos[a_pos_i, e3_i, e2_i, e1_i] = V_pos_
                     variables.policy_a_pos[a_pos_i, e3_i, e2_i, e1_i] = a_star_pos
                     #if status_pos == 2

@@ -28,7 +28,7 @@ tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0); # k
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);
+solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.0, relax_q=1.0, bellman_step=1);
 
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);

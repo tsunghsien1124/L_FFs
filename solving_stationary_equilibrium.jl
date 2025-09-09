@@ -59,16 +59,18 @@ end
 function initialize_static_parameters(;
     e1_size::Int64=3,           # number of permanent shock states
     e1_σ::Float64=0.448,        # std. dev. of permanent shock
-    e2_size::Int64=5,           # number of persistent shock states
+    e2_size::Int64=3,           # number of persistent shock states
     e2_ρ::Float64=0.957,        # persistence of AR(1) shock
     e2_σ::Float64=0.129,        # std. dev. of AR(1) innovation
-    e3_size::Int64=5,           # number of transitory shock states
+    e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
-    a_size_neg::Int64=101,      # count of (≤0) asset grid points for VFI
-    a_size_pos::Int64=101,      # count of (≥0) asset grid points for VFI
-    a_degree_neg::Int64=1,      # curvature exponent for negative grid
-    a_degree_pos::Int64=3       # curvature exponent for positive grid
+    a_size_neg_1::Int64=51,     # count of (a'≤-1) asset grid points for VFI
+    a_size_neg_2::Int64=101,    # count of (-1≤a'≤0) asset grid points for VFI
+    a_size_pos_1::Int64=101,    # count of (1≥a'≥0) asset grid points for VFI
+    a_size_pos_2::Int64=51,     # count of (a'≥1) asset grid points for VFI
+    a_degree_neg::Int64=2,      # curvature exponent for negative grid
+    a_degree_pos::Int64=2       # curvature exponent for positive grid
 )
 
     e1_grid, e1_G = adda_cooper(e1_size, 0.0, e1_σ)
@@ -106,15 +108,20 @@ function initialize_static_parameters(;
             reshape(e3_G, (e3_size, 1, 1)))
 
     a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
-    a_grid_neg_2 = collect(-1.0:0.01:0.0)
-    a_grid_neg_1 = ((range(a_size_neg - 1, stop=0.0, length=a_size_neg) ./ (a_size_neg - 1)) .^ a_degree_neg) .* (a_min + 1.0) .- 1.0
-    a_grid_neg = vcat(a_grid_neg_1[1:end-1], a_grid_neg_2[1:end-1])
-    a_size_neg = length(a_grid_neg) + 1
-    a_grid_pos = ((range(0.0, stop=a_size_pos - 1, length=a_size_pos) ./ (a_size_pos - 1)) .^ a_degree_pos) .* a_max
+
+    a_grid_neg_1 = ((range(start=a_size_neg_1 - 1, stop=0.0, length=a_size_neg_1) ./ (a_size_neg_1 - 1)) .^ a_degree_neg) .* (a_min + 1.0) .- 1.0
+    a_grid_neg_2 = collect(range(start=-1.0, stop=0.0, length=a_size_neg_2))
+    a_grid_neg = vcat(a_grid_neg_1[1:(end-1)], a_grid_neg_2[1:(end-1)])
+    a_size_neg = length(a_grid_neg)
+
+    a_grid_pos_1 = collect(range(start=0.0, stop=1.0, length=a_size_pos_1))
+    a_grid_pos_2 = ((range(start=0.0, stop=a_size_pos_2 - 1, length=a_size_pos_2) ./ (a_size_pos_2 - 1)) .^ a_degree_pos) .* (a_max - 1.0) .+ 1.0
+    a_grid_pos = vcat(a_grid_pos_1[1:(end-1)], a_grid_pos_2)
+    a_size_pos = length(a_grid_pos)
+
     a_grid = vcat(a_grid_neg, a_grid_pos)
     a_size = length(a_grid)
-    a_ind_zero = a_size_neg
-    a_size_neg = a_size_neg - 1
+    a_ind_zero = a_size_neg + 1
 
     e2_μ_grid = e2_ρ .* e2_grid
     e2_μ_σ2_grid = e2_μ_grid .+ 0.5 * e2_σ^2
@@ -284,7 +291,7 @@ end
     if c > 0.0
         return γ == 1.0 ? bellman_factor * log(c) : bellman_factor * 1.0 / ((1.0 - γ) * c^(γ - 1.0))
     else
-        return -Inf
+        return -1E+12
     end
 end
 
@@ -444,7 +451,7 @@ struct ItpCache{ItpQ,ItpEv,ItpEvPh}
     EV_Ph::Array{ItpEvPh,2}     # size: (e2_size, e1_size)
 end
 
-@inline build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Interpolations.Line())
+@inline build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Interpolations.Flat())
 
 @views @inbounds @views function build_itp_cache(variables::MutableVariables, parameters::NamedTuple)
 
@@ -537,8 +544,8 @@ end
     end
 
     F = (a_p::Float64) -> obj_DP(DP, a_p, a, W_)
-    res = Optim.optimize(F, lb, ub, Optim.Brent();
-        rel_tol=rtol, abs_tol=atol, iterations=iters)
+    res = Optim.optimize(F, lb, ub, Optim.GoldenSection(); rel_tol=rtol, abs_tol=atol, iterations=iters)
+    # res = Optim.optimize(F, lb, ub, Optim.Brent(); rel_tol=rtol, abs_tol=atol, iterations=iters)
 
     if Optim.converged(res) && isfinite(Optim.minimum(res))
         a_star = Optim.minimizer(res)
@@ -572,7 +579,7 @@ function update_value_and_policy_functions!(
     one-step update of value and policy functions
     """
 
-    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero, a_min = parameters
+    @unpack a_size, a_grid, a_size_pos, a_grid_pos, a_ind_zero, a_min, a_max = parameters
     @unpack e1_size, e1_grid, e1_Γ, e2_size, e2_grid, e2_Γ, e3_size, e3_grid, e3_Γ = parameters
     @unpack ρ, β, γ, r_f, Ph, η, κ, W, q_bar, ζ, inv_ζ, bellman_factor = parameters
     @unpack c_d, loop_e2_e1 = parameters
@@ -607,20 +614,21 @@ function update_value_and_policy_functions!(
 
             W_ = W[e3_i, e2_i, e1_i]
             V_d_ = variables.V_d[e3_i, e2_i, e1_i]
-
             c_d_ = c_d[e3_i, e2_i, e1_i]
 
-            lb_nd = rbl_a_ - 1E-2
+            lb_nd = max(prevfloat(rbl_a_) - 1E-2, a_min)
             lb_pos = 0.0
 
             for a_i = 1:a_size
 
                 a = a_grid[a_i]
                 CoH = W_ + a
-                ub_q = CoH / q_bar
+                δg = 1E-8 * (1 + abs(CoH) + abs(c_d_))
 
-                if ((CoH - rbl_qa_) <= 0.0) || (ub_q <= lb_nd)
-                    variables.V_nd[a_i, e3_i, e2_i, e1_i] = -Inf
+                ub_q = min(CoH / q_bar, a_max)
+
+                if ((CoH - rbl_qa_) ≤ 0.0) || (ub_q ≤ lb_nd)
+                    variables.V_nd[a_i, e3_i, e2_i, e1_i] = -1E+12
                     variables.V[a_i, e3_i, e2_i, e1_i] = V_d_
                     variables.policy_d[a_i, e3_i, e2_i, e1_i] = 1.0
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = 0.0
@@ -628,27 +636,15 @@ function update_value_and_policy_functions!(
                     V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
-                    if (a >= 0.0) # || (CoH >= c_d_ + 1E-3)
+                    if (a ≥ 0.0) # || (CoH ≥ c_d_ + δg)
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_nd_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = 0.0
                     else
                         Δ = (V_d_ - V_nd_) * inv_ζ
-                        # t = exp(-abs(Δ))
-                        # policy_d_ = (Δ >= 0.0) ? 1.0 / (1.0 + t) : t / (1.0 + t)
-                        # policy_d_ = (Δ ≥ 0.0) ? inv(1.0 + t) : (t * inv(1.0 + t))
-                        # V_ = V_d_ + ζ * (log1p(t) + max(-Δ, 0.0))
-                        # V_ = muladd(ζ, log1p(t) + max(-Δ, 0.0), V_d_)
-
-                        x  = -abs(Δ)
-                        m  = max(V_d_, V_nd_)
+                        x = -abs(Δ)
+                        m = max(V_d_, V_nd_)
                         V_ = m + ζ * log1p(exp(x))
-                        policy_d_ = 0.5 * (1 + tanh(0.5*Δ))
-
-                        # δ_d = exp(V_d_ * inv_ζ)
-                        # δ_nd = exp(V_nd_ * inv_ζ)
-                        # δ_ = δ_d + δ_nd 
-                        # policy_d_ = δ_d / δ_
-                        # V_ = ζ * log(δ_)
+                        policy_d_ = 0.5 * (1 + tanh(0.5 * Δ))
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = policy_d_
                     end
@@ -713,12 +709,14 @@ end
 # safe_abs(x) = ifelse(isnan(x), 0.0, abs(x))
 
 function solve_value_and_policy_functions!(variables::MutableVariables, itp_cache::ItpCache, parameters::NamedTuple;
-    tol::Float64=1E-6, iter_max::Int64=500, relax::Float64=1.0, bellman_step::Int64=1)
+    tol::Float64=1E-6, iter_max::Int64=500, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1)
 
-    @assert 0.0 < relax <= 1.0 "relaxation must be in (0,1]; got $relax"
-    @assert bellman_step >= 1 "bellman step has to be larger than or equal to one; got $bellman_step"
+    @assert 0.0 < relax_V ≤ 1.0 "relaxation must be in (0,1]; got $relax_V"
+    @assert 0.0 < relax_q ≤ 1.0 "relaxation must be in (0,1]; got $relax_q"
+    @assert bellman_step ≥ 1 "bellman step has to be larger than or equal to one; got $bellman_step"
 
-    r0, r1 = 1.0 - relax, relax
+    r0V, r1V = 1.0 - relax_V, relax_V
+    r0q, r1q = 1.0 - relax_q, relax_q
     search_iter = 0
     V_crit = Inf
     V_pos_crit = Inf
@@ -740,6 +738,13 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         copyto!(V_pos_p, variables.V_pos)
         copyto!(q_p, variables.q)
 
+        bellman_step_ = q_crit ≤ 1E-4 ? bellman_step : 1
+        for _ in 1:bellman_step_
+            update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
+            @. variables.V = r0V * V_p + r1V * variables.V
+            @. variables.V_pos = r0V * V_pos_p + r1V * variables.V_pos
+        end
+
         update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
         update_pricing_and_rbl_functions!(variables, parameters)
 
@@ -758,9 +763,7 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
 
         println("$V_crit at $V_crit_i")
 
-        @. variables.V = r0 * V_p + r1 * variables.V
-        @. variables.V_pos = r0 * V_pos_p + r1 * variables.V_pos
-        @. variables.q = r0 * q_p + r1 * variables.q
+        @. variables.q = r0q * q_p + r1q * variables.q
     end
 
     println("$V_crit, $V_pos_crit, $q_crit")

@@ -107,7 +107,7 @@ function initialize_static_parameters(;
             reshape(e2_G, (1, e2_size, 1)) .*
             reshape(e3_G, (e3_size, 1, 1)))
 
-    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] # * exp_e3_grid[end]
+    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
 
     a_grid_neg_1 = ((range(start=a_size_neg_1 - 1, stop=0.0, length=a_size_neg_1) ./ (a_size_neg_1 - 1)) .^ a_degree_neg) .* (a_min + 1.0) .- 1.0
     a_grid_neg_2 = collect(range(start=-1.0, stop=0.0, length=a_size_neg_2))
@@ -196,8 +196,8 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     ψ::Float64=0.972^4,                 # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Float64=1.0 / (4.57 * 0.75),     # diverting fraction # 1.0 / 3.0
     Ph::Float64=1.0 / 6.0,              # prob. of history erased
-    η::Float64=0.30,                    # wage garnishment rate
-    ζ::Float64=0.005,                   # EV shock scale
+    η::Float64=0.35,                    # wage garnishment rate
+    ζ::Float64=0.001,                   # EV shock scale
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost
     λ::Float64=0.0                      # multiplier
 )
@@ -614,20 +614,19 @@ function update_value_and_policy_functions!(
 
             W_ = W[e3_i, e2_i, e1_i]
             V_d_ = variables.V_d[e3_i, e2_i, e1_i]
-            c_d_ = c_d[e3_i, e2_i, e1_i]
 
-            lb_nd = max(prevfloat(rbl_a_) - 1E-2, a_min)
+            lb_nd = max(1.05 * rbl_a_, a_min)
             lb_pos = 0.0
 
             for a_i = 1:a_size
 
                 a = a_grid[a_i]
                 CoH = W_ + a
-                δg = 1E-8 * (1 + abs(CoH) + abs(c_d_))
-
                 ub_q = min(CoH / q_bar, a_max)
+                budget_gap = CoH - rbl_qa_
+                bound_gap = ub_q - lb_nd
 
-                if ((CoH - rbl_qa_) ≤ 0.0) || (ub_q ≤ lb_nd)
+                if (budget_gap ≤ 0.0) || (bound_gap ≤ 0.0)
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = -1E+12
                     variables.V[a_i, e3_i, e2_i, e1_i] = V_d_
                     variables.policy_d[a_i, e3_i, e2_i, e1_i] = 1.0
@@ -636,7 +635,7 @@ function update_value_and_policy_functions!(
                     V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
-                    if (a ≥ 0.0) # || (CoH ≥ c_d_ + δg)
+                    if a ≥ 0.0
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_nd_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = 0.0
                     else
@@ -648,9 +647,6 @@ function update_value_and_policy_functions!(
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = policy_d_
                     end
-                    #if status_nd == 2
-                    #    lb_pos = a_star_nd
-                    #end
                 end
 
                 if a_i >= a_ind_zero
@@ -658,9 +654,6 @@ function update_value_and_policy_functions!(
                     V_pos_, a_star_pos, _ = solve_DP(DP_Problem_pos, a, W_; lb=lb_pos, ub=ub_q)
                     variables.V_pos[a_pos_i, e3_i, e2_i, e1_i] = V_pos_
                     variables.policy_a_pos[a_pos_i, e3_i, e2_i, e1_i] = a_star_pos
-                    #if status_pos == 2
-                    #    lb_pos = a_star_pos
-                    #end
                 end
             end
         end
@@ -761,7 +754,7 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         ProgressMeter.update!(prog, crit)
         search_iter += 1
 
-        println("$V_crit at $V_crit_i")
+        # println("$V_crit at $V_crit_i")
 
         @. variables.q = r0q * q_p + r1q * variables.q
     end
@@ -1204,3 +1197,65 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float
     return variables_λ_min, variables_λ_optimal, 3, crit_V_optimal, crit_μ_optimal
 end
 
+
+#====#
+
+function is_nondecreasing(v::AbstractVector; atol=1e-12, rtol=1e-10, strict=false)
+    n = length(v)
+    if n ≤ 1
+        return true, 0, 0.0
+    end
+    onev = one(float(eltype(v)))
+    for i in 1:(n-1)
+        vi, vj = v[i], v[i+1]
+        tol = strict ? atol : (atol + rtol * max(abs(vi), abs(vj), onev))
+        if vj + tol < vi
+            return false, i, (vi - vj - tol)
+        end
+    end
+    return true, 0, 0.0
+end
+
+function check_q_nondecreasing(q::AbstractArray, a_grid::AbstractVector;
+                               atol=1e-12, rtol=1e-10, strict=false, max_report=10)
+
+    @assert ndims(q) == 3 "q must be a 3D array (Na, Ne2, Ne1)"
+    Na, Ne2, Ne1 = size(q)
+
+    @assert length(a_grid) == Na "length(a_grid) must equal size(q,1)"
+    @assert all(diff(a_grid) .≥ 0) "a_grid must be non-decreasing"
+
+    violations = NamedTuple[]
+    @inbounds for e2_i in 1:Ne2, e1_i in 1:Ne1
+        v = @view q[:, e2_i, e1_i]
+        ok, i, slack = is_nondecreasing(v; atol=atol, rtol=rtol, strict=strict)
+        if !ok
+            push!(violations, (
+                e2_i = e2_i,
+                e1_i = e1_i,
+                idx   = i,
+                a_lo  = a_grid[i],
+                a_hi  = a_grid[i+1],
+                q_lo  = v[i],
+                q_hi  = v[i+1],
+                drop  = v[i] - v[i+1],
+                tol_slack = slack
+            ))
+            if length(violations) >= max_report
+                return false, violations
+            end
+        end
+    end
+    return isempty(violations), violations
+end
+
+function assert_q_nondecreasing(q, a_grid; kwargs...)
+    ok, bads = check_q_nondecreasing(q, a_grid; kwargs...)
+    if !ok
+        first_bad = first(bads)
+        error("q is not non-decreasing. First violation at (e2=$(first_bad.e2_i), e1=$(first_bad.e1_i)), ",
+              "between a=$(first_bad.a_lo) and a=$(first_bad.a_hi); ",
+              "q drops by $(first_bad.drop) (beyond tolerance).")
+    end
+    return nothing
+end

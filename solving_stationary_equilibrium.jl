@@ -291,7 +291,7 @@ end
     if c > 0.0
         return γ == 1.0 ? bellman_factor * log(c) : bellman_factor * 1.0 / ((1.0 - γ) * c^(γ - 1.0))
     else
-        return -1E+12
+        return -1E+12 #-Inf
     end
 end
 
@@ -403,15 +403,15 @@ end
 
     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
     q = fill(T(q_bar), a_size, e2_size, e1_size)
-    @batch for idx in loop_a_neg_e2_e1
-        a_p_i, e2_i, e1_i = idx.I
-        e1 = e1_grid[e1_i]
-        a_neg = a_grid_neg[a_p_i]
-        thres_e2_ = log_((-a_neg - κ) / (η * w_λ)) - e1
-        R_temp = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
-        R[a_p_i, e2_i, e1_i] = R_temp
-        q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
-    end
+    # @batch for idx in loop_a_neg_e2_e1
+    #     a_p_i, e2_i, e1_i = idx.I
+    #     e1 = e1_grid[e1_i]
+    #     a_neg = a_grid_neg[a_p_i]
+    #     thres_e2_ = log_((-a_neg - κ) / (η * w_λ)) - e1
+    #     R_temp = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
+    #     R[a_p_i, e2_i, e1_i] = R_temp
+    #     q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
+    # end
 
     rbl_a = Array{T}(undef, e2_size, e1_size)
     rbl_qa = Array{T}(undef, e2_size, e1_size)
@@ -764,11 +764,11 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
     return crit
 end
 
-struct SimulItpCache{ItpQ,ItpA,ItpAPos,T}
+struct SimulItpCache{ItpQ,ItpA,ItpD,ItpAPos}
     q_itp::Array{ItpQ,2}                       # size: (e2_size, e1_size)
     policy_a_itp::Array{ItpA,3}                # size: (e3_size, e2_size, e1_size)
+    policy_d_itp::Array{ItpD,3}                # size: (e3_size, e2_size, e1_size)
     policy_a_pos_itp::Array{ItpAPos,3}         # size: (e3_size, e2_size, e1_size)
-    thres_a::Array{T,3}                        # size: (e3_size, e2_size, e1_size)
 end
 
 @inline simul_build_itp(xs, ys) = linear_interpolation(xs, ys, extrapolation_bc=Interpolations.Flat())
@@ -779,18 +779,20 @@ end
 
     q_ = variables.q[:, 1, 1]
     q_sample = simul_build_itp(a_grid, q_)
-    policy_a_ = variables.policy_a[:, 1, 1, 1, 1]
+    policy_a_ = variables.policy_a[:, 1, 1, 1]
     policy_a_sample = simul_build_itp(a_grid, policy_a_)
-    policy_a_pos_ = variables.policy_a_pos[:, 1, 1, 1, 1]
+    policy_d_ = variables.policy_d[:, 1, 1, 1]
+    policy_d_sample = simul_build_itp(a_grid, policy_d_)
+    policy_a_pos_ = variables.policy_a_pos[:, 1, 1, 1]
     policy_a_pos_sample = simul_build_itp(a_grid_pos, policy_a_pos_)
-    thres_a_sample = variables.thres_a[1, 1, 1, 1]
 
     q_itp = Array{typeof(q_sample)}(undef, e2_size, e1_size)
     policy_a_itp = Array{typeof(policy_a_sample)}(undef, e3_size, e2_size, e1_size)
+    policy_d_itp = Array{typeof(policy_d_sample)}(undef, e3_size, e2_size, e1_size)
     policy_a_pos_itp = Array{typeof(policy_a_pos_sample)}(undef, e3_size, e2_size, e1_size)
 
-    return SimulItpCache{typeof(q_sample),typeof(policy_a_sample),typeof(policy_a_pos_sample),typeof(thres_a_sample)}(
-        q_itp, policy_a_itp, policy_a_pos_itp, variables.thres_a)
+    return SimulItpCache{typeof(q_sample),typeof(policy_a_sample),typeof(policy_d_sample),typeof(policy_a_pos_sample)}(
+        q_itp, policy_a_itp, policy_d_itp, policy_a_pos_itp)
 end
 
 @views @inbounds @views function update_simul_itp_cache!(simul_itp_cache::SimulItpCache, variables::MutableVariables, parameters::NamedTuple)
@@ -803,11 +805,12 @@ end
         for e3_i in 1:e3_size
             policy_a_ = variables.policy_a[:, e3_i, e2_i, e1_i]
             simul_itp_cache.policy_a_itp[e3_i, e2_i, e1_i] = simul_build_itp(a_grid, policy_a_)
+            policy_d_ = variables.policy_d[:, e3_i, e2_i, e1_i]
+            simul_itp_cache.policy_d_itp[e3_i, e2_i, e1_i] = simul_build_itp(a_grid, policy_d_)
             policy_a_pos_ = variables.policy_a_pos[:, e3_i, e2_i, e1_i]
             simul_itp_cache.policy_a_pos_itp[e3_i, e2_i, e1_i] = simul_build_itp(a_grid_pos, policy_a_pos_)
         end
     end
-    copyto!(simul_itp_cache.thres_a, variables.thres_a)
     return nothing
 end
 
@@ -824,7 +827,6 @@ struct SimulatedPanel{TF<:AbstractFloat,TI<:Integer}
     e2_state::Matrix{TI}
     e3_state::Matrix{TI}
     earnings_state::Matrix{TF}
-    nu_state::Matrix{TI}
     asset_state::Matrix{TF}
     good_history::Matrix{Bool}
     default_choice::Matrix{Bool}
@@ -836,14 +838,14 @@ end
 @inline advance_rng!(rng::Philox4x{UInt64}) = (rand(rng); true)
 
 @inline function newborn_bundle_draw(rng::Philox4x{UInt64},
-    e1_cat::Categorical, e2_cat::Categorical, e3_cat::Categorical, ν_cat::Categorical)::NamedTuple
+    e1_cat::Categorical, e2_cat::Categorical, e3_cat::Categorical)::NamedTuple
     newborn_i = advance_rng!(rng)
     e1_i = rand(rng, e1_cat)
     e2_i = rand(rng, e2_cat)
     e3_i = rand(rng, e3_cat)
-    ν_i = rand(rng, ν_cat)
+    nd_i = Float64(advance_rng!(rng))
     good_history_i = advance_rng!(rng)
-    return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, ν=ν_i, good_history=good_history_i)
+    return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, nd=nd_i, good_history=good_history_i)
 end
 
 @inline @inbounds function newborn_assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int, W::AbstractArray{Float64,3})
@@ -853,11 +855,10 @@ end
     panel.e2_state[t_i, h_i] = draw.e2
     panel.e3_state[t_i, h_i] = draw.e3
     panel.earnings_state[t_i, h_i] = W[draw.e3, draw.e2, draw.e1]
-    panel.nu_state[t_i, h_i] = draw.ν
     panel.asset_state[t_i, h_i] = 0.0
-    panel.good_history[t_i, h_i] = true
-    panel.default_choice[t_i, h_i] = false
-    asset_choice_itp = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](0.0)
+    panel.good_history[t_i, h_i] = draw.good_history
+    panel.default_choice[t_i, h_i] = !(draw.nd == 1.0)
+    asset_choice_itp = cache.policy_a_itp[draw.e3, draw.e2, draw.e1](0.0)
     panel.asset_choice[t_i, h_i] = asset_choice_itp
     discounted_price_itp = cache.q_itp[draw.e2, draw.e1](asset_choice_itp)
     panel.discounted_price[t_i, h_i] = discounted_price_itp
@@ -867,14 +868,14 @@ end
 
 @inline function bundle_draw(rng::Philox4x{UInt64}, ρ::Float64, Ph::Float64,
     e1_cat::Categorical, e1_Γ_cat_::Categorical, e2_cat::Categorical, e2_Γ_cat_::Categorical,
-    e3_cat::Categorical, ν_cat::Categorical)::NamedTuple
+    e3_cat::Categorical)::NamedTuple
     newborn_i = rand(rng) > ρ
     e1_i = newborn_i ? rand(rng, e1_cat) : rand(rng, e1_Γ_cat_)
     e2_i = newborn_i ? rand(rng, e2_cat) : rand(rng, e2_Γ_cat_)
     e3_i = rand(rng, e3_cat)
-    ν_i = rand(rng, ν_cat)
+    nd_i = newborn_i ? Float64(advance_rng!(rng)) : rand(rng)
     good_history_i = newborn_i ? advance_rng!(rng) : rand(rng) <= Ph
-    return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, ν=ν_i, good_history=good_history_i)
+    return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, nd=nd_i, good_history=good_history_i)
 end
 
 @inline @inbounds function assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int, W::AbstractArray{Float64,3})
@@ -884,24 +885,23 @@ end
     panel.e2_state[t_i, h_i] = draw.e2
     panel.e3_state[t_i, h_i] = draw.e3
     panel.earnings_state[t_i, h_i] = W[draw.e3, draw.e2, draw.e1]
-    panel.nu_state[t_i, h_i] = draw.ν
     panel.asset_state[t_i, h_i] = panel.asset_choice[t_i-1, h_i]
     # @assert !panel.good_history[t_i-1, h_i] & (panel.asset_state[t_i, h_i] >= 0.0) "Bad history HHs cannot borrow"
     panel.good_history[t_i, h_i] = panel.good_history[t_i-1, h_i] | draw.good_history
     if panel.good_history[t_i, h_i]
-        panel.default_choice[t_i, h_i] = panel.asset_state[t_i, h_i] <= cache.thres_a[draw.e3, draw.ν, draw.e2, draw.e1]
+        panel.default_choice[t_i, h_i] = cache.policy_d_itp[draw.e3, draw.e2, draw.e1](panel.asset_state[t_i, h_i]) ≥ draw.nd
         if panel.default_choice[t_i, h_i]
             panel.asset_choice[t_i, h_i] = 0.0
             panel.good_history[t_i, h_i] = false
         else
-            asset_choice_itp = cache.policy_a_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+            asset_choice_itp = cache.policy_a_itp[draw.e3, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
             panel.asset_choice[t_i, h_i] = asset_choice_itp
             discounted_price_itp = cache.q_itp[draw.e2, draw.e1](asset_choice_itp)
             panel.discounted_price[t_i, h_i] = discounted_price_itp
             panel.interest_rate[t_i, h_i] = 1.0 / discounted_price_itp - 1.0
         end
     else
-        asset_choice_itp = cache.policy_a_pos_itp[draw.e3, draw.ν, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
+        asset_choice_itp = cache.policy_a_pos_itp[draw.e3, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
         panel.asset_choice[t_i, h_i] = asset_choice_itp
         discounted_price_itp = cache.q_itp[draw.e2, draw.e1](asset_choice_itp)
         panel.discounted_price[t_i, h_i] = discounted_price_itp
@@ -921,7 +921,6 @@ function initialize_panel(; num_households::Int64=50000, num_periods::Int64=2000
     e2_state = Matrix{IntT}(undef, num_periods, num_households)
     e3_state = Matrix{IntT}(undef, num_periods, num_households)
     earnings_state = zeros(FloT, num_periods, num_households)
-    nu_state = Matrix{IntT}(undef, num_periods, num_households)
     asset_state = zeros(FloT, num_periods, num_households)
     good_history = fill(true, num_periods, num_households) # trues(num_periods, num_households)
     default_choice = fill(false, num_periods, num_households) # falses(num_periods, num_households)
@@ -930,7 +929,7 @@ function initialize_panel(; num_households::Int64=50000, num_periods::Int64=2000
     interest_rate = zeros(FloT, num_periods, num_households)
 
     return SimulatedPanel{FloT,IntT}(
-        newborn, e1_state, e2_state, e3_state, earnings_state, nu_state, asset_state,
+        newborn, e1_state, e2_state, e3_state, earnings_state, asset_state,
         good_history, default_choice, asset_choice, discounted_price, interest_rate
     )
 end
@@ -941,14 +940,13 @@ end
     num_threads = Threads.nthreads()
     rngs = make_thread_rngs(seed, num_threads)
 
-    @unpack ρ, Ph, e1_G, e1_Γ, e1_size, e2_G, e2_Γ, e2_size, e3_G, ν_G, W = parameters
+    @unpack ρ, Ph, e1_G, e1_Γ, e1_size, e2_G, e2_Γ, e2_size, e3_G, W = parameters
 
     e1_cat = Categorical(e1_G)
     e1_Γ_cat = [Categorical(e1_Γ[e1_i, :]) for e1_i in 1:e1_size]
     e2_cat = Categorical(e2_G)
     e2_Γ_cat = [Categorical(e2_Γ[e2_i, :]) for e2_i in 1:e2_size]
     e3_cat = Categorical(e3_G)
-    ν_cat = Categorical(ν_G)
 
     # @showprogress
     prog_bar = Progress(num_households; dt=0.1, desc="Simulation progress:", barglyphs=BarGlyphs("[=> ]"))
@@ -959,7 +957,7 @@ end
         h_id = UInt64(h_i)
         h1_id = base_counter(h_id, UInt64(1))
         set_counter!(rng, h1_id)
-        draw = newborn_bundle_draw(rng, e1_cat, e2_cat, e3_cat, ν_cat)
+        draw = newborn_bundle_draw(rng, e1_cat, e2_cat, e3_cat)
         newborn_assignment!(simul_itp_cache, simul_panel, draw, 1, h_i, W)
 
         for t_i in 2:num_periods
@@ -968,7 +966,7 @@ end
             set_counter!(rng, ht_id)
             e1_Γ_cat_ = e1_Γ_cat[simul_panel.e1_state[t_i-1, h_i]]
             e2_Γ_cat_ = e2_Γ_cat[simul_panel.e2_state[t_i-1, h_i]]
-            draw = bundle_draw(rng, ρ, Ph, e1_cat, e1_Γ_cat_, e2_cat, e2_Γ_cat_, e3_cat, ν_cat)
+            draw = bundle_draw(rng, ρ, Ph, e1_cat, e1_Γ_cat_, e2_cat, e2_Γ_cat_, e3_cat)
 
             if draw.newborn
                 newborn_assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i, W)
@@ -1091,7 +1089,7 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1)
+    solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.0, relax_q=1.0, bellman_step=1)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
     compute_moments!(variables, simul_panel, parameters; burnin=500)
@@ -1195,67 +1193,4 @@ function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float
 
     # return results
     return variables_λ_min, variables_λ_optimal, 3, crit_V_optimal, crit_μ_optimal
-end
-
-
-#====#
-
-function is_nondecreasing(v::AbstractVector; atol=1e-12, rtol=1e-10, strict=false)
-    n = length(v)
-    if n ≤ 1
-        return true, 0, 0.0
-    end
-    onev = one(float(eltype(v)))
-    for i in 1:(n-1)
-        vi, vj = v[i], v[i+1]
-        tol = strict ? atol : (atol + rtol * max(abs(vi), abs(vj), onev))
-        if vj + tol < vi
-            return false, i, (vi - vj - tol)
-        end
-    end
-    return true, 0, 0.0
-end
-
-function check_q_nondecreasing(q::AbstractArray, a_grid::AbstractVector;
-                               atol=1e-12, rtol=1e-10, strict=false, max_report=10)
-
-    @assert ndims(q) == 3 "q must be a 3D array (Na, Ne2, Ne1)"
-    Na, Ne2, Ne1 = size(q)
-
-    @assert length(a_grid) == Na "length(a_grid) must equal size(q,1)"
-    @assert all(diff(a_grid) .≥ 0) "a_grid must be non-decreasing"
-
-    violations = NamedTuple[]
-    @inbounds for e2_i in 1:Ne2, e1_i in 1:Ne1
-        v = @view q[:, e2_i, e1_i]
-        ok, i, slack = is_nondecreasing(v; atol=atol, rtol=rtol, strict=strict)
-        if !ok
-            push!(violations, (
-                e2_i = e2_i,
-                e1_i = e1_i,
-                idx   = i,
-                a_lo  = a_grid[i],
-                a_hi  = a_grid[i+1],
-                q_lo  = v[i],
-                q_hi  = v[i+1],
-                drop  = v[i] - v[i+1],
-                tol_slack = slack
-            ))
-            if length(violations) >= max_report
-                return false, violations
-            end
-        end
-    end
-    return isempty(violations), violations
-end
-
-function assert_q_nondecreasing(q, a_grid; kwargs...)
-    ok, bads = check_q_nondecreasing(q, a_grid; kwargs...)
-    if !ok
-        first_bad = first(bads)
-        error("q is not non-decreasing. First violation at (e2=$(first_bad.e2_i), e1=$(first_bad.e1_i)), ",
-              "between a=$(first_bad.a_lo) and a=$(first_bad.a_hi); ",
-              "q drops by $(first_bad.drop) (beyond tolerance).")
-    end
-    return nothing
 end

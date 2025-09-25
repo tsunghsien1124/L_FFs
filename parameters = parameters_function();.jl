@@ -24,7 +24,7 @@ using Interpolations
 # using LoopVectorization
 
 static_parameters = initialize_static_parameters();
-tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, ζ = 0.0100); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
@@ -35,6 +35,8 @@ simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
 update_simul_itp_cache!(simul_itp_cache, variables, parameters);
 simulate_household_panel!(simul_panel, simul_itp_cache, parameters);
 compute_moments!(variables, simul_panel, parameters; burnin=500);
+variables.aggregate_variables.share_of_filers
+
 
 solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
 

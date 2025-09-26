@@ -196,7 +196,7 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     ψ::Float64=0.972^4,                 # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Float64=1.0 / (4.57 * 0.75),     # diverting fraction # 1.0 / 3.0
     Ph::Float64=1.0 / 6.0,              # prob. of history erased
-    η::Float64=0.35,                    # wage garnishment rate
+    η::Float64=0.45,                    # wage garnishment rate
     ζ::Float64=0.001,                   # EV shock scale
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost
     λ::Float64=0.0                      # multiplier
@@ -759,9 +759,9 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         @. variables.q = r0q * q_p + r1q * variables.q
     end
 
-    println("$V_crit, $V_pos_crit, $q_crit")
+    # println("$V_crit, $V_pos_crit, $q_crit")
 
-    return crit
+    # return crit
 end
 
 struct SimulItpCache{ItpQ,ItpA,ItpD,ItpAPos}

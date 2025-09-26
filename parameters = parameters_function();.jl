@@ -24,20 +24,12 @@ using Interpolations
 # using LoopVectorization
 
 static_parameters = initialize_static_parameters();
-tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, ζ = 0.0100); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, ζ = 0.010); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
-solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.0, relax_q=1.0, bellman_step=1);
-
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
-update_simul_itp_cache!(simul_itp_cache, variables, parameters);
-simulate_household_panel!(simul_panel, simul_itp_cache, parameters);
-compute_moments!(variables, simul_panel, parameters; burnin=500);
-variables.aggregate_variables.share_of_filers
-
-
 solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
 
 # solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);

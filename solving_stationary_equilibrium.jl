@@ -1100,19 +1100,27 @@ function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCach
 
     # printout results
     data_spec = Any[
-        "Effective Discount Factor" parameters.β agg.share_in_debts 40.14
-        "Wage Garnishment Rate" parameters.η agg.share_of_filers 0.99
-        "Bank Survival Rate" parameters.ψ agg.LR 4.57
-        "Diverting Fraction" parameters.θ agg.avg_loan_rate 9.26
-        "Liquidity Multiplier" parameters.λ "" ""
-        "Asset-to-Debt Ratio (Demand)" agg.AD "" ""
-        "Asset-to-Debt Ratio (Supply)" parameters.AD_λ "" ""
-        "Difference" diff_AD "" ""
-        "Leverage Ratio (Demand)" agg.LR "" ""
-        "Leverage Ratio (Supply)" parameters.LR_λ "" ""
-        "Difference" diff_LR "" ""
+        "Liquidity Multiplier" parameters.λ "" "" ""
+        "Effective Discount Factor" parameters.β "Share in Debts" agg.share_in_debts 40.14
+        "Wage Garnishment Rate" parameters.η "Share of Filers" agg.share_of_filers 0.99
+        "Bank Survival Rate" parameters.ψ "Leverage Ratio" agg.LR 4.57
+        "Diverting Fraction" parameters.θ "Average Loan Rate" agg.avg_loan_rate 9.26
     ]
-    pretty_table(data_spec; header=["Name", "Value", "Model Moment", "Data Moment"], alignment=[:l, :r, :r, :r], formatters=ft_round(8), body_hlines=[5, 8])
+    pretty_table(data_spec; column_labels=["Parameter", "Value", "Moment", "Model", "Data"], alignment=[:r, :r, :r, :r, :r], formatters=[fmt__round(4)])
+
+    data_spec = Any[
+        "Capital" agg.K
+        "Loans" agg.L
+        "Deposits" agg.D
+        "Net Worth" agg.N 
+        "Asset-to-Debt Ratio (Demand)" agg.AD
+        "Asset-to-Debt Ratio (Supply)" parameters.AD_λ
+        "Difference" diff_AD
+        "Leverage Ratio (Demand)" agg.LR
+        "Leverage Ratio (Supply)" parameters.LR_λ
+        "Difference" diff_LR
+    ]
+    pretty_table(data_spec; column_labels=["Moment", "Model"], alignment=[:r, :r], formatters=[fmt__round(4)])
 
     # return excess demand
     # return ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ

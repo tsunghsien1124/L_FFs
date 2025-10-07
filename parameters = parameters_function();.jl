@@ -24,7 +24,7 @@ using Interpolations
 # using LoopVectorization
 
 static_parameters = initialize_static_parameters();
-tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, ζ = 0.010); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.02, ζ = 0.010); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);

@@ -23,14 +23,15 @@ using Interpolations
 # using FastGaussQuadrature
 # using LoopVectorization
 
-static_parameters = initialize_static_parameters();
-tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.02, ζ = 0.010); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
-parameters = (; static_parameters..., tuned_parameters...);
-variables = create_variables(parameters);
-itp_cache = build_itp_cache(variables, parameters);
-simul_itp_cache = build_simul_itp_cache(variables, parameters);
-simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
-solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
+# static_parameters = initialize_static_parameters();
+# tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.00, ζ = 0.010); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+# parameters = (; static_parameters..., tuned_parameters...);
+# variables = create_variables(parameters);
+# itp_cache = build_itp_cache(variables, parameters);
+# simul_itp_cache = build_simul_itp_cache(variables, parameters);
+# simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
+# solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
+crit_VP, parameters, variables, simul_panel, flag = optimal_multiplier_function(β = 0.945, η = 0.20, ψ = 0.91, θ = 0.40, ζ = 0.012);
 
 # solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);
 # update_simul_itp_cache!(simul_itp_cache, variables, parameters);

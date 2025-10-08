@@ -189,7 +189,7 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     r_f::Float64=0.04,                  # risk-free rate
     β::Float64=0.92,                    # discount factor (households) # 1.0 / (ρ * (1.0 + r_f))
     β_f::Float64=β,                     # discount factor (bank)
-    τ::Float64=0.04,                    # transaction cost
+    τ::Float64=0.00,                    # transaction cost
     γ::Float64=3.00,                    # CRRA coefficient
     δ::Float64=0.10,                    # depreciation rate
     α::Float64=0.36,                    # capital share
@@ -443,6 +443,89 @@ end
         V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
         policy_a, policy_d, policy_a_pos,
     )
+end
+
+@views @inbounds function create_variables(parameters::NamedTuple; T::Type{<:Real}=Float64)
+
+    @unpack a_size, a_size_neg, a_size_pos, a_grid_neg = parameters
+    @unpack e1_size, e1_grid, e2_size, e3_size = parameters
+    @unpack q_bar, R_bar, κ, η, w_λ, loop_a_neg_e2_e1, loop_e2_e1 = parameters
+
+    aggregate_variables = MutableAggregateVariables{T}(
+        zero(T), zero(T), zero(T), zero(T), zero(T),
+        zero(T), zero(T), zero(T), zero(T), zero(T),
+        zero(T), zero(T), zero(T))
+
+    R = Array{T}(undef, a_size_neg, e2_size, e1_size)
+    q = fill(T(q_bar), a_size, e2_size, e1_size)
+    # @batch for idx in loop_a_neg_e2_e1
+    #     a_p_i, e2_i, e1_i = idx.I
+    #     e1 = e1_grid[e1_i]
+    #     a_neg = a_grid_neg[a_p_i]
+    #     thres_e2_ = log_((-a_neg - κ) / (η * w_λ)) - e1
+    #     R_temp = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
+    #     R[a_p_i, e2_i, e1_i] = R_temp
+    #     q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
+    # end
+
+    rbl_a = Array{T}(undef, e2_size, e1_size)
+    rbl_qa = Array{T}(undef, e2_size, e1_size)
+    @batch for idx in loop_e2_e1
+        e2_i, e1_i = idx.I
+        q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
+        rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
+        rbl_a[e2_i, e1_i] = rbl_a_
+        rbl_qa[e2_i, e1_i] = rbl_qa_
+    end
+
+    V = zeros(T, a_size, e3_size, e2_size, e1_size)
+    V_d = Array{T}(undef, e3_size, e2_size, e1_size)
+    V_nd = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
+    V_pos = zeros(T, a_size_pos, e3_size, e2_size, e1_size)
+
+    EV = zeros(T, a_size, e2_size, e1_size)
+    EV_pos = zeros(T, a_size_pos, e2_size, e1_size)
+    EV_Ph = zeros(T, a_size_pos, e2_size, e1_size)
+
+    policy_a = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
+    policy_d = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
+    policy_a_pos = Array{T}(undef, a_size_pos, e3_size, e2_size, e1_size)
+
+    return MutableVariables{T,
+        typeof(rbl_a),typeof(R),typeof(V)}(
+        aggregate_variables,
+        R, q, rbl_a, rbl_qa,
+        V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
+        policy_a, policy_d, policy_a_pos,
+    )
+end
+
+@views @inbounds function clean_variables!(variables::MutableVariables, parameters::NamedTuple)
+
+    @unpack a_size_neg, a_grid_neg, q_bar, loop_e2_e1 = parameters
+
+    fill!(variables.R, zero(eltype(variables.R)))
+    fill!(variables.q, q_bar)
+    @batch for idx in loop_e2_e1
+        e2_i, e1_i = idx.I
+        q_grid_neg = variables.q[1:a_size_neg, e2_i, e1_i]
+        rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
+        variables.rbl_a[e2_i, e1_i] = rbl_a_
+        variables.rbl_qa[e2_i, e1_i] = rbl_qa_
+    end
+
+    fill!(variables.V, zero(eltype(variables.V)))
+    fill!(variables.V_d, zero(eltype(variables.V_d)))
+    fill!(variables.V_nd, zero(eltype(variables.V_nd)))
+    fill!(variables.V_pos, zero(eltype(variables.V_pos)))
+    fill!(variables.EV, zero(eltype(variables.EV)))
+    fill!(variables.EV_pos, zero(eltype(variables.EV_pos)))
+    fill!(variables.EV_Ph, zero(eltype(variables.EV_Ph)))
+    fill!(variables.policy_a, zero(eltype(variables.policy_a)))
+    fill!(variables.policy_d, zero(eltype(variables.policy_d)))
+    fill!(variables.policy_a_pos, zero(eltype(variables.policy_a_pos)))
+
+    return nothing
 end
 
 struct ItpCache{ItpQ,ItpEv,ItpEvPh}
@@ -702,7 +785,7 @@ end
 # safe_abs(x) = ifelse(isnan(x), 0.0, abs(x))
 
 function solve_value_and_policy_functions!(variables::MutableVariables, itp_cache::ItpCache, parameters::NamedTuple;
-    tol::Float64=1E-6, iter_max::Int64=500, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1)
+    tol::Float64=1E-6, iter_max::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1)
 
     @assert 0.0 < relax_V ≤ 1.0 "relaxation must be in (0,1]; got $relax_V"
     @assert 0.0 < relax_q ≤ 1.0 "relaxation must be in (0,1]; got $relax_q"
@@ -761,7 +844,7 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
 
     # println("$V_crit, $V_pos_crit, $q_crit")
 
-    # return crit
+    return crit
 end
 
 struct SimulItpCache{ItpQ,ItpA,ItpD,ItpAPos}
@@ -981,52 +1064,6 @@ end
     return nothing
 end
 
-# @inbounds @views function compute_moments(parameters::NamedTuple, simul_panel::SimulatedPanel; burnin::Int=500)
-
-#     @unpack r_f, ψ, K_λ, ι_λ = parameters
-
-#     num_periods = size(simul_panel.newborn)[1]
-#     burin_ = burnin + 1
-#     # num_periods_ = num_periods - burnin
-
-#     earnings_state_ = simul_panel.earnings_state[burin_:num_periods, :]
-#     asset_state_ = simul_panel.asset_state[burin_:num_periods, :]
-#     default_choice_ = simul_panel.default_choice[burin_:num_periods, :]
-#     asset_choice_ = simul_panel.asset_choice[burin_:num_periods, :]
-#     # discounted_price_ = simul_panel.discounted_price[burin_:num_periods, :]
-#     interest_rate_ = simul_panel.interest_rate[burin_:num_periods, :]
-
-#     K = K_λ
-#     L = mean(max.(-asset_state_, 0.0))
-#     D = mean(max.(asset_state_, 0.0))
-#     A = K + L
-#     N = A - D
-#     LR = A / N
-#     AD = A / D
-#     profit = ι_λ * A + (1.0 + r_f) * N
-#     ω = (N - ψ * profit) / A
-
-#     share_of_filers = mean(default_choice_) * 100
-#     share_in_debts = mean(asset_state_ .< 0.0) * 100
-
-#     # debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* (asset_state_ ./ earnings_state_)) / sum(asset_state_ .< 0.0) * (-1.0)
-#     debt_to_earning_ratio = sum((asset_state_ .< 0.0) .* asset_state_) * (-1.0) / sum((asset_state_ .< 0.0) .* earnings_state_)
-
-#     avg_loan_rate = sum((asset_choice_ .< 0.0) .* interest_rate_) / sum(asset_choice_ .< 0.0) * 100
-#     # avg_loan_rate_value = sum(max.(-asset_choice_, 0.0) .* interest_rate_) / sum(max.(-asset_choice_, 0.0)) * 100
-#     # avg_loan_rate_pvalue = sum(discounted_price_ .* max.(-asset_choice_, 0.0) .* interest_rate_) / sum(discounted_price_ .* max.(-asset_choice_, 0.0)) * 100
-
-#     return MutableAggregateVariables(K, L, A, D, N, LR, AD, profit, ω, share_of_filers, share_in_debts, debt_to_earning_ratio, avg_loan_rate)
-
-#     # plot([sum(simul_panel.earnings_state[t_i, :]) / num_households for t_i in 1:num_periods])
-
-#     # plot([sum((simul_panel.asset_state[t_i, :] .< 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
-#     # plot([sum((asset_state_[t_i, :] .< 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
-
-#     # plot([sum((simul_panel.asset_state[t_i, :] .> 0.0) .* simul_panel.asset_state[t_i, :]) / num_households for t_i in 1:num_periods])
-#     # plot([sum((asset_state_[t_i, :] .> 0.0) .* asset_state_[t_i, :]) / num_households for t_i in 1:num_periods_])
-# end
-
 @inbounds @views function compute_moments!(variables::MutableVariables, simul_panel::SimulatedPanel, parameters::NamedTuple; burnin::Int=500)
 
     @unpack r_f, ψ, K_λ, ι_λ = parameters
@@ -1081,7 +1118,7 @@ end
     agg.ω = (agg.N - ψ * agg.profit) / agg.A
     agg.share_of_filers = (default_sum / n) * 100.0
     agg.share_in_debts = (debt_count / n) * 100.0
-    agg.debt_to_earning_ratio = L_sum / debt_earnings_sum
+    agg.debt_to_earning_ratio = L_sum / debt_earnings_sum * 100.0
     agg.avg_loan_rate = (loan_rate_sum / loan_count) * 100.0
 
     return nothing
@@ -1089,20 +1126,20 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.0, relax_q=1.0, bellman_step=1)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.0, relax_q=1.0, bellman_step=1)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
     compute_moments!(variables, simul_panel, parameters; burnin=500)
 
     agg = variables.aggregate_variables
-    diff_AD = agg.AD - parameters.AD_λ
     diff_LR = agg.LR - parameters.LR_λ
 
     # printout results
     data_spec = Any[
         "Liquidity Multiplier" parameters.λ "" "" ""
-        "Effective Discount Factor" parameters.β "Share in Debts" agg.share_in_debts 40.14
-        "Wage Garnishment Rate" parameters.η "Share of Filers" agg.share_of_filers 0.99
+        "Discount Factor" parameters.β "Share in Debts" agg.share_in_debts 20.9
+        "Preference Shock" parameters.ζ "Share of Filers" agg.share_of_filers 0.99
+        "Wage Garnishment Rate" parameters.η "Debt-Earnings Ratio" agg.debt_to_earning_ratio 11.75
         "Bank Survival Rate" parameters.ψ "Leverage Ratio" agg.LR 4.57
         "Diverting Fraction" parameters.θ "Average Loan Rate" agg.avg_loan_rate 9.26
     ]
@@ -1113,92 +1150,64 @@ function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCach
         "Loans" agg.L
         "Deposits" agg.D
         "Net Worth" agg.N 
-        "Asset-to-Debt Ratio (Demand)" agg.AD
-        "Asset-to-Debt Ratio (Supply)" parameters.AD_λ
-        "Difference" diff_AD
         "Leverage Ratio (Demand)" agg.LR
         "Leverage Ratio (Supply)" parameters.LR_λ
         "Difference" diff_LR
     ]
     pretty_table(data_spec; column_labels=["Moment", "Model"], alignment=[:r, :r], formatters=[fmt__round(4)])
 
-    # return excess demand
-    # return ED_KL_to_D_ratio, ED_leverage_ratio, crit_V, crit_μ
+    return crit_VP, agg.LR, parameters.LR_λ
 end
 
-function optimal_multiplier_function(parameters::NamedTuple; λ_min_adhoc::Float64=-Inf, λ_max_adhoc::Float64=Inf, tol::Float64=1E-5, iter_max::Float64=200, slow_updating::Float64=1.0)
+function optimal_multiplier_function(;β::Float64, η::Float64, ψ::Float64, θ::Float64, ζ::Float64)
     """
-    solve for optimal liquidity multiplier
+    solve for optimal liquidity multiplier λ
     """
 
-    # check the case of λ_min = 0.0
-    λ_min = 0.0
-    variables_λ_min = variables_function(parameters; λ=λ_min)
-    ED_KL_to_D_ratio_λ_min, ED_leverage_ratio_λ_min, crit_V_min, crit_μ_min = solve_economy_function!(variables_λ_min, parameters; slow_updating=slow_updating)
-    # if ED_KL_to_D_ratio_λ_min > 0.0
-    #     return variables_λ_min, variables_λ_min, 1
-    # end
-    if ED_leverage_ratio_λ_min < 0.0
-        return variables_λ_min, variables_λ_min, 1, crit_V_min, crit_μ_min
+    static_parameters = initialize_static_parameters();
+    tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, β = β, η = η, ψ = ψ, θ = θ, ζ = ζ);
+    parameters = (; static_parameters..., tuned_parameters...);
+    variables = create_variables(parameters);
+    itp_cache = build_itp_cache(variables, parameters);
+    simul_itp_cache = build_simul_itp_cache(variables, parameters);
+    simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
+    crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
+    if LR_D < LR_S
+        return crit_VP, parameters, variables, simul_panel, 1
     end
 
-    # check the case of λ_max = 1-ψ^(1/2)
-    λ_max = 1.0 - sqrt(parameters.ψ)
-    variables_λ_max = variables_function(parameters; λ=λ_max)
-    ED_KL_to_D_ratio_λ_max, ED_leverage_ratio_λ_max, crit_V_max, crit_μ_max = solve_economy_function!(variables_λ_max, parameters; slow_updating=slow_updating)
-    # if ED_KL_to_D_ratio_λ_max < 0.0
-    #     return variables_λ_min, variables_λ_max, 2 # meaning solution doesn't exist!
-    # end
-    if ED_leverage_ratio_λ_max > 0.0
-        return variables_λ_min, variables_λ_max, 2, crit_V_max, crit_μ_max # meaning solution doesn't exist!
+    λ_max = 1.0 - sqrt(ψ)
+    tuned_parameters = initialize_tuned_parameters(static_parameters; λ = λ_max, β = β, η = η, ψ = ψ, θ = θ, ζ = ζ);
+    parameters = (; static_parameters..., tuned_parameters...);
+    clean_variables!(variables, parameters)
+    crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
+    if (LR_D > LR_S) || (LR_D < 0.0)
+        return crit_VP, parameters, variables, simul_panel, 2
     end
 
-    # initialization
-    search_iter = 0
-    crit = Inf
+    search_iter = 1
+    iter_max = 100
+    tol = 0.05
+    crit_LR = Inf
     λ_optimal = 0.0
-    crit_V_optimal = 0.0
-    crit_μ_optimal = 0.0
-    variables_λ_optimal = []
-    λ_lower = max(λ_min_adhoc, λ_min)
-    λ_upper = min(λ_max_adhoc, λ_max)
+    λ_lower = 0.0
+    λ_upper = λ_max
 
-    # solve equlibrium multiplier by bisection
-    while crit > tol && search_iter < iter_max
-
-        # update the multiplier
+    while crit_LR > tol && search_iter < iter_max
         λ_optimal = (λ_lower + λ_upper) / 2
-
-        # compute the associated results
-        # if search_iter == 0
-        #     variables_λ_optimal = variables_function(parameters; λ = λ_optimal)
-        # else
-        #     variables_function_update!(variables_λ_optimal, parameters; λ = λ_optimal)
-        # end
-        variables_λ_optimal = variables_function(parameters; λ=λ_optimal)
-        ED_KL_to_D_ratio_λ_optimal, ED_leverage_ratio_λ_optimal, crit_V_optimal, crit_μ_optimal = solve_economy_function!(variables_λ_optimal, parameters; slow_updating=slow_updating)
-
-        # update search region
-        # if ED_KL_to_D_ratio_λ_optimal > 0.0
-        #     λ_upper = λ_optimal
-        # else
-        #     λ_lower = λ_optimal
-        # end
-        if ED_leverage_ratio_λ_optimal < 0.0
+        tuned_parameters = initialize_tuned_parameters(static_parameters; λ = λ_optimal, β = β, η = η, ψ = ψ, θ = θ, ζ = ζ);
+        parameters = (; static_parameters..., tuned_parameters...);
+        clean_variables!(variables, parameters)
+        crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
+        if LR_D < LR_S
             λ_upper = λ_optimal
         else
             λ_lower = λ_optimal
         end
-
-        # check convergence
-        # crit = abs(ED_KL_to_D_ratio_λ_optimal)
-        crit = abs(ED_leverage_ratio_λ_optimal)
-
-        # update the iteration number
+        crit_LR = abs(LR_D - LR_S)
         search_iter += 1
-
+        if crit_LR < tol
+            return crit_VP, parameters, variables, simul_panel, 3
+        end
     end
-
-    # return results
-    return variables_λ_min, variables_λ_optimal, 3, crit_V_optimal, crit_μ_optimal
 end

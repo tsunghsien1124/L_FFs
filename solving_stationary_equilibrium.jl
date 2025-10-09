@@ -65,12 +65,13 @@ function initialize_static_parameters(;
     e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
+    a_thres::Float64=1.0,       # asset gridpoint threshold
     a_size_neg_1::Int64=51,     # count of (a'≤-1) asset grid points for VFI
     a_size_neg_2::Int64=101,    # count of (-1≤a'≤0) asset grid points for VFI
     a_size_pos_1::Int64=101,    # count of (1≥a'≥0) asset grid points for VFI
     a_size_pos_2::Int64=51,     # count of (a'≥1) asset grid points for VFI
-    a_degree_neg::Int64=2,      # curvature exponent for negative grid
-    a_degree_pos::Int64=2       # curvature exponent for positive grid
+    a_degree_neg::Int64=3,      # curvature exponent for negative grid
+    a_degree_pos::Int64=3       # curvature exponent for positive grid
 )
 
     e1_grid, e1_G = adda_cooper(e1_size, 0.0, e1_σ)
@@ -110,11 +111,11 @@ function initialize_static_parameters(;
     a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
 
     a_grid_neg_1 = ((range(start=a_size_neg_1 - 1, stop=0.0, length=a_size_neg_1) ./ (a_size_neg_1 - 1)) .^ a_degree_neg) .* (a_min + 1.0) .- 1.0
-    a_grid_neg_2 = collect(range(start=-1.0, stop=0.0, length=a_size_neg_2))
+    a_grid_neg_2 = collect(range(start=-a_thres, stop=0.0, length=a_size_neg_2))
     a_grid_neg = vcat(a_grid_neg_1[1:(end-1)], a_grid_neg_2[1:(end-1)])
     a_size_neg = length(a_grid_neg)
 
-    a_grid_pos_1 = collect(range(start=0.0, stop=1.0, length=a_size_pos_1))
+    a_grid_pos_1 = collect(range(start=0.0, stop=a_thres, length=a_size_pos_1))
     a_grid_pos_2 = ((range(start=0.0, stop=a_size_pos_2 - 1, length=a_size_pos_2) ./ (a_size_pos_2 - 1)) .^ a_degree_pos) .* (a_max - 1.0) .+ 1.0
     a_grid_pos = vcat(a_grid_pos_1[1:(end-1)], a_grid_pos_2)
     a_size_pos = length(a_grid_pos)
@@ -195,7 +196,7 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     α::Float64=0.36,                    # capital share
     ψ::Float64=0.972^4,                 # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Float64=1.0 / (4.57 * 0.75),     # diverting fraction # 1.0 / 3.0
-    Ph::Float64=1.0 / 6.0,              # prob. of history erased
+    Ph::Float64=1.0 / 10.0,             # prob. of history erased
     η::Float64=0.45,                    # wage garnishment rate
     ζ::Float64=0.001,                   # EV shock scale
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost

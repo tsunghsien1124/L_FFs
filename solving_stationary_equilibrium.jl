@@ -65,10 +65,10 @@ function initialize_static_parameters(;
     e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
-    a_thres::Float64=1.0,       # asset gridpoint threshold
+    a_thres::Float64=0.5,       # asset gridpoint threshold
     a_size_neg_1::Int64=51,     # count of (a'≤-1) asset grid points for VFI
-    a_size_neg_2::Int64=101,    # count of (-1≤a'≤0) asset grid points for VFI
-    a_size_pos_1::Int64=101,    # count of (1≥a'≥0) asset grid points for VFI
+    a_size_neg_2::Int64=201,    # count of (-1≤a'≤0) asset grid points for VFI
+    a_size_pos_1::Int64=201,    # count of (1≥a'≥0) asset grid points for VFI
     a_size_pos_2::Int64=51,     # count of (a'≥1) asset grid points for VFI
     a_degree_neg::Int64=3,      # curvature exponent for negative grid
     a_degree_pos::Int64=3       # curvature exponent for positive grid
@@ -108,15 +108,15 @@ function initialize_static_parameters(;
             reshape(e2_G, (1, e2_size, 1)) .*
             reshape(e3_G, (e3_size, 1, 1)))
 
-    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
+    a_min = -0.5 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
 
-    a_grid_neg_1 = ((range(start=a_size_neg_1 - 1, stop=0.0, length=a_size_neg_1) ./ (a_size_neg_1 - 1)) .^ a_degree_neg) .* (a_min + 1.0) .- 1.0
+    a_grid_neg_1 = ((range(start=a_size_neg_1 - 1, stop=0.0, length=a_size_neg_1) ./ (a_size_neg_1 - 1)) .^ a_degree_neg) .* (a_min + a_thres) .- a_thres
     a_grid_neg_2 = collect(range(start=-a_thres, stop=0.0, length=a_size_neg_2))
     a_grid_neg = vcat(a_grid_neg_1[1:(end-1)], a_grid_neg_2[1:(end-1)])
     a_size_neg = length(a_grid_neg)
 
     a_grid_pos_1 = collect(range(start=0.0, stop=a_thres, length=a_size_pos_1))
-    a_grid_pos_2 = ((range(start=0.0, stop=a_size_pos_2 - 1, length=a_size_pos_2) ./ (a_size_pos_2 - 1)) .^ a_degree_pos) .* (a_max - 1.0) .+ 1.0
+    a_grid_pos_2 = ((range(start=0.0, stop=a_size_pos_2 - 1, length=a_size_pos_2) ./ (a_size_pos_2 - 1)) .^ a_degree_pos) .* (a_max - a_thres) .+ a_thres
     a_grid_pos = vcat(a_grid_pos_1[1:(end-1)], a_grid_pos_2)
     a_size_pos = length(a_grid_pos)
 
@@ -186,8 +186,9 @@ function initialize_static_parameters(;
 end
 
 function initialize_tuned_parameters(static_parameters::NamedTuple;
-    ρ::Float64=0.975,                   # survival rate (40 years)
+    ρ::Float64=1.0 - 1.0/40.0,          # survival rate (40 years)
     r_f::Float64=0.04,                  # risk-free rate
+    # r_f::Float64=ρ*(1.04) - 1.0,        # (effective) risk-free rate
     β::Float64=0.92,                    # discount factor (households) # 1.0 / (ρ * (1.0 + r_f))
     β_f::Float64=β,                     # discount factor (bank)
     τ::Float64=0.00,                    # transaction cost
@@ -699,7 +700,7 @@ function update_value_and_policy_functions!(
             W_ = W[e3_i, e2_i, e1_i]
             V_d_ = variables.V_d[e3_i, e2_i, e1_i]
 
-            lb_nd = max(1.05 * rbl_a_, a_min)
+            lb_nd = max(1.0 * rbl_a_, a_min)
             lb_pos = 0.0
 
             for a_i = 1:a_size
@@ -994,7 +995,7 @@ end
     return nothing
 end
 
-function initialize_panel(; num_households::Int64=50000, num_periods::Int64=2000,
+function initialize_panel(; num_households::Int64=80000, num_periods::Int64=2500,
     FloT::Type{<:AbstractFloat}=Float64, IntT::Type{<:Integer}=Int64)
 
     @assert 0 < num_households <= 2^20 "The number of households exceeds 20-bit capacity"
@@ -1127,7 +1128,7 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.0, relax_q=1.0, bellman_step=1)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=0.70, relax_q=0.70, bellman_step=2)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
     compute_moments!(variables, simul_panel, parameters; burnin=500)
@@ -1138,11 +1139,11 @@ function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCach
     # printout results
     data_spec = Any[
         "Liquidity Multiplier" parameters.λ "" "" ""
-        "Discount Factor" parameters.β "Share in Debts" agg.share_in_debts 20.9
+        "Discount Factor" parameters.β "Share in Debts" agg.share_in_debts "7.67 or 8.93"
         "Preference Shock" parameters.ζ "Share of Filers" agg.share_of_filers 0.99
-        "Wage Garnishment Rate" parameters.η "Debt-Earnings Ratio" agg.debt_to_earning_ratio 11.75
-        "Bank Survival Rate" parameters.ψ "Leverage Ratio" agg.LR 4.57
-        "Diverting Fraction" parameters.θ "Average Loan Rate" agg.avg_loan_rate 9.26
+        "Wage Garnishment Rate" parameters.η "Debt-Earnings Ratio" agg.debt_to_earning_ratio 9.10
+        "Bank Survival Rate" parameters.ψ "Leverage Ratio" agg.LR 4.53
+        "Diverting Fraction" parameters.θ "Average Loan Rate" agg.avg_loan_rate 10.54
     ]
     pretty_table(data_spec; column_labels=["Parameter", "Value", "Moment", "Model", "Data"], alignment=[:r, :r, :r, :r, :r], formatters=[fmt__round(4)])
 
@@ -1188,7 +1189,7 @@ function optimal_multiplier_function(;β::Float64, η::Float64, ψ::Float64, θ:
 
     search_iter = 1
     iter_max = 100
-    tol = 0.05
+    tol = 0.0001
     crit_LR = Inf
     λ_optimal = 0.0
     λ_lower = 0.0

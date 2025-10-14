@@ -31,7 +31,7 @@ using Interpolations
 # simul_itp_cache = build_simul_itp_cache(variables, parameters);
 # simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
 # solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
-crit_VP, parameters, variables, simul_panel, flag = optimal_multiplier_function(β = 0.9405, η = 0.124, ψ = 0.90, θ = 1.0/3.15, ζ = 0.0094);
+crit_VP, parameters, variables, simul_panel, flag = optimal_multiplier_function(β = 0.9408, η = 0.1240, ψ = 0.9010, θ = 1.0/3.50, ζ = 0.0084);
 
 # solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);
 # update_simul_itp_cache!(simul_itp_cache, variables, parameters);

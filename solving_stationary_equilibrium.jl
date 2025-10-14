@@ -67,8 +67,8 @@ function initialize_static_parameters(;
     a_max::Float64=800.0,       # max asset on positive grid
     a_thres::Float64=0.5,       # asset gridpoint threshold
     a_size_neg_1::Int64=51,     # count of (a'≤-1) asset grid points for VFI
-    a_size_neg_2::Int64=201,    # count of (-1≤a'≤0) asset grid points for VFI
-    a_size_pos_1::Int64=201,    # count of (1≥a'≥0) asset grid points for VFI
+    a_size_neg_2::Int64=151,    # count of (-1≤a'≤0) asset grid points for VFI
+    a_size_pos_1::Int64=151,    # count of (1≥a'≥0) asset grid points for VFI
     a_size_pos_2::Int64=51,     # count of (a'≥1) asset grid points for VFI
     a_degree_neg::Int64=3,      # curvature exponent for negative grid
     a_degree_pos::Int64=3       # curvature exponent for positive grid
@@ -108,7 +108,7 @@ function initialize_static_parameters(;
             reshape(e2_G, (1, e2_size, 1)) .*
             reshape(e3_G, (e3_size, 1, 1)))
 
-    a_min = -0.5 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
+    a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
 
     a_grid_neg_1 = ((range(start=a_size_neg_1 - 1, stop=0.0, length=a_size_neg_1) ./ (a_size_neg_1 - 1)) .^ a_degree_neg) .* (a_min + a_thres) .- a_thres
     a_grid_neg_2 = collect(range(start=-a_thres, stop=0.0, length=a_size_neg_2))
@@ -200,7 +200,7 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     Ph::Float64=1.0 / 10.0,             # prob. of history erased
     η::Float64=0.45,                    # wage garnishment rate
     ζ::Float64=0.001,                   # EV shock scale
-    κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost
+    κ::Float64=975 / 33176,             # out-of-pocket monetary filing cost
     λ::Float64=0.0                      # multiplier
 )
 
@@ -816,12 +816,12 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         copyto!(V_pos_p, variables.V_pos)
         copyto!(q_p, variables.q)
 
-        bellman_step_ = q_crit ≤ 1E-4 ? bellman_step : 1
-        for _ in 1:bellman_step_
-            update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
-            @. variables.V = r0V * V_p + r1V * variables.V
-            @. variables.V_pos = r0V * V_pos_p + r1V * variables.V_pos
-        end
+        # bellman_step_ = q_crit ≤ 1E-4 ? bellman_step : 1
+        # for _ in 1:bellman_step_
+        #     update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
+        #     @. variables.V = r0V * V_p + r1V * variables.V
+        #     @. variables.V_pos = r0V * V_pos_p + r1V * variables.V_pos
+        # end
 
         update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
         update_pricing_and_rbl_functions!(variables, parameters)
@@ -1128,7 +1128,7 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=0.70, relax_q=0.70, bellman_step=2)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=0.75, relax_q=0.75, bellman_step=5)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
     compute_moments!(variables, simul_panel, parameters; burnin=500)
@@ -1189,7 +1189,7 @@ function optimal_multiplier_function(;β::Float64, η::Float64, ψ::Float64, θ:
 
     search_iter = 1
     iter_max = 100
-    tol = 0.0001
+    tol = 0.01
     crit_LR = Inf
     λ_optimal = 0.0
     λ_lower = 0.0

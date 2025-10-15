@@ -186,7 +186,7 @@ function initialize_static_parameters(;
 end
 
 function initialize_tuned_parameters(static_parameters::NamedTuple;
-    ρ::Float64=1.0 - 1.0/40.0,          # survival rate (40 years)
+    ρ::Float64=1.0 - 1.0 / 40.0,          # survival rate (40 years)
     r_f::Float64=0.04,                  # risk-free rate
     # r_f::Float64=ρ*(1.04) - 1.0,        # (effective) risk-free rate
     β::Float64=0.92,                    # discount factor (households) # 1.0 / (ρ * (1.0 + r_f))
@@ -197,10 +197,10 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     α::Float64=0.36,                    # capital share
     ψ::Float64=0.972^4,                 # exogenous retention ratio # 1.0 - 1.0 / 20.0
     θ::Float64=1.0 / (4.57 * 0.75),     # diverting fraction # 1.0 / 3.0
-    Ph::Float64=1.0 / 10.0,             # prob. of history erased
+    Ph::Float64=1.0 / 6.0,              # prob. of history erased # 1.0 / 10.0
     η::Float64=0.45,                    # wage garnishment rate
     ζ::Float64=0.001,                   # EV shock scale
-    κ::Float64=975 / 33176,             # out-of-pocket monetary filing cost
+    κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost # 975
     λ::Float64=0.0                      # multiplier
 )
 
@@ -700,7 +700,7 @@ function update_value_and_policy_functions!(
             W_ = W[e3_i, e2_i, e1_i]
             V_d_ = variables.V_d[e3_i, e2_i, e1_i]
 
-            lb_nd = max(1.0 * rbl_a_, a_min)
+            lb_nd = max(2.5 * rbl_a_, a_min)
             lb_pos = 0.0
 
             for a_i = 1:a_size
@@ -720,7 +720,7 @@ function update_value_and_policy_functions!(
                     V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
-                    if a ≥ 0.0
+                    if a ≥ 0.0 #-(κ + η*W_)
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_nd_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = 0.0
                     else
@@ -831,7 +831,9 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         # V_nd_crit = maximum(safe_abs, @. variables.V_nd - V_nd_p)
         # V_d_crit = maximum(safe_abs, @. variables.V_d - V_d_p)
         V_pos_crit = maximum(abs, @. variables.V_pos - V_pos_p)
-        q_crit = maximum(abs, @. variables.q - q_p)
+        # q_crit = maximum(abs, @. variables.q - q_p)
+        q_crit, q_crit_i = findmax(@. abs(variables.q - q_p))
+
         crit = max(V_crit, V_pos_crit, q_crit)
         # crit = max(V_nd_crit, V_d_crit, V_pos_crit, q_crit)
         # crit = q_crit
@@ -840,7 +842,10 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         search_iter += 1
 
         # println("$V_crit at $V_crit_i")
+        # println("$q_crit at $q_crit_i")
 
+        @. variables.V = r0V * V_p + r1V * variables.V
+        @. variables.V_pos = r0V * V_pos_p + r1V * variables.V_pos
         @. variables.q = r0q * q_p + r1q * variables.q
     end
 
@@ -1128,7 +1133,8 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=0.75, relax_q=0.75, bellman_step=5)
+    # crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-5, relax_V=0.75, relax_q=0.75, bellman_step=5)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
     compute_moments!(variables, simul_panel, parameters; burnin=500)
@@ -1138,6 +1144,8 @@ function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCach
 
     # printout results
     data_spec = Any[
+        "Exclusion Years" 1.0/parameters.Ph "" "" ""
+        "Filing cost" parameters.κ "" "" ""
         "Liquidity Multiplier" parameters.λ "" "" ""
         "Discount Factor" parameters.β "Share in Debts" agg.share_in_debts "7.67 or 8.93"
         "Preference Shock" parameters.ζ "Share of Filers" agg.share_of_filers 0.99
@@ -1145,42 +1153,42 @@ function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCach
         "Bank Survival Rate" parameters.ψ "Leverage Ratio" agg.LR 4.53
         "Diverting Fraction" parameters.θ "Average Loan Rate" agg.avg_loan_rate 10.54
     ]
-    pretty_table(data_spec; column_labels=["Parameter", "Value", "Moment", "Model", "Data"], alignment=[:r, :r, :r, :r, :r], formatters=[fmt__round(4)])
+    pretty_table(data_spec; column_labels=["Parameter", "Value", "Moment", "Model", "Data"], alignment=[:r, :r, :r, :r, :r], formatters=[fmt__round(6)])
 
     data_spec = Any[
         "Capital" agg.K
         "Loans" agg.L
         "Deposits" agg.D
-        "Net Worth" agg.N 
+        "Net Worth" agg.N
         "Leverage Ratio (Demand)" agg.LR
         "Leverage Ratio (Supply)" parameters.LR_λ
         "Difference" diff_LR
     ]
-    pretty_table(data_spec; column_labels=["Moment", "Model"], alignment=[:r, :r], formatters=[fmt__round(4)])
+    pretty_table(data_spec; column_labels=["Moment", "Model"], alignment=[:r, :r], formatters=[fmt__round(6)])
 
     return crit_VP, agg.LR, parameters.LR_λ
 end
 
-function optimal_multiplier_function(;β::Float64, η::Float64, ψ::Float64, θ::Float64, ζ::Float64)
+function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η::Float64, ψ::Float64, θ::Float64, ζ::Float64)
     """
     solve for optimal liquidity multiplier λ
     """
 
-    static_parameters = initialize_static_parameters();
-    tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, β = β, η = η, ψ = ψ, θ = θ, ζ = ζ);
-    parameters = (; static_parameters..., tuned_parameters...);
-    variables = create_variables(parameters);
-    itp_cache = build_itp_cache(variables, parameters);
-    simul_itp_cache = build_simul_itp_cache(variables, parameters);
-    simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
+    static_parameters = initialize_static_parameters()
+    tuned_parameters = initialize_tuned_parameters(static_parameters; λ=0.0, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
+    parameters = (; static_parameters..., tuned_parameters...)
+    variables = create_variables(parameters)
+    itp_cache = build_itp_cache(variables, parameters)
+    simul_itp_cache = build_simul_itp_cache(variables, parameters)
+    simul_panel = initialize_panel(num_households=80_000, num_periods=2_000)
     crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
     if LR_D < LR_S
         return crit_VP, parameters, variables, simul_panel, 1
     end
 
     λ_max = 1.0 - sqrt(ψ)
-    tuned_parameters = initialize_tuned_parameters(static_parameters; λ = λ_max, β = β, η = η, ψ = ψ, θ = θ, ζ = ζ);
-    parameters = (; static_parameters..., tuned_parameters...);
+    tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_max, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
+    parameters = (; static_parameters..., tuned_parameters...)
     clean_variables!(variables, parameters)
     crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
     if (LR_D > LR_S) || (LR_D < 0.0)
@@ -1189,7 +1197,7 @@ function optimal_multiplier_function(;β::Float64, η::Float64, ψ::Float64, θ:
 
     search_iter = 1
     iter_max = 100
-    tol = 0.01
+    tol = 1E-4
     crit_LR = Inf
     λ_optimal = 0.0
     λ_lower = 0.0
@@ -1197,8 +1205,8 @@ function optimal_multiplier_function(;β::Float64, η::Float64, ψ::Float64, θ:
 
     while crit_LR > tol && search_iter < iter_max
         λ_optimal = (λ_lower + λ_upper) / 2
-        tuned_parameters = initialize_tuned_parameters(static_parameters; λ = λ_optimal, β = β, η = η, ψ = ψ, θ = θ, ζ = ζ);
-        parameters = (; static_parameters..., tuned_parameters...);
+        tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_optimal, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
+        parameters = (; static_parameters..., tuned_parameters...)
         clean_variables!(variables, parameters)
         crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
         if LR_D < LR_S

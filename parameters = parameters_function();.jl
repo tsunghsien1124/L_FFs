@@ -31,7 +31,13 @@ using Interpolations
 # simul_itp_cache = build_simul_itp_cache(variables, parameters);
 # simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
 # solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
-crit_VP, parameters, variables, simul_panel, flag = optimal_multiplier_function(β = 0.9408, η = 0.1240, ψ = 0.9010, θ = 1.0/3.50, ζ = 0.0084);
+crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9395, η=0.1200, ψ=0.9010, θ=1.0 / 3.50, ζ=0.00870);
+crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9408, η=0.1240, ψ=0.9010, θ=1.0 / 3.50, ζ=0.00840);
+
+# variables = create_variables(parameters_new);
+# itp_cache = build_itp_cache(variables, parameters_new);
+# crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters_new; tol=1E-6, relax_V=1.0, relax_q=1.0, bellman_step=1)
+
 
 # solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);
 # update_simul_itp_cache!(simul_itp_cache, variables, parameters);
@@ -67,6 +73,9 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end-1], seri
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end])
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end], seriestype=:scatter)
+
+plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end])
+plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end] .* parameters_old.a_grid_neg)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1] .* parameters.a_grid_neg)
 plot!(variables.rbl_a[:, 1], variables.rbl_qa[:, 1], seriestype=:scatter)

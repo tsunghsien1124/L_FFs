@@ -1,11 +1,11 @@
 # housekeeping -----------------------------------------------------------------
 rm(list=ls())
-username <- "user"
-setwd(paste0("C:/Users/", username, "/Desktop/Chapter 1"))
+username <- "User"
+setwd(paste0("C:/Users/", username, "/Documents/Consumer_credit_FFs/FFs - data moments"))
 
 # load SCF data sets -----------------------------------------------------------
 years.to.load <- 2004
-load(paste0("raw data/scf", years.to.load, ".rda"))
+load(paste0("scf", years.to.load, ".rda"))
 df.imp <- as.data.frame(rbind(imp1, imp2, imp3, imp4, imp5))
 scf.data <- df.imp
 rm(imp1, imp2, imp3, imp4, imp5, rw, df.imp)

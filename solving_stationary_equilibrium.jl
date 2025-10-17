@@ -65,7 +65,7 @@ function initialize_static_parameters(;
     e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
-    a_thres::Float64=0.5,       # asset gridpoint threshold
+    a_thres::Float64=1.0,       # asset gridpoint threshold
     a_size_neg_1::Int64=51,     # count of (a'≤-1) asset grid points for VFI
     a_size_neg_2::Int64=151,    # count of (-1≤a'≤0) asset grid points for VFI
     a_size_pos_1::Int64=151,    # count of (1≥a'≥0) asset grid points for VFI
@@ -596,7 +596,8 @@ function update_V_d!(variables::MutableVariables, parameters::NamedTuple)
 
     @inbounds @batch for idx in loop_e3_e2_e1
         e3_i, e2_i, e1_i = idx.I
-        EV_pos_zero = variables.EV_pos[1, e2_i, e1_i]
+        # EV_pos_zero = variables.EV_pos[1, e2_i, e1_i]
+        EV_pos_zero = variables.EV_Ph[1, e2_i, e1_i]
         u_d_temp = u_d[e3_i, e2_i, e1_i]
         variables.V_d[e3_i, e2_i, e1_i] = u_d_temp + EV_pos_zero
     end
@@ -700,7 +701,7 @@ function update_value_and_policy_functions!(
             W_ = W[e3_i, e2_i, e1_i]
             V_d_ = variables.V_d[e3_i, e2_i, e1_i]
 
-            lb_nd = max(2.5 * rbl_a_, a_min)
+            lb_nd = max(1.5 * rbl_a_, a_min)
             lb_pos = 0.0
 
             for a_i = 1:a_size
@@ -720,7 +721,7 @@ function update_value_and_policy_functions!(
                     V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
-                    if a ≥ 0.0 #-(κ + η*W_)
+                    if a ≥ -(κ + η*W_) # 0.0
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_nd_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = 0.0
                     else
@@ -849,7 +850,7 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         @. variables.q = r0q * q_p + r1q * variables.q
     end
 
-    # println("$V_crit, $V_pos_crit, $q_crit")
+    println("$V_crit, $V_pos_crit, $q_crit")
 
     return crit
 end
@@ -1090,6 +1091,7 @@ end
     D_sum = 0.0
     debt_count = 0
     debt_earnings_sum = 0.0
+    earnings_sum = 0.0
     default_sum = 0.0
     loan_rate_sum = 0.0
     loan_count = 0
@@ -1110,6 +1112,7 @@ end
             loan_count += 1
         end
 
+        earnings_sum += earnings_state_[i]
         default_sum += default_choice_[i]
     end
 
@@ -1125,7 +1128,8 @@ end
     agg.ω = (agg.N - ψ * agg.profit) / agg.A
     agg.share_of_filers = (default_sum / n) * 100.0
     agg.share_in_debts = (debt_count / n) * 100.0
-    agg.debt_to_earning_ratio = L_sum / debt_earnings_sum * 100.0
+    # agg.debt_to_earning_ratio = L_sum / debt_earnings_sum * 100.0 # conditional
+    agg.debt_to_earning_ratio = L_sum / earnings_sum * 100.0 # unconditional 
     agg.avg_loan_rate = (loan_rate_sum / loan_count) * 100.0
 
     return nothing
@@ -1133,8 +1137,8 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    # crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-5, relax_V=0.75, relax_q=0.75, bellman_step=5)
-    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-5, relax_V=0.75, relax_q=0.75, bellman_step=1)
+    # crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
     compute_moments!(variables, simul_panel, parameters; burnin=500)

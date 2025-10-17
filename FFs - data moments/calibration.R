@@ -1,7 +1,13 @@
 # housekeeping -----------------------------------------------------------------
 rm(list=ls())
-username <- "User"
-setwd(paste0("C:/Users/", username, "/Documents/Consumer_credit_FFs/FFs - data moments"))
+
+# home
+# username <- "User" 
+# setwd(paste0("C:/Users/", username, "/Documents/Consumer_credit_FFs/FFs - data moments"))
+
+# Sinica
+username <- "user"
+setwd(paste0("C:/Users/", username, "/Documents/GitHub/L_FFs/FFs - data moments"))
 
 # load SCF data sets -----------------------------------------------------------
 years.to.load <- 2004
@@ -88,16 +94,17 @@ earnings.weighted.nw <- sum(scf.data$networth_neg * scf.data$wageinc * scf.data$
 D2E.ratio.nw <- nw.neg.weighted / earnings.weighted.nw * 100
 # D2E.ratio.nw <- nw.neg.weighted / earnings.weighted * 100
 
-# unconditional D2E
-un.D2E.ratio <- CCD.weighted / sum(scf.data$wageinc * scf.data$wgt) * 100
-un.D2E.ratio.liquid <- nw_liquid.weighted / sum(scf.data$wageinc * scf.data$wgt) * 100
-un.D2E.ratio.nw <- nw.neg.weighted / sum(scf.data$wageinc * scf.data$wgt) * 100
+# [unconditional] D2E
+un.earnings.weighted <- sum(scf.data$wageinc * scf.data$wgt)
+un.D2E.ratio <- CCD.weighted / un.earnings.weighted * 100
+un.D2E.ratio.liquid <- nw_liquid.weighted / un.earnings.weighted * 100
+un.D2E.ratio.nw <- nw.neg.weighted / un.earnings.weighted * 100
 
 # credit card interest rate (CCIR) ---------------------------------------------
 scf.data$x7132pos <- as.numeric(scf.data$x7132 > 0)
-AvgCCrate <- sum(scf.data$x7132 * scf.data$x7132pos * scf.data$wgt) / sum(scf.data$x7132pos * scf.data$wgt) / 100
-AvgCCrate_nw_neg <- sum(scf.data$x7132 * scf.data$x7132pos * scf.data$networth_neg * scf.data$wgt) / sum(scf.data$x7132pos * scf.data$networth_neg * scf.data$wgt) / 100
-AvgCCrate_nw_liquid_neg <- sum(scf.data$x7132 * scf.data$x7132pos * scf.data$nw_liquid_neg * scf.data$wgt) / sum(scf.data$x7132pos * scf.data$nw_liquid_neg * scf.data$wgt) / 100
+AvgCCrate <- sum(scf.data$x7132 * scf.data$x7132pos * scf.data$wgt) / sum(scf.data$x7132pos * scf.data$wgt) / 100 - 2.68
+AvgCCrate_nw_neg <- sum(scf.data$x7132 * scf.data$x7132pos * scf.data$networth_neg * scf.data$wgt) / sum(scf.data$x7132pos * scf.data$networth_neg * scf.data$wgt) / 100 - 2.68
+AvgCCrate_nw_liquid_neg <- sum(scf.data$x7132 * scf.data$x7132pos * scf.data$nw_liquid_neg * scf.data$wgt) / sum(scf.data$x7132pos * scf.data$nw_liquid_neg * scf.data$wgt) / 100 - 2.68
 
 # G.19
 (12.42 + 12.93 + 13.60 + 13.92)/4 - 2.68

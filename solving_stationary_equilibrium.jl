@@ -64,12 +64,13 @@ function initialize_static_parameters(;
     e2_σ::Float64=0.129,        # std. dev. of AR(1) innovation
     e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
-    a_max::Float64=800.0,       # max asset on positive grid
-    a_thres::Float64=0.5,       # asset gridpoint threshold
-    a_size_neg_1::Int64=51,     # count of (a'≤-1) asset grid points for VFI
-    a_size_neg_2::Int64=151,    # count of (-1≤a'≤0) asset grid points for VFI
-    a_size_pos_1::Int64=151,    # count of (1≥a'≥0) asset grid points for VFI
-    a_size_pos_2::Int64=51,     # count of (a'≥1) asset grid points for VFI
+    a_max::Float64=150.0,       # max asset on positive grid
+    a_thres_neg::Float64=0.5,   # negative asset gridpoint threshold
+    a_thres_pos::Float64=1.0,   # positive asset gridpoint threshold
+    a_size_neg_1::Int64=51,     # count of (a'≤-a_thres_neg) asset grid points for VFI
+    a_size_neg_2::Int64=151,    # count of (-a_thres_neg≤a'≤0) asset grid points for VFI
+    a_size_pos_1::Int64=151,    # count of (a_thres_pos≥a'≥0) asset grid points for VFI
+    a_size_pos_2::Int64=151,    # count of (a'≥a_thres_pos) asset grid points for VFI
     a_degree_neg::Int64=3,      # curvature exponent for negative grid
     a_degree_pos::Int64=5       # curvature exponent for positive grid
 )
@@ -110,13 +111,13 @@ function initialize_static_parameters(;
 
     a_min = -1.0 * exp_e1_grid[end] * exp_e2_grid[end] * exp_e3_grid[end]
 
-    a_grid_neg_1 = ((range(start=a_size_neg_1 - 1, stop=0.0, length=a_size_neg_1) ./ (a_size_neg_1 - 1)) .^ a_degree_neg) .* (a_min + a_thres) .- a_thres
-    a_grid_neg_2 = collect(range(start=-a_thres, stop=0.0, length=a_size_neg_2))
+    a_grid_neg_1 = ((range(start=a_size_neg_1 - 1, stop=0.0, length=a_size_neg_1) ./ (a_size_neg_1 - 1)) .^ a_degree_neg) .* (a_min + a_thres_neg) .- a_thres_neg
+    a_grid_neg_2 = collect(range(start=-a_thres_neg, stop=0.0, length=a_size_neg_2))
     a_grid_neg = vcat(a_grid_neg_1[1:(end-1)], a_grid_neg_2[1:(end-1)])
     a_size_neg = length(a_grid_neg)
 
-    a_grid_pos_1 = collect(range(start=0.0, stop=a_thres, length=a_size_pos_1))
-    a_grid_pos_2 = ((range(start=0.0, stop=a_size_pos_2 - 1, length=a_size_pos_2) ./ (a_size_pos_2 - 1)) .^ a_degree_pos) .* (a_max - a_thres) .+ a_thres
+    a_grid_pos_1 = collect(range(start=0.0, stop=a_thres_pos, length=a_size_pos_1))
+    a_grid_pos_2 = ((range(start=0.0, stop=a_size_pos_2 - 1, length=a_size_pos_2) ./ (a_size_pos_2 - 1)) .^ a_degree_pos) .* (a_max - a_thres_pos) .+ a_thres_pos
     a_grid_pos = vcat(a_grid_pos_1[1:(end-1)], a_grid_pos_2)
     a_size_pos = length(a_grid_pos)
 
@@ -847,7 +848,7 @@ function solve_DP_hybrid(
     abs_tol = max(tau*width, 0.25*Δa_loc)
     abs_tol = min(abs_tol, 0.25*width)
 
-    res   = Optim.optimize(F, Lb, Ub, Optim.Brent();
+    res   = Optim.optimize(F, Lb, Ub, Optim.GoldenSection(); # Optim.Brent(); 
                            rel_tol=0.0, abs_tol=abs_tol, iterations=iters)
     a_cont = clamp(Optim.minimizer(res), Lb, Ub)
     v_cont = -Optim.minimum(res)
@@ -919,14 +920,16 @@ function update_value_and_policy_functions!(
             W_ = W[e3_i, e2_i, e1_i]
             V_d_ = variables.V_d[e3_i, e2_i, e1_i]
 
-            lb_nd = max(1.5 * rbl_a_, a_min)
+            # lb_nd = max(1.5 * rbl_a_, a_min)
+            lb_nd = a_min
             lb_pos = 0.0
 
             for a_i = 1:a_size
 
                 a = a_grid[a_i]
                 CoH = W_ + a
-                ub_q = min(CoH / q_bar, a_max)
+                # ub_q = min(CoH / q_bar, a_max)
+                ub_q = a_max
                 budget_gap = CoH - rbl_qa_
                 bound_gap = ub_q - lb_nd
 
@@ -937,7 +940,7 @@ function update_value_and_policy_functions!(
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = 0.0
                 else
                     # V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
-                    V_nd_, a_star_nd, _ = solve_DP_hybrid(DP_Problem_nd, a, W_; lb = lb_nd, ub = ub_q, a_grid = parameters.a_grid, tau = 5e-8, iters = 200)
+                    V_nd_, a_star_nd, _ = solve_DP_hybrid(DP_Problem_nd, a, W_; lb = lb_nd, ub = ub_q, a_grid = parameters.a_grid, tau = 1e-9, iters = 200)
 
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
@@ -1008,7 +1011,7 @@ end
 # safe_abs(x) = ifelse(isnan(x), 0.0, abs(x))
 
 function solve_value_and_policy_functions!(variables::MutableVariables, itp_cache::ItpCache, parameters::NamedTuple;
-    tol::Float64=1E-6, iter_max::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1)
+    tol::Float64=1E-5, iter_max::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1)
 
     @assert 0.0 < relax_V ≤ 1.0 "relaxation must be in (0,1]; got $relax_V"
     @assert 0.0 < relax_q ≤ 1.0 "relaxation must be in (0,1]; got $relax_q"
@@ -1062,14 +1065,17 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
 
         ProgressMeter.update!(prog, crit)
         search_iter += 1
-
+        
+        # println("")
         # println("V_crit = $V_crit at V_crit_i = $V_crit_i")
         # println("V_pos_crit = $V_pos_crit at V_pos_crit_i = $V_pos_crit_i")
         # println("q_crit = $q_crit at q_crit_i = $q_crit_i")
 
-        @. variables.V = r0V * V_p + r1V * variables.V
-        @. variables.V_pos = r0V * V_pos_p + r1V * variables.V_pos
-        @. variables.q = r0q * q_p + r1q * variables.q
+        # if crit < 1E-4
+        #     @. variables.V = r0V * V_p + r1V * variables.V
+        #     @. variables.V_pos = r0V * V_pos_p + r1V * variables.V_pos
+        #     @. variables.q = r0q * q_p + r1q * variables.q
+        # end
     end
 
     # println("V_crit = $V_crit, V_pos_crit = $V_pos_crit, q_crit = $q_crit")
@@ -1359,7 +1365,7 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-5, relax_V=1.00, relax_q=1.00, bellman_step=1)
     # crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)

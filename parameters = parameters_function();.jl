@@ -24,15 +24,15 @@ using Interpolations
 # using LoopVectorization
 
 # static_parameters = initialize_static_parameters();
-# tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.00, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9408, η=0.2200, ψ=0.9010, θ=1.0 / 3.00, ζ=0.01400); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+# tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.029662, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9423, η=0.2400, ψ=0.9010, θ=1.0 / 3.00, ζ=0.01600); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
 # parameters = (; static_parameters..., tuned_parameters...);
 # variables = create_variables(parameters);
 # itp_cache = build_itp_cache(variables, parameters);
 # simul_itp_cache = build_simul_itp_cache(variables, parameters);
 # simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
 # solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
-crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9420, η=0.2500, ψ=0.9010, θ=1.0 / 3.00, ζ=0.01200);
-crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9420, η=0.2500, ψ=0.9010, θ=1.0 / 3.00, ζ=0.01200);
+crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9470, η=0.1200, ψ=0.920, θ=1.0 / 3.00, ζ=0.01300);
+# crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9420, η=0.2500, ψ=0.9010, θ=1.0 / 3.00, ζ=0.01200);
 
 # variables = create_variables(parameters_new);
 # itp_cache = build_itp_cache(variables, parameters_new);
@@ -44,7 +44,7 @@ crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_
 # simulate_household_panel!(simul_panel, parameters, simul_itp_cache);
 # compute_moments!(variables, parameters, simul_panel; burnin=500);
 
-a_range = range(-2, 40, length=101)
+a_range = range(-3, 20, length=101)
 # histogram(reshape(simul_panel.asset_state[1001:end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
 histogram(reshape(simul_panel.asset_state[end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
 
@@ -62,7 +62,7 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i], se
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i] .* parameters.a_grid_neg, seriestype=:scatter)
 plot!([variables.rbl_a[e2_i, e1_i]], [variables.rbl_qa[e2_i, e1_i]], seriestype=:scatter)
 
-plot(parameters.a_grid_neg[25:end], variables.q[25:parameters.a_size_neg, :, 1])
+plot(parameters.a_grid_neg[50:end], variables.q[50:parameters.a_size_neg, :, 1])
 plot(parameters.a_grid_neg[25:end], variables.q[25:parameters.a_size_neg, :, 1], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
@@ -80,7 +80,7 @@ plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, 
 plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end])
 plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end] .* parameters_old.a_grid_neg)
 
-plot(parameters_old.a_grid_neg[25:end], variables_old.q[25:parameters_old.a_size_neg, :, 1])
+plot(parameters_old.a_grid_neg[25:end], variables_old.q[25:parameters_old.a_size_neg, :, 2])
 plot!(parameters_new.a_grid_neg[25:end], variables_new.q[25:parameters_new.a_size_neg, :, 1], ls=:dash)
 
 plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end])
@@ -96,8 +96,8 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end] .* para
 plot!(variables.rbl_a[:, end], variables.rbl_qa[:, end], seriestype=:scatter)
 
 
-plot(parameters.a_grid[parameters.a_ind_zero:parameters.a_ind_zero+170], variables.V[parameters.a_ind_zero:parameters.a_ind_zero+170,2,2,:])
-plot(parameters.a_grid[parameters.a_ind_zero:parameters.a_ind_zero+170], variables.V[parameters.a_ind_zero:parameters.a_ind_zero+170,2,2,:], seriestype=:scatter)
+plot(parameters.a_grid[parameters.a_ind_zero:parameters.a_ind_zero+185], variables.V[parameters.a_ind_zero:parameters.a_ind_zero+185,2,1,:])
+plot(parameters.a_grid[parameters.a_ind_zero:parameters.a_ind_zero+180], variables.V[parameters.a_ind_zero:parameters.a_ind_zero+180,2,1,:], seriestype=:scatter)
 
 #####
 e1_i = parameters.e1_size

@@ -65,13 +65,13 @@ function initialize_static_parameters(;
     e3_size::Int64=3,           # number of transitory shock states
     e3_σ::Float64=0.351,        # std. dev. of transitory i.i.d. shock
     a_max::Float64=800.0,       # max asset on positive grid
-    a_thres::Float64=1.0,       # asset gridpoint threshold
+    a_thres::Float64=0.5,       # asset gridpoint threshold
     a_size_neg_1::Int64=51,     # count of (a'≤-1) asset grid points for VFI
     a_size_neg_2::Int64=151,    # count of (-1≤a'≤0) asset grid points for VFI
     a_size_pos_1::Int64=151,    # count of (1≥a'≥0) asset grid points for VFI
     a_size_pos_2::Int64=51,     # count of (a'≥1) asset grid points for VFI
     a_degree_neg::Int64=3,      # curvature exponent for negative grid
-    a_degree_pos::Int64=3       # curvature exponent for positive grid
+    a_degree_pos::Int64=5       # curvature exponent for positive grid
 )
 
     e1_grid, e1_G = adda_cooper(e1_size, 0.0, e1_σ)
@@ -293,7 +293,7 @@ end
     if c > 0.0
         return γ == 1.0 ? bellman_factor * log(c) : bellman_factor * 1.0 / ((1.0 - γ) * c^(γ - 1.0))
     else
-        return -1E+12 #-Inf
+        return -Inf # -1E+12
     end
 end
 
@@ -377,75 +377,20 @@ mutable struct MutableVariables{T,
     policy_a_pos::A4
 end
 
-@inline @views @inbounds function repayment_mat(thres_e2::Float64, a_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple)
+# @inline @views @inbounds function repayment_mat(thres_e2::Float64, a_p_i::Int64, e2_i::Int64, e1_i::Int64, parameters::NamedTuple)
 
-    @unpack e2_μ_grid, inv_e2_σ, e2_σ, a_grid_neg, Γ_default = parameters
+#     @unpack e2_μ_grid, inv_e2_σ, e2_σ, a_grid_neg, Γ_default = parameters
 
-    e2_μ = e2_μ_grid[e2_i]
-    a_p = a_grid_neg[a_p_i]
-    z_e2 = (thres_e2 - e2_μ) * inv_e2_σ
-    repay_amount = (-a_p) * normcdf(-z_e2)
-    default_amount = Γ_default[end, e2_i, e1_i] * normcdf(z_e2 - e2_σ)
-    total_amount = repay_amount + default_amount
-    return clamp(total_amount, 0.0, -a_p)
-end
+#     e2_μ = e2_μ_grid[e2_i]
+#     a_p = a_grid_neg[a_p_i]
+#     z_e2 = (thres_e2 - e2_μ) * inv_e2_σ
+#     repay_amount = (-a_p) * normcdf(-z_e2)
+#     default_amount = Γ_default[end, e2_i, e1_i] * normcdf(z_e2 - e2_σ)
+#     total_amount = repay_amount + default_amount
+#     return clamp(total_amount, 0.0, -a_p)
+# end
 
-@inline log_(thres_e::Float64) = thres_e > 0.0 ? log(thres_e) : -Inf
-
-@views @inbounds function create_variables(parameters::NamedTuple; T::Type{<:Real}=Float64)
-
-    @unpack a_size, a_size_neg, a_size_pos, a_grid_neg = parameters
-    @unpack e1_size, e1_grid, e2_size, e3_size = parameters
-    @unpack q_bar, R_bar, κ, η, w_λ, loop_a_neg_e2_e1, loop_e2_e1 = parameters
-
-    aggregate_variables = MutableAggregateVariables{T}(
-        zero(T), zero(T), zero(T), zero(T), zero(T),
-        zero(T), zero(T), zero(T), zero(T), zero(T),
-        zero(T), zero(T), zero(T))
-
-    R = Array{T}(undef, a_size_neg, e2_size, e1_size)
-    q = fill(T(q_bar), a_size, e2_size, e1_size)
-    # @batch for idx in loop_a_neg_e2_e1
-    #     a_p_i, e2_i, e1_i = idx.I
-    #     e1 = e1_grid[e1_i]
-    #     a_neg = a_grid_neg[a_p_i]
-    #     thres_e2_ = log_((-a_neg - κ) / (η * w_λ)) - e1
-    #     R_temp = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
-    #     R[a_p_i, e2_i, e1_i] = R_temp
-    #     q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
-    # end
-
-    rbl_a = Array{T}(undef, e2_size, e1_size)
-    rbl_qa = Array{T}(undef, e2_size, e1_size)
-    @batch for idx in loop_e2_e1
-        e2_i, e1_i = idx.I
-        q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
-        rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
-        rbl_a[e2_i, e1_i] = rbl_a_
-        rbl_qa[e2_i, e1_i] = rbl_qa_
-    end
-
-    V = zeros(T, a_size, e3_size, e2_size, e1_size)
-    V_d = Array{T}(undef, e3_size, e2_size, e1_size)
-    V_nd = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
-    V_pos = zeros(T, a_size_pos, e3_size, e2_size, e1_size)
-
-    EV = zeros(T, a_size, e2_size, e1_size)
-    EV_pos = zeros(T, a_size_pos, e2_size, e1_size)
-    EV_Ph = zeros(T, a_size_pos, e2_size, e1_size)
-
-    policy_a = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
-    policy_d = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
-    policy_a_pos = Array{T}(undef, a_size_pos, e3_size, e2_size, e1_size)
-
-    return MutableVariables{T,
-        typeof(rbl_a),typeof(R),typeof(V)}(
-        aggregate_variables,
-        R, q, rbl_a, rbl_qa,
-        V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
-        policy_a, policy_d, policy_a_pos,
-    )
-end
+# @inline log_(thres_e::Float64) = thres_e > 0.0 ? log(thres_e) : -Inf
 
 @views @inbounds function create_variables(parameters::NamedTuple; T::Type{<:Real}=Float64)
 
@@ -501,6 +446,61 @@ end
         policy_a, policy_d, policy_a_pos,
     )
 end
+
+# @views @inbounds function create_variables(parameters::NamedTuple; T::Type{<:Real}=Float64)
+
+#     @unpack a_size, a_size_neg, a_size_pos, a_grid_neg = parameters
+#     @unpack e1_size, e1_grid, e2_size, e3_size = parameters
+#     @unpack q_bar, R_bar, κ, η, w_λ, loop_a_neg_e2_e1, loop_e2_e1 = parameters
+
+#     aggregate_variables = MutableAggregateVariables{T}(
+#         zero(T), zero(T), zero(T), zero(T), zero(T),
+#         zero(T), zero(T), zero(T), zero(T), zero(T),
+#         zero(T), zero(T), zero(T))
+
+#     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
+#     q = fill(T(q_bar), a_size, e2_size, e1_size)
+#     # @batch for idx in loop_a_neg_e2_e1
+#     #     a_p_i, e2_i, e1_i = idx.I
+#     #     e1 = e1_grid[e1_i]
+#     #     a_neg = a_grid_neg[a_p_i]
+#     #     thres_e2_ = log_((-a_neg - κ) / (η * w_λ)) - e1
+#     #     R_temp = repayment_mat(thres_e2_, a_p_i, e2_i, e1_i, parameters)
+#     #     R[a_p_i, e2_i, e1_i] = R_temp
+#     #     q[a_p_i, e2_i, e1_i] = R_bar[a_p_i] * R_temp
+#     # end
+
+#     rbl_a = Array{T}(undef, e2_size, e1_size)
+#     rbl_qa = Array{T}(undef, e2_size, e1_size)
+#     @batch for idx in loop_e2_e1
+#         e2_i, e1_i = idx.I
+#         q_grid_neg = q[1:a_size_neg, e2_i, e1_i]
+#         rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
+#         rbl_a[e2_i, e1_i] = rbl_a_
+#         rbl_qa[e2_i, e1_i] = rbl_qa_
+#     end
+
+#     V = zeros(T, a_size, e3_size, e2_size, e1_size)
+#     V_d = Array{T}(undef, e3_size, e2_size, e1_size)
+#     V_nd = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
+#     V_pos = zeros(T, a_size_pos, e3_size, e2_size, e1_size)
+
+#     EV = zeros(T, a_size, e2_size, e1_size)
+#     EV_pos = zeros(T, a_size_pos, e2_size, e1_size)
+#     EV_Ph = zeros(T, a_size_pos, e2_size, e1_size)
+
+#     policy_a = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
+#     policy_d = Array{T}(undef, a_size, e3_size, e2_size, e1_size)
+#     policy_a_pos = Array{T}(undef, a_size_pos, e3_size, e2_size, e1_size)
+
+#     return MutableVariables{T,
+#         typeof(rbl_a),typeof(R),typeof(V)}(
+#         aggregate_variables,
+#         R, q, rbl_a, rbl_qa,
+#         V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
+#         policy_a, policy_d, policy_a_pos,
+#     )
+# end
 
 @views @inbounds function clean_variables!(variables::MutableVariables, parameters::NamedTuple)
 
@@ -648,6 +648,224 @@ end
     end
 end
 
+# @inline function Δa_at(a_grid::AbstractVector{<:Real}, i::Int)
+#     N = length(a_grid)
+#     if i == 1
+#         return a_grid[2] - a_grid[1]
+#     elseif i == N
+#         return a_grid[N] - a_grid[N-1]
+#     else
+#         return 0.5*((a_grid[i]-a_grid[i-1]) + (a_grid[i+1]-a_grid[i]))
+#     end
+# end
+
+# @inline clamp_to(x, lo, hi) = x ≤ lo ? lo : (x ≥ hi ? hi : x)
+
+# """
+# Hybrid 1-D ND solver robust to piecewise-linear/kinked objectives.
+
+# - obj_DP(DP, a′, a, W_) returns **-V_nd** (a minimization objective).
+# - a_prev, v_prev are optional (for hysteresis).
+# """
+# function solve_DP_hybrid(
+#     DP::DP_Problem, a::Float64, W_::Float64;
+#     lb::Float64, ub::Float64,
+#     a_grid::AbstractVector{<:Real},
+#     tau::Float64 = 1e-7,                   # abs-tol ≈ tau * bracket width
+#     iters::Int = 200,
+# )
+#     # degenerate interval
+#     if !(ub > lb)
+#         a_star = lb
+#         v_nd   = -obj_DP(DP, a_star, a, W_)
+#         return v_nd, a_star, 1
+#     end
+
+#     # safe objective (treat non-finite as +Inf for minimization)
+#     F = (ap::Float64) -> obj_DP(DP, ap, a, W_)
+#     # F = (ap::Float64) -> begin
+#     #     v = F_raw(ap)
+#     #     isfinite(v) ? v : (v > 0 ? v : 1e300)  # avoid NaNs/-Inf
+#     # end
+
+#     # --- 1) coarse grid search in [lb, ub] ---
+#     Lidx = searchsortedfirst(a_grid, lb)
+#     Ridx = searchsortedlast(a_grid,  ub)
+#     Lidx > Ridx && ((Lidx, Ridx) = (Ridx, Lidx))
+
+#     nodes = a_grid[Lidx:Ridx]
+#     vals  = similar(nodes, Float64)
+#     @inbounds for k in eachindex(nodes)
+#         vals[k] = -F(nodes[k])    # value V at node
+#     end
+
+#     # include exact bounds if off-grid (use ≈ to avoid dupes)
+#     if !(isapprox(nodes[1], lb; rtol=0.0, atol=eps())) 
+#         nodes = [lb; nodes];  vals = [-F(lb); vals]
+#         Lidx = 1
+#     end
+#     if !(isapprox(nodes[end], ub; rtol=0.0, atol=eps()))
+#         nodes = [nodes; ub];  vals = [vals; -F(ub)]
+#     end
+
+#     j      = argmax(vals)
+#     a_node = nodes[j];  v_node = vals[j]
+
+#     # --- 2) bracket by the two neighbor nodes around j ---
+#     left  = (j == 1)              ? nodes[1]   : nodes[j-1]
+#     right = (j == length(nodes))  ? nodes[end] : nodes[j+1]
+#     Lb, Ub = left, right
+#     if Ub ≤ Lb
+#         return v_node, a_node, 2
+#     end
+#     width = Ub - Lb
+
+#     # --- 3) Brent with scale-aware abs tol (floored by local grid) ---
+#     #   local spacing near the winning node:
+#     i_near  = searchsortedfirst(a_grid, a_node)
+#     i_near  = clamp(i_near, 1, length(a_grid))
+#     Δa_loc  = Δa_at(a_grid, i_near)
+
+#     abs_tol = max(tau*width, 0.25*Δa_loc)      # don’t chase sub-grid wiggles
+#     abs_tol = min(abs_tol, 0.25*width)         # keep tol ≤ 1/4 bracket
+
+#     res = Optim.optimize(F, Lb, Ub, Optim.Brent(); # Optim.GoldenSection(); 
+#                          rel_tol=0.0, abs_tol=abs_tol, iterations=iters)
+#     a_cont = clamp(Optim.minimizer(res), Lb, Ub)
+#     v_cont = -Optim.minimum(res)
+
+#     # --- 4) local polish around a* (tests adjacent segment explicitly) ---
+#     δ   = max(abs_tol, 0.5*Δa_loc)             # probe radius
+#     aL  = clamp_to(a_cont - δ, lb, ub)
+#     aR  = clamp_to(a_cont + δ, lb, ub)
+#     vL  = -F(aL)
+#     vR  = -F(aR)
+
+#     # best among {Brent, left probe, right probe, grid winner}
+#     a_star, v_star = a_cont, v_cont
+#     if vL > v_star + 1e-12;  a_star, v_star = aL, vL; end
+#     if vR > v_star + 1e-12;  a_star, v_star = aR, vR; end
+#     if v_node > v_star + 1e-12; a_star, v_star = a_node, v_node; end
+
+#     return v_star, a_star, 2
+# end
+
+"Type-stable objective functor: returns -V_nd"
+struct Obj{DPType}
+    dp::DPType
+    a::Float64
+    W::Float64
+end
+@inline (o::Obj)(ap::Float64) = obj_DP(o.dp, ap, o.a, o.W)  # uses your obj_DP
+
+@inline function Δa_at(a_grid::Vector{Float64}, i::Int)
+    N = length(a_grid)
+    i == 1  && return a_grid[2] - a_grid[1]
+    i == N  && return a_grid[N] - a_grid[N-1]
+    return 0.5*((a_grid[i]-a_grid[i-1]) + (a_grid[i+1]-a_grid[i]))
+end
+
+"Allocation-free full scan over [lb,ub] + neighbor bracket."
+@inline function scan_and_bracket!(
+    DP::DP_Problem, a::Float64, W_::Float64,
+    lb::Float64, ub::Float64,
+    a_grid::Vector{Float64}    # concrete eltype → better specialization
+)
+    ag = a_grid
+    Lidx = searchsortedfirst(ag, lb)   # first i s.t. ag[i] ≥ lb
+    Ridx = searchsortedlast(ag,  ub)   # last  i s.t. ag[i] ≤ ub
+    if Lidx > Ridx
+        Lidx, Ridx = Ridx, Lidx
+    end
+
+    F = Obj(DP, a, W_)                 # type-stable callable
+
+    # Best grid node in [Lidx:Ridx] (no allocations, branch-light)
+    best_idx = Lidx
+    best_val = -Inf
+    @inbounds for i in Lidx:Ridx
+        v = -F(ag[i])                  # v = V_nd at node
+        if v > best_val
+            best_val = v
+            best_idx = i
+        end
+    end
+    a_node = ag[best_idx]
+    v_node = best_val
+
+    # Also check exact lb, ub once if truly off-grid
+    best_is_lb = false
+    best_is_ub = false
+    if Lidx > 1 && lb < ag[Lidx]
+        v_lb = -F(lb)
+        if v_lb > v_node
+            v_node = v_lb; a_node = lb; best_is_lb = true
+        end
+    end
+    if Ridx < length(ag) && ub > ag[Ridx]
+        v_ub = -F(ub)
+        if v_ub > v_node
+            v_node = v_ub; a_node = ub; best_is_lb = false; best_is_ub = true
+        end
+    end
+
+    # Neighbor bracket around winner (covers the kink)
+    if best_is_lb
+        Lb, Ub = lb, ag[Lidx]                     # [lb, next node]
+    elseif best_is_ub
+        Lb, Ub = ag[Ridx], ub                     # [prev node, ub]
+    else
+        Lb = max(lb, ag[max(best_idx-1, Lidx)])   # left neighbor
+        Ub = min(ub, ag[min(best_idx+1, Ridx)])   # right neighbor
+    end
+    return a_node, v_node, Lb, Ub
+end
+
+function solve_DP_hybrid(
+    DP::DP_Problem, a::Float64, W_::Float64;
+    lb::Float64, ub::Float64,
+    a_grid::Vector{Float64},             # concrete for speed
+    tau::Float64 = 1e-7, iters::Int = 200
+)
+    if !(ub > lb)
+        a_star = lb
+        v_nd   = -obj_DP(DP, a_star, a, W_)
+        return v_nd, a_star, 1
+    end
+
+    # === allocation-free scan + bracket ===
+    a_node, v_node, Lb, Ub = scan_and_bracket!(DP, a, W_, lb, ub, a_grid)
+    if !(Ub > Lb)
+        return v_node, a_node, 2
+    end
+    width   = Ub - Lb
+    near_ix = clamp(searchsortedlast(a_grid, a_node), 1, length(a_grid))
+    Δa_loc  = Δa_at(a_grid, near_ix)
+
+    # === Brent with tolerance floor ===
+    F = Obj(DP, a, W_)                       # minimize F(ap) == -V_nd
+    abs_tol = max(tau*width, 0.25*Δa_loc)
+    abs_tol = min(abs_tol, 0.25*width)
+
+    res   = Optim.optimize(F, Lb, Ub, Optim.Brent();
+                           rel_tol=0.0, abs_tol=abs_tol, iterations=iters)
+    a_cont = clamp(Optim.minimizer(res), Lb, Ub)
+    v_cont = -Optim.minimum(res)
+
+    # === 2-point local polish (cheap, crosses the kink) ===
+    δ  = max(abs_tol, 0.5*Δa_loc)
+    aL = clamp(a_cont - δ, lb, ub)
+    aR = clamp(a_cont + δ, lb, ub)
+    vL = -F(aL); vR = -F(aR)
+
+    a_star, v_star = a_cont, v_cont
+    if vL > v_star + 1e-12;  a_star, v_star = aL, vL; end
+    if vR > v_star + 1e-12;  a_star, v_star = aR, vR; end
+    if v_node > v_star + 1e-12; a_star, v_star = a_node, v_node; end
+
+    return v_star, a_star, 2
+end
+
 struct QaInterpolant{Itp}
     q_itp::Itp
 end
@@ -713,12 +931,14 @@ function update_value_and_policy_functions!(
                 bound_gap = ub_q - lb_nd
 
                 if (budget_gap ≤ 0.0) || (bound_gap ≤ 0.0)
-                    variables.V_nd[a_i, e3_i, e2_i, e1_i] = -1E+12
+                    variables.V_nd[a_i, e3_i, e2_i, e1_i] = -Inf # -1E+12
                     variables.V[a_i, e3_i, e2_i, e1_i] = V_d_
                     variables.policy_d[a_i, e3_i, e2_i, e1_i] = 1.0
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = 0.0
                 else
-                    V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
+                    # V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
+                    V_nd_, a_star_nd, _ = solve_DP_hybrid(DP_Problem_nd, a, W_; lb = lb_nd, ub = ub_q, a_grid = parameters.a_grid, tau = 5e-8, iters = 200)
+
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
                     if a ≥ -(κ + η*W_) # 0.0
@@ -831,7 +1051,8 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         V_crit, V_crit_i = findmax(@. abs(variables.V - V_p))
         # V_nd_crit = maximum(safe_abs, @. variables.V_nd - V_nd_p)
         # V_d_crit = maximum(safe_abs, @. variables.V_d - V_d_p)
-        V_pos_crit = maximum(abs, @. variables.V_pos - V_pos_p)
+        V_pos_crit, V_pos_crit_i = findmax(@. abs(variables.V_pos - V_pos_p))
+        # V_pos_crit = maximum(abs, @. variables.V_pos - V_pos_p)
         # q_crit = maximum(abs, @. variables.q - q_p)
         q_crit, q_crit_i = findmax(@. abs(variables.q - q_p))
 
@@ -842,15 +1063,16 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         ProgressMeter.update!(prog, crit)
         search_iter += 1
 
-        # println("$V_crit at $V_crit_i")
-        # println("$q_crit at $q_crit_i")
+        # println("V_crit = $V_crit at V_crit_i = $V_crit_i")
+        # println("V_pos_crit = $V_pos_crit at V_pos_crit_i = $V_pos_crit_i")
+        # println("q_crit = $q_crit at q_crit_i = $q_crit_i")
 
         @. variables.V = r0V * V_p + r1V * variables.V
         @. variables.V_pos = r0V * V_pos_p + r1V * variables.V_pos
         @. variables.q = r0q * q_p + r1q * variables.q
     end
 
-    println("$V_crit, $V_pos_crit, $q_crit")
+    # println("V_crit = $V_crit, V_pos_crit = $V_pos_crit, q_crit = $q_crit")
 
     return crit
 end
@@ -1137,7 +1359,7 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-5, relax_V=0.75, relax_q=0.75, bellman_step=1)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
     # crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)

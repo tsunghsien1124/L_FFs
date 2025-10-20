@@ -187,13 +187,13 @@ function initialize_static_parameters(;
 end
 
 function initialize_tuned_parameters(static_parameters::NamedTuple;
-    ρ::Float64=1.0 - 1.0 / 40.0,          # survival rate (40 years)
+    ρ::Float64=1.0 - 1.0 / 40.0,        # survival rate (40 years)
     r_f::Float64=0.04,                  # risk-free rate
     # r_f::Float64=ρ*(1.04) - 1.0,        # (effective) risk-free rate
     β::Float64=0.92,                    # discount factor (households) # 1.0 / (ρ * (1.0 + r_f))
-    β_f::Float64=β,                     # discount factor (bank)
+    β_f::Float64=ρ / (1.0 + r_f),       # discount factor (bank)
     τ::Float64=0.00,                    # transaction cost
-    γ::Float64=3.00,                    # CRRA coefficient
+    γ::Float64=2.00,                    # CRRA coefficient
     δ::Float64=0.10,                    # depreciation rate
     α::Float64=0.36,                    # capital share
     ψ::Float64=0.972^4,                 # exogenous retention ratio # 1.0 - 1.0 / 20.0
@@ -761,9 +761,9 @@ end
 
 @inline function Δa_at(a_grid::Vector{Float64}, i::Int)
     N = length(a_grid)
-    i == 1  && return a_grid[2] - a_grid[1]
-    i == N  && return a_grid[N] - a_grid[N-1]
-    return 0.5*((a_grid[i]-a_grid[i-1]) + (a_grid[i+1]-a_grid[i]))
+    i == 1 && return a_grid[2] - a_grid[1]
+    i == N && return a_grid[N] - a_grid[N-1]
+    return 0.5 * ((a_grid[i] - a_grid[i-1]) + (a_grid[i+1] - a_grid[i]))
 end
 
 "Allocation-free full scan over [lb,ub] + neighbor bracket."
@@ -774,7 +774,7 @@ end
 )
     ag = a_grid
     Lidx = searchsortedfirst(ag, lb)   # first i s.t. ag[i] ≥ lb
-    Ridx = searchsortedlast(ag,  ub)   # last  i s.t. ag[i] ≤ ub
+    Ridx = searchsortedlast(ag, ub)   # last  i s.t. ag[i] ≤ ub
     if Lidx > Ridx
         Lidx, Ridx = Ridx, Lidx
     end
@@ -800,13 +800,18 @@ end
     if Lidx > 1 && lb < ag[Lidx]
         v_lb = -F(lb)
         if v_lb > v_node
-            v_node = v_lb; a_node = lb; best_is_lb = true
+            v_node = v_lb
+            a_node = lb
+            best_is_lb = true
         end
     end
     if Ridx < length(ag) && ub > ag[Ridx]
         v_ub = -F(ub)
         if v_ub > v_node
-            v_node = v_ub; a_node = ub; best_is_lb = false; best_is_ub = true
+            v_node = v_ub
+            a_node = ub
+            best_is_lb = false
+            best_is_ub = true
         end
     end
 
@@ -816,8 +821,8 @@ end
     elseif best_is_ub
         Lb, Ub = ag[Ridx], ub                     # [prev node, ub]
     else
-        Lb = max(lb, ag[max(best_idx-1, Lidx)])   # left neighbor
-        Ub = min(ub, ag[min(best_idx+1, Ridx)])   # right neighbor
+        Lb = max(lb, ag[max(best_idx - 1, Lidx)])   # left neighbor
+        Ub = min(ub, ag[min(best_idx + 1, Ridx)])   # right neighbor
     end
     return a_node, v_node, Lb, Ub
 end
@@ -826,11 +831,11 @@ function solve_DP_hybrid(
     DP::DP_Problem, a::Float64, W_::Float64;
     lb::Float64, ub::Float64,
     a_grid::Vector{Float64},             # concrete for speed
-    tau::Float64 = 1e-7, iters::Int = 200
+    tau::Float64=1e-7, iters::Int=200
 )
     if !(ub > lb)
         a_star = lb
-        v_nd   = -obj_DP(DP, a_star, a, W_)
+        v_nd = -obj_DP(DP, a_star, a, W_)
         return v_nd, a_star, 1
     end
 
@@ -839,30 +844,37 @@ function solve_DP_hybrid(
     if !(Ub > Lb)
         return v_node, a_node, 2
     end
-    width   = Ub - Lb
+    width = Ub - Lb
     near_ix = clamp(searchsortedlast(a_grid, a_node), 1, length(a_grid))
-    Δa_loc  = Δa_at(a_grid, near_ix)
+    Δa_loc = Δa_at(a_grid, near_ix)
 
     # === Brent with tolerance floor ===
     F = Obj(DP, a, W_)                       # minimize F(ap) == -V_nd
-    abs_tol = max(tau*width, 0.25*Δa_loc)
-    abs_tol = min(abs_tol, 0.25*width)
+    abs_tol = max(tau * width, 0.25 * Δa_loc)
+    abs_tol = min(abs_tol, 0.25 * width)
 
-    res   = Optim.optimize(F, Lb, Ub, Optim.GoldenSection(); # Optim.Brent(); 
-                           rel_tol=0.0, abs_tol=abs_tol, iterations=iters)
+    res = Optim.optimize(F, Lb, Ub, Optim.GoldenSection(); # Optim.Brent(); 
+        rel_tol=0.0, abs_tol=abs_tol, iterations=iters)
     a_cont = clamp(Optim.minimizer(res), Lb, Ub)
     v_cont = -Optim.minimum(res)
 
     # === 2-point local polish (cheap, crosses the kink) ===
-    δ  = max(abs_tol, 0.5*Δa_loc)
+    δ = max(abs_tol, 0.5 * Δa_loc)
     aL = clamp(a_cont - δ, lb, ub)
     aR = clamp(a_cont + δ, lb, ub)
-    vL = -F(aL); vR = -F(aR)
+    vL = -F(aL)
+    vR = -F(aR)
 
     a_star, v_star = a_cont, v_cont
-    if vL > v_star + 1e-12;  a_star, v_star = aL, vL; end
-    if vR > v_star + 1e-12;  a_star, v_star = aR, vR; end
-    if v_node > v_star + 1e-12; a_star, v_star = a_node, v_node; end
+    if vL > v_star + 1e-12
+        a_star, v_star = aL, vL
+    end
+    if vR > v_star + 1e-12
+        a_star, v_star = aR, vR
+    end
+    if v_node > v_star + 1e-12
+        a_star, v_star = a_node, v_node
+    end
 
     return v_star, a_star, 2
 end
@@ -940,11 +952,11 @@ function update_value_and_policy_functions!(
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = 0.0
                 else
                     # V_nd_, a_star_nd, _ = solve_DP(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q)
-                    V_nd_, a_star_nd, _ = solve_DP_hybrid(DP_Problem_nd, a, W_; lb = lb_nd, ub = ub_q, a_grid = parameters.a_grid, tau = 1e-9, iters = 200)
+                    V_nd_, a_star_nd, _ = solve_DP_hybrid(DP_Problem_nd, a, W_; lb=lb_nd, ub=ub_q, a_grid=parameters.a_grid, tau=1e-9, iters=200)
 
                     variables.V_nd[a_i, e3_i, e2_i, e1_i] = V_nd_
                     variables.policy_a[a_i, e3_i, e2_i, e1_i] = a_star_nd
-                    if a ≥ -(κ + η*W_) # 0.0
+                    if a ≥ -(κ + η * W_) # 0.0
                         variables.V[a_i, e3_i, e2_i, e1_i] = V_nd_
                         variables.policy_d[a_i, e3_i, e2_i, e1_i] = 0.0
                     else
@@ -1059,13 +1071,13 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         # q_crit = maximum(abs, @. variables.q - q_p)
         q_crit, q_crit_i = findmax(@. abs(variables.q - q_p))
 
-        crit = max(V_crit, V_pos_crit, q_crit)
+        # crit = max(V_crit, V_pos_crit, q_crit)
         # crit = max(V_nd_crit, V_d_crit, V_pos_crit, q_crit)
-        # crit = q_crit
+        crit = q_crit
 
         ProgressMeter.update!(prog, crit)
         search_iter += 1
-        
+
         # println("")
         # println("V_crit = $V_crit at V_crit_i = $V_crit_i")
         # println("V_pos_crit = $V_pos_crit at V_pos_crit_i = $V_pos_crit_i")
@@ -1079,6 +1091,9 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
     end
 
     # println("V_crit = $V_crit, V_pos_crit = $V_pos_crit, q_crit = $q_crit")
+    println("V_crit = $V_crit")
+    println("V_pos_crit = $V_pos_crit")
+    println("q_crit = $q_crit")
 
     return crit
 end
@@ -1365,7 +1380,7 @@ end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
-    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-5, relax_V=1.00, relax_q=1.00, bellman_step=1)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
     # crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
@@ -1379,9 +1394,9 @@ function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCach
         "Exclusion Years" 1.0/parameters.Ph "" "" ""
         "Filing cost" parameters.κ "" "" ""
         "Liquidity Multiplier" parameters.λ "" "" ""
-        "Discount Factor" parameters.β "Share in Debts" agg.share_in_debts "7.67 or 8.93"
+        "Discount Factor" parameters.β "Share in Debts" agg.share_in_debts 8.93 # "7.67 or 8.93"
         "Preference Shock" parameters.ζ "Share of Filers" agg.share_of_filers 0.99
-        "Wage Garnishment Rate" parameters.η "Debt-Earnings Ratio" agg.debt_to_earning_ratio 9.10
+        "Wage Garnishment Rate" parameters.η "Debt-Earnings Ratio" agg.debt_to_earning_ratio 2.18 # 9.10
         "Bank Survival Rate" parameters.ψ "Leverage Ratio" agg.LR 4.53
         "Diverting Fraction" parameters.θ "Average Loan Rate" agg.avg_loan_rate 10.54
     ]
@@ -1429,7 +1444,7 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
 
     search_iter = 1
     iter_max = 100
-    tol = 1E-4
+    tol = 1E-3
     crit_LR = Inf
     λ_optimal = 0.0
     λ_lower = 0.0

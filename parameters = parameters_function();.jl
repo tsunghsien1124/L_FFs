@@ -23,16 +23,17 @@ using Interpolations
 # using FastGaussQuadrature
 # using LoopVectorization
 
-# static_parameters = initialize_static_parameters();
-# tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.029662, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9423, η=0.2400, ψ=0.9010, θ=1.0 / 3.00, ζ=0.01600); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
-# parameters = (; static_parameters..., tuned_parameters...);
-# variables = create_variables(parameters);
-# itp_cache = build_itp_cache(variables, parameters);
-# simul_itp_cache = build_simul_itp_cache(variables, parameters);
-# simul_panel = initialize_panel(num_households=80_000, num_periods=2_000);
-# solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
-crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9470, η=0.1200, ψ=0.920, θ=1.0 / 3.00, ζ=0.01300);
-# crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9420, η=0.2500, ψ=0.9010, θ=1.0 / 3.00, ζ=0.01200);
+static_parameters = initialize_static_parameters();
+tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2400, ψ=0.970, θ=1.0 / 3.50, ζ=0.0167); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+parameters = (; static_parameters..., tuned_parameters...);
+variables = create_variables(parameters);
+itp_cache = build_itp_cache(variables, parameters);
+simul_itp_cache = build_simul_itp_cache(variables, parameters);
+simul_panel = initialize_panel(num_households=80_000, num_periods=2_500);
+solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
+
+crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.85, ζ=0.0160);
+# crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.50, ζ=0.0160);
 
 # variables = create_variables(parameters_new);
 # itp_cache = build_itp_cache(variables, parameters_new);
@@ -62,7 +63,7 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i], se
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, e2_i, e1_i] .* parameters.a_grid_neg, seriestype=:scatter)
 plot!([variables.rbl_a[e2_i, e1_i]], [variables.rbl_qa[e2_i, e1_i]], seriestype=:scatter)
 
-plot(parameters.a_grid_neg[50:end], variables.q[50:parameters.a_size_neg, :, 1])
+plot(parameters.a_grid_neg[25:end], variables.q[25:parameters.a_size_neg, :, 1])
 plot(parameters.a_grid_neg[25:end], variables.q[25:parameters.a_size_neg, :, 1], seriestype=:scatter)
 
 plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, 1])
@@ -80,7 +81,7 @@ plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, 
 plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end])
 plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end] .* parameters_old.a_grid_neg)
 
-plot(parameters_old.a_grid_neg[25:end], variables_old.q[25:parameters_old.a_size_neg, :, 2])
+plot(parameters_old.a_grid_neg[25:end], variables_old.q[25:parameters_old.a_size_neg, :, 1])
 plot!(parameters_new.a_grid_neg[25:end], variables_new.q[25:parameters_new.a_size_neg, :, 1], ls=:dash)
 
 plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end])

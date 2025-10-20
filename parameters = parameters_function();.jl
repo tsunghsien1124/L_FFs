@@ -24,7 +24,7 @@ using Interpolations
 # using LoopVectorization
 
 static_parameters = initialize_static_parameters();
-tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2400, ψ=0.970, θ=1.0 / 3.50, ζ=0.0167); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.95, ζ=0.0160); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
@@ -32,13 +32,14 @@ simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_500);
 solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
 
-crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.85, ζ=0.0160);
-# crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.50, ζ=0.0160);
+compute_extra_moments!(simul_panel, parameters; burnin=500)
+
+crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.95, ζ=0.0160);
+crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.95, ζ=0.0160);
 
 # variables = create_variables(parameters_new);
 # itp_cache = build_itp_cache(variables, parameters_new);
 # crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters_new; tol=1E-6, relax_V=1.0, relax_q=1.0, bellman_step=1)
-
 
 # solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax=1.0, bellman_step=1);
 # update_simul_itp_cache!(simul_itp_cache, variables, parameters);

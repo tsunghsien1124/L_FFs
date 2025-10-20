@@ -355,6 +355,7 @@ mutable struct MutableAggregateVariables{T}
     share_in_debts::T
     debt_to_earning_ratio::T
     avg_loan_rate::T
+    age_dist::Vector{T}
 end
 
 mutable struct MutableVariables{T,
@@ -402,7 +403,7 @@ end
     aggregate_variables = MutableAggregateVariables{T}(
         zero(T), zero(T), zero(T), zero(T), zero(T),
         zero(T), zero(T), zero(T), zero(T), zero(T),
-        zero(T), zero(T), zero(T))
+        zero(T), zero(T), zero(T), zeros(T, 9))
 
     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
     q = fill(T(q_bar), a_size, e2_size, e1_size)
@@ -1157,6 +1158,7 @@ end
 
 struct SimulatedPanel{TF<:AbstractFloat,TI<:Integer}
     newborn::Matrix{Bool}
+    age::Matrix{TI}
     e1_state::Matrix{TI}
     e2_state::Matrix{TI}
     e3_state::Matrix{TI}
@@ -1185,6 +1187,7 @@ end
 @inline @inbounds function newborn_assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int, W::AbstractArray{Float64,3})
     # @assert draw.newborn "Not newborn household"
     panel.newborn[t_i, h_i] = draw.newborn
+    panel.age[t_i, h_i] = 1
     panel.e1_state[t_i, h_i] = draw.e1
     panel.e2_state[t_i, h_i] = draw.e2
     panel.e3_state[t_i, h_i] = draw.e3
@@ -1215,6 +1218,7 @@ end
 @inline @inbounds function assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int, W::AbstractArray{Float64,3})
     # @assert !draw.newborn "Unexpected newborn household"
     panel.newborn[t_i, h_i] = false
+    panel.age[t_i, h_i] = panel.age[t_i-1, h_i] + 1
     panel.e1_state[t_i, h_i] = draw.e1
     panel.e2_state[t_i, h_i] = draw.e2
     panel.e3_state[t_i, h_i] = draw.e3
@@ -1251,6 +1255,7 @@ function initialize_panel(; num_households::Int64=80000, num_periods::Int64=2500
     @assert 0 < num_periods <= 2^20 "The number of periods exceeds 20-bit capacity"
 
     newborn = fill(false, num_periods, num_households) # falses(num_periods, num_households)
+    age = Matrix{IntT}(undef, num_periods, num_households)
     e1_state = Matrix{IntT}(undef, num_periods, num_households)
     e2_state = Matrix{IntT}(undef, num_periods, num_households)
     e3_state = Matrix{IntT}(undef, num_periods, num_households)
@@ -1263,7 +1268,7 @@ function initialize_panel(; num_households::Int64=80000, num_periods::Int64=2500
     interest_rate = zeros(FloT, num_periods, num_households)
 
     return SimulatedPanel{FloT,IntT}(
-        newborn, e1_state, e2_state, e3_state, earnings_state, asset_state,
+        newborn, age, e1_state, e2_state, e3_state, earnings_state, asset_state,
         good_history, default_choice, asset_choice, discounted_price, interest_rate
     )
 end
@@ -1378,10 +1383,70 @@ end
     return nothing
 end
 
+@inline _age_bin(a::Int) = a <= 0 ? 1 : a <= 100 ? ((a - 1) ÷ 10 + 1) : 11
+
+@inbounds @views function compute_extra_moments!(simul_panel::SimulatedPanel, parameters::NamedTuple; burnin::Int=500) # extra_variables::ExtraVariables, 
+
+    @unpack r_f, ψ, K_λ, ι_λ = parameters
+
+    num_periods = size(simul_panel.newborn)[1]
+    burnin_ = burnin + 1
+
+    age_ = simul_panel.age[burnin_:num_periods, :]
+    earnings_state_ = simul_panel.earnings_state[burnin_:num_periods, :]
+    asset_state_ = simul_panel.asset_state[burnin_:num_periods, :]
+    default_choice_ = simul_panel.default_choice[burnin_:num_periods, :]
+    asset_choice_ = simul_panel.asset_choice[burnin_:num_periods, :]
+    interest_rate_ = simul_panel.interest_rate[burnin_:num_periods, :]
+
+    # n1, n2 = size(asset_state_)
+    n = length(asset_state_)
+
+    age_group_thres = collect(0:10:100)
+    age_group_thres_n = length(age_group_thres)
+    age_group_num = zeros(age_group_thres_n)
+    age_dist = zeros(age_group_thres_n)
+
+    L_age_group_sum = zeros(age_group_thres_n)
+    debt_age_group_count = zeros(age_group_thres_n)
+    earnings_age_group_sum = zeros(age_group_thres_n)
+    default_age_group_sum = zeros(age_group_thres_n)
+
+    D_sum = 0.0
+    debt_earnings_sum = 0.0
+    earnings_sum = 0.0
+    default_sum = 0.0
+    loan_rate_sum = 0.0
+    loan_count = 0
+
+    for i in eachindex(asset_state_)
+        asset_val = asset_state_[i]
+        age_group_ind = _age_bin(age_[i])
+        age_group_num[age_group_ind] += 1
+
+        if asset_val < 0.0
+            L_age_group_sum[age_group_ind] += -asset_val
+            debt_age_group_count[age_group_ind] += 1
+            # debt_earnings_sum += earnings_state_[i]
+        else
+            # D_sum += asset_val
+        end
+
+        # if asset_choice_[i] < 0.0
+        #     loan_rate_sum += interest_rate_[i]
+        #     loan_count += 1
+        # end
+
+        earnings_age_group_sum[age_group_ind] += earnings_state_[i]
+        default_age_group_sum[age_group_ind] += default_choice_[i]
+    end
+
+    return age_group_num ./ n * 100, debt_age_group_count ./ age_group_num .* 100, L_age_group_sum ./ age_group_num .* 100, L_age_group_sum ./ earnings_age_group_sum .* 100, default_age_group_sum ./ age_group_num .* 100
+end
+
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
 
     crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
-    # crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
     compute_moments!(variables, simul_panel, parameters; burnin=500)

@@ -355,7 +355,6 @@ mutable struct MutableAggregateVariables{T}
     share_in_debts::T
     debt_to_earning_ratio::T
     avg_loan_rate::T
-    age_dist::Vector{T}
 end
 
 mutable struct MutableVariables{T,
@@ -403,7 +402,7 @@ end
     aggregate_variables = MutableAggregateVariables{T}(
         zero(T), zero(T), zero(T), zero(T), zero(T),
         zero(T), zero(T), zero(T), zero(T), zero(T),
-        zero(T), zero(T), zero(T), zeros(T, 9))
+        zero(T), zero(T), zero(T))
 
     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
     q = fill(T(q_bar), a_size, e2_size, e1_size)
@@ -1063,17 +1062,21 @@ function solve_value_and_policy_functions!(variables::MutableVariables, itp_cach
         update_value_and_policy_functions!(V_p, V_pos_p, variables, parameters, itp_cache)
         update_pricing_and_rbl_functions!(variables, parameters)
 
-        # V_crit = maximum(abs, @. variables.V - V_p)
-        V_crit, V_crit_i = findmax(@. abs(variables.V - V_p))
+        V_crit = maximum(abs, @. variables.V - V_p)
+        # V_crit, V_crit_i = findmax(@. abs(variables.V - V_p))
+
         # V_nd_crit = maximum(safe_abs, @. variables.V_nd - V_nd_p)
         # V_d_crit = maximum(safe_abs, @. variables.V_d - V_d_p)
-        V_pos_crit, V_pos_crit_i = findmax(@. abs(variables.V_pos - V_pos_p))
-        # V_pos_crit = maximum(abs, @. variables.V_pos - V_pos_p)
-        # q_crit = maximum(abs, @. variables.q - q_p)
-        q_crit, q_crit_i = findmax(@. abs(variables.q - q_p))
+
+        V_pos_crit = maximum(abs, @. variables.V_pos - V_pos_p)
+        # V_pos_crit, V_pos_crit_i = findmax(@. abs(variables.V_pos - V_pos_p))
+
+        q_crit = maximum(abs, @. variables.q - q_p)
+        # q_crit, q_crit_i = findmax(@. abs(variables.q - q_p))
 
         # crit = max(V_crit, V_pos_crit, q_crit)
         # crit = max(V_nd_crit, V_d_crit, V_pos_crit, q_crit)
+
         crit = q_crit
 
         ProgressMeter.update!(prog, crit)
@@ -1169,6 +1172,7 @@ struct SimulatedPanel{TF<:AbstractFloat,TI<:Integer}
     asset_choice::Matrix{TF}
     discounted_price::Matrix{TF}
     interest_rate::Matrix{TF}
+    consumption::Matrix{TF}
 end
 
 @inline advance_rng!(rng::Philox4x{UInt64}) = (rand(rng); true)
@@ -1200,6 +1204,7 @@ end
     discounted_price_itp = cache.q_itp[draw.e2, draw.e1](asset_choice_itp)
     panel.discounted_price[t_i, h_i] = discounted_price_itp
     panel.interest_rate[t_i, h_i] = 1.0 / discounted_price_itp - 1.0
+    panel.consumption[t_i, h_i] = panel.earnings_state[t_i, h_i] - discounted_price_itp * asset_choice_itp
     return nothing
 end
 
@@ -1215,7 +1220,8 @@ end
     return (newborn=newborn_i, e1=e1_i, e2=e2_i, e3=e3_i, nd=nd_i, good_history=good_history_i)
 end
 
-@inline @inbounds function assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int, W::AbstractArray{Float64,3})
+@inline @inbounds function assignment!(cache::SimulItpCache, panel::SimulatedPanel, draw::NamedTuple, t_i::Int, h_i::Int,
+    W::AbstractArray{Float64,3}, c_d::AbstractArray{Float64,3})
     # @assert !draw.newborn "Unexpected newborn household"
     panel.newborn[t_i, h_i] = false
     panel.age[t_i, h_i] = panel.age[t_i-1, h_i] + 1
@@ -1231,12 +1237,14 @@ end
         if panel.default_choice[t_i, h_i]
             panel.asset_choice[t_i, h_i] = 0.0
             panel.good_history[t_i, h_i] = false
+            panel.consumption[t_i, h_i] = c_d[draw.e3, draw.e2, draw.e1]
         else
             asset_choice_itp = cache.policy_a_itp[draw.e3, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
             panel.asset_choice[t_i, h_i] = asset_choice_itp
             discounted_price_itp = cache.q_itp[draw.e2, draw.e1](asset_choice_itp)
             panel.discounted_price[t_i, h_i] = discounted_price_itp
             panel.interest_rate[t_i, h_i] = 1.0 / discounted_price_itp - 1.0
+            panel.consumption[t_i, h_i] = panel.earnings_state[t_i, h_i] + panel.asset_state[t_i, h_i] - discounted_price_itp * asset_choice_itp
         end
     else
         asset_choice_itp = cache.policy_a_pos_itp[draw.e3, draw.e2, draw.e1](panel.asset_state[t_i, h_i])
@@ -1244,6 +1252,7 @@ end
         discounted_price_itp = cache.q_itp[draw.e2, draw.e1](asset_choice_itp)
         panel.discounted_price[t_i, h_i] = discounted_price_itp
         panel.interest_rate[t_i, h_i] = 1.0 / discounted_price_itp - 1.0
+        panel.consumption[t_i, h_i] = panel.earnings_state[t_i, h_i] + panel.asset_state[t_i, h_i] - discounted_price_itp * asset_choice_itp
     end
     return nothing
 end
@@ -1266,10 +1275,11 @@ function initialize_panel(; num_households::Int64=80000, num_periods::Int64=2500
     asset_choice = zeros(FloT, num_periods, num_households)
     discounted_price = zeros(FloT, num_periods, num_households)
     interest_rate = zeros(FloT, num_periods, num_households)
+    consumption = zeros(FloT, num_periods, num_households)
 
     return SimulatedPanel{FloT,IntT}(
         newborn, age, e1_state, e2_state, e3_state, earnings_state, asset_state,
-        good_history, default_choice, asset_choice, discounted_price, interest_rate
+        good_history, default_choice, asset_choice, discounted_price, interest_rate, consumption
     )
 end
 
@@ -1279,7 +1289,7 @@ end
     num_threads = Threads.nthreads()
     rngs = make_thread_rngs(seed, num_threads)
 
-    @unpack ρ, Ph, e1_G, e1_Γ, e1_size, e2_G, e2_Γ, e2_size, e3_G, W = parameters
+    @unpack ρ, Ph, e1_G, e1_Γ, e1_size, e2_G, e2_Γ, e2_size, e3_G, W, c_d = parameters
 
     e1_cat = Categorical(e1_G)
     e1_Γ_cat = [Categorical(e1_Γ[e1_i, :]) for e1_i in 1:e1_size]
@@ -1310,7 +1320,7 @@ end
             if draw.newborn
                 newborn_assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i, W)
             else
-                assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i, W)
+                assignment!(simul_itp_cache, simul_panel, draw, t_i, h_i, W, c_d)
             end
         end
         next!(prog_bar)
@@ -1331,9 +1341,23 @@ end
     asset_state_ = simul_panel.asset_state[burnin_:num_periods, :]
     default_choice_ = simul_panel.default_choice[burnin_:num_periods, :]
     asset_choice_ = simul_panel.asset_choice[burnin_:num_periods, :]
+    discounted_price_ = simul_panel.discounted_price[burnin_:num_periods, :]
     interest_rate_ = simul_panel.interest_rate[burnin_:num_periods, :]
 
     n = length(asset_state_)
+
+    w_sum = 0.0
+    a_neg_count = 0.0
+    a_neg_sum = 0.0
+    a_pos_count = 0.0
+    a_pos_sum = 0.0
+    ac_neg_count = 0.0
+    ac_neg_sum = 0.0
+    ac_pos_count = 0.0
+    ac_pos_sum = 0.0
+    ir_count = 0.0
+    ir_sum = 0.0
+    d_count = 0.0
 
     L_sum = 0.0
     D_sum = 0.0
@@ -1345,111 +1369,61 @@ end
     loan_count = 0
 
     for i in eachindex(asset_state_)
-        asset_val = asset_state_[i]
 
-        if asset_val < 0.0
-            L_sum += -asset_val
-            debt_count += 1
-            debt_earnings_sum += earnings_state_[i]
-        else
-            D_sum += asset_val
+        w = earnings_state_[i]
+        a = asset_state_[i]
+        d = default_choice_[i]
+        ac = asset_choice_[i]
+        q = discounted_price_[i]
+        ir = interest_rate_[i]
+
+        w_sum += w
+
+        if a < 0.0
+            a_neg_count += 1
+            a_neg_sum += -a
+            d_count += d
+        elseif a > 0.0
+            a_pos_count += 1
+            a_pos_sum += a
         end
 
-        if asset_choice_[i] < 0.0
-            loan_rate_sum += interest_rate_[i]
-            loan_count += 1
+        if ac < 0.0
+            ac_neg_count += 1
+            ac_neg_sum += -ac * q
+            ir_count += 1
+            ir_sum += ir
+        elseif ac > 0.0
+            ac_pos_count += 1
+            ac_pos_sum += ac * q
         end
-
-        earnings_sum += earnings_state_[i]
-        default_sum += default_choice_[i]
     end
 
     agg = variables.aggregate_variables
     agg.K = K_λ
-    agg.L = L_sum / n
-    agg.D = D_sum / n
+    agg.L = ac_neg_sum / n
+    agg.D = ac_pos_sum / n
     agg.A = agg.K + agg.L
     agg.N = agg.A - agg.D
     agg.LR = agg.A / agg.N
     agg.AD = agg.A / agg.D
     agg.profit = ι_λ * agg.A + (1.0 + r_f) * agg.N
     agg.ω = (agg.N - ψ * agg.profit) / agg.A
-    agg.share_of_filers = (default_sum / n) * 100.0
-    agg.share_in_debts = (debt_count / n) * 100.0
-    # agg.debt_to_earning_ratio = L_sum / debt_earnings_sum * 100.0 # conditional
-    agg.debt_to_earning_ratio = L_sum / earnings_sum * 100.0 # unconditional 
-    agg.avg_loan_rate = (loan_rate_sum / loan_count) * 100.0
+    agg.share_of_filers = (d_count / n) * 100.0
+    agg.share_in_debts = (a_neg_count / n) * 100.0
+    agg.debt_to_earning_ratio = a_neg_sum / w_sum * 100.0 # unconditional 
+    agg.avg_loan_rate = (ir_sum / ir_count) * 100.0
 
     return nothing
 end
 
-@inline _age_bin(a::Int) = a <= 0 ? 1 : a <= 100 ? ((a - 1) ÷ 10 + 1) : 11
+function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple;
+    tol::Float64=1E-5, iter_max::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1, burnin::Int=500)
 
-@inbounds @views function compute_extra_moments!(simul_panel::SimulatedPanel, parameters::NamedTuple; burnin::Int=500) # extra_variables::ExtraVariables, 
-
-    @unpack r_f, ψ, K_λ, ι_λ = parameters
-
-    num_periods = size(simul_panel.newborn)[1]
-    burnin_ = burnin + 1
-
-    age_ = simul_panel.age[burnin_:num_periods, :]
-    earnings_state_ = simul_panel.earnings_state[burnin_:num_periods, :]
-    asset_state_ = simul_panel.asset_state[burnin_:num_periods, :]
-    default_choice_ = simul_panel.default_choice[burnin_:num_periods, :]
-    asset_choice_ = simul_panel.asset_choice[burnin_:num_periods, :]
-    interest_rate_ = simul_panel.interest_rate[burnin_:num_periods, :]
-
-    # n1, n2 = size(asset_state_)
-    n = length(asset_state_)
-
-    age_group_thres = collect(0:10:100)
-    age_group_thres_n = length(age_group_thres)
-    age_group_num = zeros(age_group_thres_n)
-    age_dist = zeros(age_group_thres_n)
-
-    L_age_group_sum = zeros(age_group_thres_n)
-    debt_age_group_count = zeros(age_group_thres_n)
-    earnings_age_group_sum = zeros(age_group_thres_n)
-    default_age_group_sum = zeros(age_group_thres_n)
-
-    D_sum = 0.0
-    debt_earnings_sum = 0.0
-    earnings_sum = 0.0
-    default_sum = 0.0
-    loan_rate_sum = 0.0
-    loan_count = 0
-
-    for i in eachindex(asset_state_)
-        asset_val = asset_state_[i]
-        age_group_ind = _age_bin(age_[i])
-        age_group_num[age_group_ind] += 1
-
-        if asset_val < 0.0
-            L_age_group_sum[age_group_ind] += -asset_val
-            debt_age_group_count[age_group_ind] += 1
-            # debt_earnings_sum += earnings_state_[i]
-        else
-            # D_sum += asset_val
-        end
-
-        # if asset_choice_[i] < 0.0
-        #     loan_rate_sum += interest_rate_[i]
-        #     loan_count += 1
-        # end
-
-        earnings_age_group_sum[age_group_ind] += earnings_state_[i]
-        default_age_group_sum[age_group_ind] += default_choice_[i]
-    end
-
-    return age_group_num ./ n * 100, debt_age_group_count ./ age_group_num .* 100, L_age_group_sum ./ age_group_num .* 100, L_age_group_sum ./ earnings_age_group_sum .* 100, default_age_group_sum ./ age_group_num .* 100
-end
-
-function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple)
-
-    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=1E-6, relax_V=1.00, relax_q=1.00, bellman_step=1)
+    crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=tol, iter_max=iter_max, relax_V=relax_V, relax_q=relax_q, bellman_step=bellman_step)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
     simulate_household_panel!(simul_panel, simul_itp_cache, parameters)
-    compute_moments!(variables, simul_panel, parameters; burnin=500)
+    compute_moments!(variables, simul_panel, parameters; burnin=burnin)
 
     agg = variables.aggregate_variables
     diff_LR = agg.LR - parameters.LR_λ
@@ -1481,7 +1455,10 @@ function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCach
     return crit_VP, agg.LR, parameters.LR_λ
 end
 
-function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η::Float64, ψ::Float64, θ::Float64, ζ::Float64)
+function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η::Float64, ψ::Float64, θ::Float64, ζ::Float64,
+    tol_Vq::Float64=1E-5, iter_max_Vq::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1,
+    num_households::Int64=80_000, num_periods::Int64=2_500, burnin::Int=500,
+    tol_λ::Float64=1E-3, iter_max_λ::Int64=50)
     """
     solve for optimal liquidity multiplier λ
     """
@@ -1492,8 +1469,9 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
     variables = create_variables(parameters)
     itp_cache = build_itp_cache(variables, parameters)
     simul_itp_cache = build_simul_itp_cache(variables, parameters)
-    simul_panel = initialize_panel(num_households=80_000, num_periods=2_000)
-    crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
+    simul_panel = initialize_panel(num_households=num_households, num_periods=num_periods)
+    crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters;
+        tol=tol_Vq, iter_max=iter_max_Vq, relax_V=relax_V, relax_q=relax_q, bellman_step=bellman_step, burnin=burnin)
     if LR_D < LR_S
         return crit_VP, parameters, variables, simul_panel, 1
     end
@@ -1502,25 +1480,25 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
     tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_max, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
     parameters = (; static_parameters..., tuned_parameters...)
     clean_variables!(variables, parameters)
-    crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
+    crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters;
+        tol=tol_Vq, iter_max=iter_max_Vq, relax_V=relax_V, relax_q=relax_q, bellman_step=bellman_step, burnin=burnin)
     if (LR_D > LR_S) || (LR_D < 0.0)
         return crit_VP, parameters, variables, simul_panel, 2
     end
 
     search_iter = 1
-    iter_max = 100
-    tol = 1E-3
     crit_LR = Inf
     λ_optimal = 0.0
     λ_lower = 0.0
     λ_upper = λ_max
 
-    while crit_LR > tol && search_iter < iter_max
+    while crit_LR > tol_λ && search_iter < iter_max_λ
         λ_optimal = (λ_lower + λ_upper) / 2
         tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_optimal, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
         parameters = (; static_parameters..., tuned_parameters...)
         clean_variables!(variables, parameters)
-        crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters)
+        crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters;
+            tol=tol_Vq, iter_max=iter_max_Vq, relax_V=relax_V, relax_q=relax_q, bellman_step=bellman_step, burnin=burnin)
         if LR_D < LR_S
             λ_upper = λ_optimal
         else
@@ -1528,8 +1506,144 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
         end
         crit_LR = abs(LR_D - LR_S)
         search_iter += 1
-        if crit_LR < tol
+        if crit_LR < tol_λ
             return crit_VP, parameters, variables, simul_panel, 3
+        elseif search_iter > iter_max_λ
+            return crit_VP, parameters, variables, simul_panel, 4
         end
     end
+end
+
+mutable struct LifecycleVariables{T}
+    ag_dist::Vector{T}
+    w_μ_ag::Vector{T}
+    w_σ2_ag::Vector{T}
+    c_μ_ag::Vector{T}
+    c_σ2_ag::Vector{T}
+    share_of_filers_ag::Vector{T}
+    share_in_debts_ag::Vector{T}
+    debt_to_earning_ratio_ag::Vector{T}
+    avg_loan_rate_ag::Vector{T}
+end
+
+@inline _age_bin(a::Int) = a <= 0 ? 1 : a <= 100 ? ((a - 1) ÷ 10 + 1) : 11
+
+@inbounds @views function compute_lifecycle_moments(simul_panel::SimulatedPanel;
+    burnin::Int=500, T::Type{<:Real}=Float64)
+
+    num_periods = size(simul_panel.newborn)[1]
+    burnin_ = burnin + 1
+
+    age_ = simul_panel.age[burnin_:num_periods, :]
+    earnings_state_ = simul_panel.earnings_state[burnin_:num_periods, :]
+    asset_state_ = simul_panel.asset_state[burnin_:num_periods, :]
+    default_choice_ = simul_panel.default_choice[burnin_:num_periods, :]
+    asset_choice_ = simul_panel.asset_choice[burnin_:num_periods, :]
+    interest_rate_ = simul_panel.interest_rate[burnin_:num_periods, :]
+    consumption_ = simul_panel.consumption[burnin_:num_periods, :]
+
+    n = length(asset_state_)
+    ag_size = 11
+    @assert ag_size == _age_bin(1124) "age group mismatch"
+    
+    ag_count = zeros(Int, ag_size)
+    ag_sum = zeros(Int, ag_size)
+    ag_sum2 = zeros(Int, ag_size)
+
+    w_sum = zeros(T, ag_size)
+    w_sum2 = zeros(T, ag_size)
+
+    c_sum = zeros(T, ag_size)
+    c_sum2 = zeros(T, ag_size)
+
+    a_neg_count = zeros(Int, ag_size)
+    a_neg_sum = zeros(T, ag_size)
+    a_neg_sum2 = zeros(T, ag_size)
+
+    a_pos_count = zeros(Int, ag_size)
+    a_pos_sum = zeros(T, ag_size)
+    a_pos_sum2 = zeros(T, ag_size)
+
+    ac_neg_count = zeros(Int, ag_size)
+    ac_neg_sum = zeros(T, ag_size)
+    ac_neg_sum2 = zeros(T, ag_size)
+
+    ac_pos_count = zeros(Int, ag_size)
+    ac_pos_sum = zeros(T, ag_size)
+    ac_pos_sum2 = zeros(T, ag_size)
+
+    ir_count = zeros(Int, ag_size)
+    ir_sum = zeros(T, ag_size)
+
+    d_count = zeros(T, ag_size)
+
+    @inbounds for i in eachindex(asset_state_)
+
+        ag = age_[i]
+        agi = _age_bin(ag)
+        ag_count[agi] += 1
+        ag_sum[agi] += ag
+        ag_sum2[agi] += ag * ag
+
+        w = earnings_state_[i]
+        w_sum[agi] += w
+        w_sum2[agi] += w * w
+
+        c = consumption_[i]
+        c_sum[agi] += c
+        c_sum2[agi] += c * c
+
+        a = asset_state_[i]
+        if a < 0.0
+            a_neg_count[agi] += 1
+            a_neg_sum[agi] += -a
+            a_neg_sum2[agi] += a * a
+
+            d = default_choice_[i]
+            d_count[agi] += d
+        elseif a > 0.0
+            a_pos_count[agi] += 1
+            a_pos_sum[agi] += a
+            a_pos_sum2[agi] += a * a
+        end
+
+        ac = asset_choice_[i]
+        if ac < 0.0
+            ac_neg_count[agi] += 1
+            ac_neg_sum[agi] += -ac
+            ac_neg_sum2[agi] += ac * ac
+
+            ir = interest_rate_[i]
+            ir_count[agi] += 1
+            ir_sum[agi] += ir
+        elseif ac > 0.0
+            ac_pos_count[agi] += 1
+            ac_pos_sum[agi] += ac
+            ac_pos_sum2[agi] += ac * ac
+        end
+    end
+
+    ag_dist = ag_count ./ n * 100
+    w_μ_ag = w_sum ./ ag_count
+    w_σ2_ag = (w_sum2 .- ag_count .* w_μ_ag .* w_μ_ag) ./ (ag_count .- 1)
+    c_μ_ag = c_sum ./ ag_count
+    c_σ2_ag = (c_sum2 .- ag_count .* c_μ_ag .* c_μ_ag) ./ (ag_count .- 1)
+
+    share_of_filers_ag = d_count ./ ag_count .* 100
+    share_in_debts_ag = a_neg_count ./ ag_count .* 100
+    debt_to_earning_ratio_ag = a_neg_sum ./ w_sum .* 100
+    avg_loan_rate_ag = ir_sum ./ ir_count .* 100
+
+
+    return LifecycleVariables{T}(
+        ag_dist,
+        w_μ_ag,
+        w_σ2_ag,
+        c_μ_ag,
+        c_σ2_ag,
+        share_of_filers_ag,
+        share_in_debts_ag,
+        debt_to_earning_ratio_ag,
+        avg_loan_rate_ag,
+    )
 end

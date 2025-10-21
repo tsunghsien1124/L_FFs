@@ -30,12 +30,16 @@ variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_500);
-solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters);
-
-compute_extra_moments!(simul_panel, parameters; burnin=500)
+solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters; burnin=500);
+variables_ls = compute_lifecycle_moments(simul_panel; burnin=500);
 
 crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.95, ζ=0.0160);
+# parameters_old.λ = 0.0037933149353907287
+variables_ls_old = compute_lifecycle_moments(simul_panel_old; burnin=500)
+
 crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.95, ζ=0.0160);
+# parameters_new.λ = 0.008317248895302241
+variables_ls_new = compute_lifecycle_moments(simul_panel_new; burnin=500)
 
 # variables = create_variables(parameters_new);
 # itp_cache = build_itp_cache(variables, parameters_new);

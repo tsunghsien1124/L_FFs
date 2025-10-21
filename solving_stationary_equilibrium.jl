@@ -1359,15 +1359,6 @@ end
     ir_sum = 0.0
     d_count = 0.0
 
-    L_sum = 0.0
-    D_sum = 0.0
-    debt_count = 0
-    debt_earnings_sum = 0.0
-    earnings_sum = 0.0
-    default_sum = 0.0
-    loan_rate_sum = 0.0
-    loan_count = 0
-
     for i in eachindex(asset_state_)
 
         w = earnings_state_[i]

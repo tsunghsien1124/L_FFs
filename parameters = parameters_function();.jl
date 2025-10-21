@@ -24,16 +24,17 @@ using Interpolations
 # using LoopVectorization
 
 static_parameters = initialize_static_parameters();
-tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.95, ζ=0.0160); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_500);
 solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters; burnin=500);
-variables_ls = compute_lifecycle_moments(simul_panel; burnin=500);
+# variables_ls = compute_lifecycle_moments(simul_panel; burnin=500);
 
-crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.95, ζ=0.0160);
+crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
+# crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.70, ζ=0.0160);
 # parameters_old.λ = 0.0037933149353907287
 variables_ls_old = compute_lifecycle_moments(simul_panel_old; burnin=500)
 

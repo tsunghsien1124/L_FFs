@@ -12,7 +12,7 @@ using QuantEcon: rouwenhorst, tauchen, stationary_distributions, MarkovChain
 # using Roots
 # using CSV
 # using Tables
-using Plots
+# using Plots
 using Random123
 # using GLM
 # using DataFrames
@@ -22,6 +22,8 @@ using Polyester
 using Interpolations
 # using FastGaussQuadrature
 # using LoopVectorization
+
+include("solving_stationary_equilibrium.jl")
 
 static_parameters = initialize_static_parameters();
 tuned_parameters = initialize_tuned_parameters(static_parameters; λ=0.003808074915684078, Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...

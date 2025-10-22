@@ -1449,10 +1449,23 @@ end
 function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η::Float64, ψ::Float64, θ::Float64, ζ::Float64,
     tol_Vq::Float64=1E-6, iter_max_Vq::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1,
     num_households::Int64=80_000, num_periods::Int64=2_500, burnin::Int=500,
-    tol_λ::Float64=1E-3, iter_max_λ::Int64=50)
+    tol_λ::Float64=1E-4, iter_max_λ::Int64=50, λ_opt::Float64=0.0)
     """
     solve for optimal liquidity multiplier λ
     """
+
+    if λ_opt != 0.0
+        static_parameters = initialize_static_parameters()
+        tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_opt, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
+        parameters = (; static_parameters..., tuned_parameters...)
+        variables = create_variables(parameters)
+        itp_cache = build_itp_cache(variables, parameters)
+        simul_itp_cache = build_simul_itp_cache(variables, parameters)
+        simul_panel = initialize_panel(num_households=num_households, num_periods=num_periods)
+        crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters;
+        tol=tol_Vq, iter_max=iter_max_Vq, relax_V=relax_V, relax_q=relax_q, bellman_step=bellman_step, burnin=burnin)
+        return crit_VP, parameters, variables, simul_panel, 3
+    end
 
     static_parameters = initialize_static_parameters()
     tuned_parameters = initialize_tuned_parameters(static_parameters; λ=0.0, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
@@ -1505,7 +1518,7 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
     end
 end
 
-mutable struct LifecycleVariables{T}
+mutable struct GroupVariables{T}
     ag_dist::Vector{T}
     w_μ_ag::Vector{T}
     w_σ2_ag::Vector{T}
@@ -1515,17 +1528,25 @@ mutable struct LifecycleVariables{T}
     share_in_debts_ag::Vector{T}
     debt_to_earning_ratio_ag::Vector{T}
     avg_loan_rate_ag::Vector{T}
+    e1_dist::Vector{T}
+    e2_dist::Vector{T}
+    e3_dist::Vector{T}
 end
 
 @inline _age_bin(a::Int) = a <= 0 ? 1 : a <= 100 ? ((a - 1) ÷ 10 + 1) : 11
 
-@inbounds @views function compute_lifecycle_moments(simul_panel::SimulatedPanel;
+@inbounds @views function compute_group_moments(simul_panel::SimulatedPanel, parameters::NamedTuple;
     burnin::Int=500, T::Type{<:Real}=Float64)
+
+    @unpack e1_size, e2_size, e3_size = parameters
 
     num_periods = size(simul_panel.newborn)[1]
     burnin_ = burnin + 1
 
     age_ = simul_panel.age[burnin_:num_periods, :]
+    e1_ = simul_panel.e1_state[burnin_:num_periods, :]
+    e2_ = simul_panel.e2_state[burnin_:num_periods, :]
+    e3_ = simul_panel.e3_state[burnin_:num_periods, :]
     earnings_state_ = simul_panel.earnings_state[burnin_:num_periods, :]
     asset_state_ = simul_panel.asset_state[burnin_:num_periods, :]
     default_choice_ = simul_panel.default_choice[burnin_:num_periods, :]
@@ -1534,12 +1555,15 @@ end
     consumption_ = simul_panel.consumption[burnin_:num_periods, :]
 
     n = length(asset_state_)
-    ag_size = 11
-    @assert ag_size == _age_bin(1124) "age group mismatch"
-    
+    ag_size = _age_bin(1124)
+
     ag_count = zeros(Int, ag_size)
     ag_sum = zeros(Int, ag_size)
     ag_sum2 = zeros(Int, ag_size)
+
+    e1_count = zeros(Int, e1_size)
+    e2_count = zeros(Int, e2_size)
+    e3_count = zeros(Int, e3_size)
 
     w_sum = zeros(T, ag_size)
     w_sum2 = zeros(T, ag_size)
@@ -1575,6 +1599,15 @@ end
         ag_count[agi] += 1
         ag_sum[agi] += ag
         ag_sum2[agi] += ag * ag
+
+        e1 = e1_[i]
+        e1_count[e1] += 1
+
+        e2 = e2_[i]
+        e2_count[e2] += 1
+
+        e3 = e3_[i]
+        e3_count[e3] += 1
 
         w = earnings_state_[i]
         w_sum[agi] += w
@@ -1625,8 +1658,11 @@ end
     debt_to_earning_ratio_ag = a_neg_sum ./ w_sum .* 100
     avg_loan_rate_ag = ir_sum ./ ir_count .* 100
 
+    e1_dist = e1_count ./ n * 100
+    e2_dist = e2_count ./ n * 100
+    e3_dist = e3_count ./ n * 100
 
-    return LifecycleVariables{T}(
+    return GroupVariables{T}(
         ag_dist,
         w_μ_ag,
         w_σ2_ag,
@@ -1636,5 +1672,8 @@ end
         share_in_debts_ag,
         debt_to_earning_ratio_ag,
         avg_loan_rate_ag,
+        e1_dist,
+        e2_dist,
+        e3_dist,
     )
 end

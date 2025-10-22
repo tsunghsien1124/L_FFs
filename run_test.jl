@@ -1,28 +1,48 @@
-#===============================#
-# Import packages and functions #
-#===============================#
+#=================#
+# Import packages #
+#=================#
 using Distributions, StatsFuns, QuadGK
+# using JLD2: @save, @load
 using LinearAlgebra
 using Optim
 using Parameters: @unpack
 using PrettyTables
 using ProgressMeter
 using QuantEcon: rouwenhorst, tauchen, stationary_distributions, MarkovChain
+# using Roots
+# using CSV
+# using Tables
+# using Plots
 using Random123
+# using GLM
+# using DataFrames
+# using Measures
 using BenchmarkTools, Profile
 using Polyester
 using Interpolations
+# using FastGaussQuadrature
+# using LoopVectorization
+
 include("solving_stationary_equilibrium.jl")
 
-# crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
-λ_opt_old = 0.003805307419379075
-crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(λ_opt = λ_opt_old, Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
-variables_g_old = compute_group_moments(simul_panel_old, parameters_old; burnin=500);
+# static_parameters = initialize_static_parameters();
+# tuned_parameters = initialize_tuned_parameters(static_parameters; λ=0.003808074915684078, Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+# parameters = (; static_parameters..., tuned_parameters...);
+# variables = create_variables(parameters);
+# itp_cache = build_itp_cache(variables, parameters);
+# simul_itp_cache = build_simul_itp_cache(variables, parameters);
+# simul_panel = initialize_panel(num_households=80_000, num_periods=2_500);
+# solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters; burnin=500);
+# variables_ls = compute_lifecycle_moments(simul_panel; burnin=500);
 
-# crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
-λ_opt_new = 0.009691772060120379
-crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(λ_opt = λ_opt_new, Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
-variables_g_new = compute_group_moments(simul_panel_new, parameters_new; burnin=500);
+crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
+# crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.70, ζ=0.0160);
+# parameters_old.λ = 0.003808074915684078
+variables_ls_old = compute_lifecycle_moments(simul_panel_old; burnin=500);
+
+crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
+# parameters_new.λ = 0.00968992706258371
+variables_ls_new = compute_lifecycle_moments(simul_panel_new; burnin=500);
 
 
 sum(variables_old.V[parameters_old.a_ind_zero, :, :, :] .*

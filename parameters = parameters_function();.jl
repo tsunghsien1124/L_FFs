@@ -24,23 +24,40 @@ using Interpolations
 # using LoopVectorization
 
 static_parameters = initialize_static_parameters();
-tuned_parameters = initialize_tuned_parameters(static_parameters; λ = 0.0, Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
+tuned_parameters = initialize_tuned_parameters(static_parameters; λ=0.003808074915684078, Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162); # kwargs = (β = 0.99, λ = 0.01) ; kwargs...
 parameters = (; static_parameters..., tuned_parameters...);
 variables = create_variables(parameters);
 itp_cache = build_itp_cache(variables, parameters);
 simul_itp_cache = build_simul_itp_cache(variables, parameters);
 simul_panel = initialize_panel(num_households=80_000, num_periods=2_500);
 solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters; burnin=500);
-# variables_ls = compute_lifecycle_moments(simul_panel; burnin=500);
+variables_ls = compute_lifecycle_moments(simul_panel; burnin=500);
 
-crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
+crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
 # crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=697.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.70, ζ=0.0160);
-# parameters_old.λ = 0.0037933149353907287
-variables_ls_old = compute_lifecycle_moments(simul_panel_old; burnin=500)
+# parameters_old.λ = 0.003808074915684078
+variables_ls_old = compute_lifecycle_moments(simul_panel_old; burnin=500);
 
-crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=975.0 / 33176.0, β=0.9540, η=0.2200, ψ=0.970, θ=1.0 / 3.95, ζ=0.0160);
-# parameters_new.λ = 0.008317248895302241
-variables_ls_new = compute_lifecycle_moments(simul_panel_new; burnin=500)
+crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
+# parameters_new.λ = 0.00968992706258371
+variables_ls_new = compute_lifecycle_moments(simul_panel_new; burnin=500);
+
+
+sum(variables_old.V[parameters_old.a_ind_zero, :, :, :] .*
+    reshape(parameters_old.e1_G, (1, 1, parameters_old.e1_size)) .*
+    reshape(parameters_old.e2_G, (1, parameters_old.e2_size, 1)) .*
+    reshape(parameters_old.e3_G, (parameters_old.e3_size, 1, 1)))
+
+sum(variables_new.V[parameters_new.a_ind_zero, :, :, :] .*
+    reshape(parameters_new.e1_G, (1, 1, parameters_new.e1_size)) .*
+    reshape(parameters_new.e2_G, (1, parameters_new.e2_size, 1)) .*
+    reshape(parameters_new.e3_G, (parameters_new.e3_size, 1, 1)))
+
+
+sum(variables.V[parameters.a_ind_zero, :, :, :] .*
+    reshape(parameters.e1_G, (1, 1, parameters.e1_size)) .*
+    reshape(parameters.e2_G, (1, parameters.e2_size, 1)) .*
+    reshape(parameters.e3_G, (parameters.e3_size, 1, 1)))
 
 # variables = create_variables(parameters_new);
 # itp_cache = build_itp_cache(variables, parameters_new);
@@ -53,7 +70,8 @@ variables_ls_new = compute_lifecycle_moments(simul_panel_new; burnin=500)
 
 a_range = range(-3, 20, length=101)
 # histogram(reshape(simul_panel.asset_state[1001:end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
-histogram(reshape(simul_panel.asset_state[end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
+histogram(reshape(simul_panel_old.asset_state[end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
+histogram(reshape(simul_panel_new.asset_state[end, :], :, 1), bins=a_range, normalize=:pdf, color=:blue)
 
 # V_p = rand(Float64, size(similar(variables.V)));
 # V_pos_p = rand(Float64, size(similar(variables.V_pos)));
@@ -90,6 +108,12 @@ plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, 
 plot(parameters_old.a_grid_neg[25:end], variables_old.q[25:parameters_old.a_size_neg, :, 1])
 plot!(parameters_new.a_grid_neg[25:end], variables_new.q[25:parameters_new.a_size_neg, :, 1], ls=:dash)
 
+plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, 1])
+plot!(parameters_new.a_grid_neg, variables_new.q[1:parameters_new.a_size_neg, :, 1], ls=:dash)
+
+plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end-1])
+plot!(parameters_new.a_grid_neg, variables_new.q[1:parameters_new.a_size_neg, :, end-1], ls=:dash)
+
 plot(parameters_old.a_grid_neg, variables_old.q[1:parameters_old.a_size_neg, :, end])
 plot!(parameters_new.a_grid_neg, variables_new.q[1:parameters_new.a_size_neg, :, end], ls=:dash)
 
@@ -103,8 +127,8 @@ plot(parameters.a_grid_neg, variables.q[1:parameters.a_size_neg, :, end] .* para
 plot!(variables.rbl_a[:, end], variables.rbl_qa[:, end], seriestype=:scatter)
 
 
-plot(parameters.a_grid[parameters.a_ind_zero:parameters.a_ind_zero+185], variables.V[parameters.a_ind_zero:parameters.a_ind_zero+185,2,1,:])
-plot(parameters.a_grid[parameters.a_ind_zero:parameters.a_ind_zero+180], variables.V[parameters.a_ind_zero:parameters.a_ind_zero+180,2,1,:], seriestype=:scatter)
+plot(parameters.a_grid[parameters.a_ind_zero:parameters.a_ind_zero+185], variables.V[parameters.a_ind_zero:parameters.a_ind_zero+185, 2, 1, :])
+plot(parameters.a_grid[parameters.a_ind_zero:parameters.a_ind_zero+180], variables.V[parameters.a_ind_zero:parameters.a_ind_zero+180, 2, 1, :], seriestype=:scatter)
 
 #####
 e1_i = parameters.e1_size

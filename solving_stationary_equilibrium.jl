@@ -1402,14 +1402,14 @@ end
     agg.ω = (agg.N - ψ * agg.profit) / agg.A
     agg.share_of_filers = (d_count / n) * 100.0
     agg.share_in_debts = (a_neg_count / n) * 100.0
-    agg.debt_to_earning_ratio = a_neg_sum / w_sum * 100.0 # unconditional 
+    agg.debt_to_earning_ratio = a_neg_sum / w_sum * 100.0
     agg.avg_loan_rate = (ir_sum / ir_count) * 100.0
 
     return nothing
 end
 
 function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCache, simul_panel::SimulatedPanel, simul_itp_cache::SimulItpCache, parameters::NamedTuple;
-    tol::Float64=1E-5, iter_max::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1, burnin::Int=500)
+    tol::Float64=1E-6, iter_max::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1, burnin::Int=500)
 
     crit_VP = solve_value_and_policy_functions!(variables, itp_cache, parameters; tol=tol, iter_max=iter_max, relax_V=relax_V, relax_q=relax_q, bellman_step=bellman_step)
     update_simul_itp_cache!(simul_itp_cache, variables, parameters)
@@ -1447,7 +1447,7 @@ function solve_economy_function!(variables::MutableVariables, itp_cache::ItpCach
 end
 
 function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η::Float64, ψ::Float64, θ::Float64, ζ::Float64,
-    tol_Vq::Float64=1E-5, iter_max_Vq::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1,
+    tol_Vq::Float64=1E-6, iter_max_Vq::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1,
     num_households::Int64=80_000, num_periods::Int64=2_500, burnin::Int=500,
     tol_λ::Float64=1E-3, iter_max_λ::Int64=50)
     """

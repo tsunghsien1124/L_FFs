@@ -14,32 +14,28 @@ using Polyester
 using Interpolations
 include("solving_stationary_equilibrium.jl")
 
+#===========#
+# Benchmark #
+#===========#
 # crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
 λ_opt_old = 0.003805307419379075
-crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(λ_opt = λ_opt_old, Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
-variables_g_old = compute_group_moments(simul_panel_old, parameters_old; burnin=500);
+crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(λ_opt=λ_opt_old, Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
+ag_mnts_old, e1_mnts_old, e2_mnts_old, e3_mnts_old = compute_group_moments(simul_panel_old, parameters_old; burnin=500);
 
+#========#
+# BAPCPA #
+#========#
 # crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
 λ_opt_new = 0.009691772060120379
-crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(λ_opt = λ_opt_new, Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
-variables_g_new = compute_group_moments(simul_panel_new, parameters_new; burnin=500);
+crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(λ_opt=λ_opt_new, Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
+ag_mnts_new, e1_mnts_new, e2_mnts_new, e3_mnts_new = compute_group_moments(simul_panel_new, parameters_new; burnin=500);
 
-
-sum(variables_old.V[parameters_old.a_ind_zero, :, :, :] .*
-    reshape(parameters_old.e1_G, (1, 1, parameters_old.e1_size)) .*
-    reshape(parameters_old.e2_G, (1, parameters_old.e2_size, 1)) .*
-    reshape(parameters_old.e3_G, (parameters_old.e3_size, 1, 1)))
-
-sum(variables_new.V[parameters_new.a_ind_zero, :, :, :] .*
-    reshape(parameters_new.e1_G, (1, 1, parameters_new.e1_size)) .*
-    reshape(parameters_new.e2_G, (1, parameters_new.e2_size, 1)) .*
-    reshape(parameters_new.e3_G, (parameters_new.e3_size, 1, 1)))
-
-
-sum(variables.V[parameters.a_ind_zero, :, :, :] .*
-    reshape(parameters.e1_G, (1, 1, parameters.e1_size)) .*
-    reshape(parameters.e2_G, (1, parameters.e2_size, 1)) .*
-    reshape(parameters.e3_G, (parameters.e3_size, 1, 1)))
+#=================#
+# BAPCPA (No FFs) #
+#=================#
+ι_λ_, w_λ_ = parameters_old.ι_λ, parameters_old.w_λ
+crit_VP_new_NFFs, parameters_new_NFFs, variables_new_NFFs, simul_panel_new_NFFs, flag_new_NFFs = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / Inf, ζ=0.0162, ι_λ_=ι_λ_, w_λ_=w_λ_);
+ag_mnts_new_NFFs, e1_mnts_new_NFFs, e2_mnts_new_NFFs, e3_mnts_new_NFFs = compute_group_moments(simul_panel_new_NFFs, parameters_new_NFFs; burnin=500);
 
 # variables = create_variables(parameters_new);
 # itp_cache = build_itp_cache(variables, parameters_new);

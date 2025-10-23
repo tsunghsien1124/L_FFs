@@ -202,7 +202,9 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     η::Float64=0.45,                    # wage garnishment rate
     ζ::Float64=0.001,                   # EV shock scale
     κ::Float64=697 / 33176,             # out-of-pocket monetary filing cost # 975
-    λ::Float64=0.0                      # multiplier
+    λ::Float64=0.0,                     # multiplier
+    ι_λ_::Float64=0.0,                  # given incentive premium  
+    w_λ_::Float64=0.0                   # given wage
 )
 
     @unpack e3_size, e3_Γ, e2_size, e2_Γ, e1_size, exp_e123_grid, E = static_parameters
@@ -216,9 +218,11 @@ function initialize_tuned_parameters(static_parameters::NamedTuple;
     AD_λ = LR_λ / (LR_λ - 1.0)
     ι_λ = λ * θ / Λ_λ
     r_k_λ = r_f + ι_λ
-    # E = 1.0
     K_λ = E * ((r_k_λ + δ) / α)^(1.0 / (α - 1.0))
     w_λ = (1.0 - α) * (K_λ / E)^α
+
+    ι_λ = ι_λ_ == 0.0 ? ι_λ : ι_λ_
+    w_λ = w_λ_ == 0.0 ? w_λ : w_λ_
 
     q_bar = ρ / (1.0 + r_f)
     R_bar = ρ ./ ((-a_grid_neg) .* ((1.0 + r_f) * (1.0 + τ) + ι_λ))
@@ -1449,26 +1453,26 @@ end
 function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η::Float64, ψ::Float64, θ::Float64, ζ::Float64,
     tol_Vq::Float64=1E-6, iter_max_Vq::Int64=200, relax_V::Float64=1.0, relax_q::Float64=1.0, bellman_step::Int64=1,
     num_households::Int64=80_000, num_periods::Int64=2_500, burnin::Int=500,
-    tol_λ::Float64=1E-4, iter_max_λ::Int64=50, λ_opt::Float64=0.0)
+    tol_λ::Float64=1E-4, iter_max_λ::Int64=50, λ_opt::Float64=0.0, ι_λ_::Float64=0.0, w_λ_::Float64=0.0)
     """
     solve for optimal liquidity multiplier λ
     """
 
     if λ_opt != 0.0
         static_parameters = initialize_static_parameters()
-        tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_opt, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
+        tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_opt, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ, ι_λ_=ι_λ_, w_λ_=w_λ_)
         parameters = (; static_parameters..., tuned_parameters...)
         variables = create_variables(parameters)
         itp_cache = build_itp_cache(variables, parameters)
         simul_itp_cache = build_simul_itp_cache(variables, parameters)
         simul_panel = initialize_panel(num_households=num_households, num_periods=num_periods)
         crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters;
-        tol=tol_Vq, iter_max=iter_max_Vq, relax_V=relax_V, relax_q=relax_q, bellman_step=bellman_step, burnin=burnin)
+            tol=tol_Vq, iter_max=iter_max_Vq, relax_V=relax_V, relax_q=relax_q, bellman_step=bellman_step, burnin=burnin)
         return crit_VP, parameters, variables, simul_panel, 3
     end
 
     static_parameters = initialize_static_parameters()
-    tuned_parameters = initialize_tuned_parameters(static_parameters; λ=0.0, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
+    tuned_parameters = initialize_tuned_parameters(static_parameters; λ=0.0, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ, ι_λ_=ι_λ_, w_λ_=w_λ_)
     parameters = (; static_parameters..., tuned_parameters...)
     variables = create_variables(parameters)
     itp_cache = build_itp_cache(variables, parameters)
@@ -1481,7 +1485,7 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
     end
 
     λ_max = 1.0 - sqrt(ψ)
-    tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_max, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
+    tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_max, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ, ι_λ_=ι_λ_, w_λ_=w_λ_)
     parameters = (; static_parameters..., tuned_parameters...)
     clean_variables!(variables, parameters)
     crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters;
@@ -1498,7 +1502,7 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
 
     while crit_LR > tol_λ && search_iter < iter_max_λ
         λ_optimal = (λ_lower + λ_upper) / 2
-        tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_optimal, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ)
+        tuned_parameters = initialize_tuned_parameters(static_parameters; λ=λ_optimal, Ph=Ph, κ=κ, β=β, η=η, ψ=ψ, θ=θ, ζ=ζ, ι_λ_=ι_λ_, w_λ_=w_λ_)
         parameters = (; static_parameters..., tuned_parameters...)
         clean_variables!(variables, parameters)
         crit_VP, LR_D, LR_S = solve_economy_function!(variables, itp_cache, simul_panel, simul_itp_cache, parameters;
@@ -1519,161 +1523,129 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
 end
 
 mutable struct GroupVariables{T}
-    ag_dist::Vector{T}
-    w_μ_ag::Vector{T}
-    w_σ2_ag::Vector{T}
-    c_μ_ag::Vector{T}
-    c_σ2_ag::Vector{T}
-    share_of_filers_ag::Vector{T}
-    share_in_debts_ag::Vector{T}
-    debt_to_earning_ratio_ag::Vector{T}
-    avg_loan_rate_ag::Vector{T}
-    e1_dist::Vector{T}
-    e2_dist::Vector{T}
-    e3_dist::Vector{T}
+    x_dist::Vector{T}
+    w_μ_x::Vector{T}
+    w_σ2_x::Vector{T}
+    c_μ_x::Vector{T}
+    c_σ2_x::Vector{T}
+    share_of_filers_x::Vector{T}
+    share_in_debts_x::Vector{T}
+    debt_to_earning_ratio_x::Vector{T}
+    avg_loan_rate_x::Vector{T}
+end
+
+function _compute_group_moments(_simul_panel::SimulatedPanel, x_size::Int, x_field_name::Symbol, x_field;
+    T::Type{<:Real}=Float64)
+
+    n = length(_simul_panel.asset_state)
+    x_count = zeros(Int, x_size)
+    w_sum, w_sum2 = zeros(T, x_size), zeros(T, x_size)
+    c_sum, c_sum2 = zeros(T, x_size), zeros(T, x_size)
+    a_neg_count, a_neg_sum, a_neg_sum2 = zeros(Int, x_size), zeros(T, x_size), zeros(T, x_size)
+    a_pos_count, a_pos_sum, a_pos_sum2 = zeros(Int, x_size), zeros(T, x_size), zeros(T, x_size)
+    ac_neg_count, ac_neg_sum, ac_neg_sum2 = zeros(Int, x_size), zeros(T, x_size), zeros(T, x_size)
+    ac_pos_count, ac_pos_sum, ac_pos_sum2 = zeros(Int, x_size), zeros(T, x_size), zeros(T, x_size)
+    ir_count, ir_sum = zeros(Int, x_size), zeros(T, x_size)
+    d_count = zeros(T, x_size)
+
+    @inbounds @simd for i in eachindex(_simul_panel.asset_state)
+
+        x = x_field[i]
+        xi = x_field_name == :age ? _age_bin(x) : x
+        x_count[xi] += 1
+
+        w = _simul_panel.earnings_state[i]
+        w_sum[xi] += w
+        w_sum2[xi] += w * w
+
+        c = _simul_panel.consumption[i]
+        c_sum[xi] += c
+        c_sum2[xi] += c * c
+
+        a = _simul_panel.asset_state[i]
+        if a < 0.0
+            a_neg_count[xi] += 1
+            a_neg_sum[xi] += -a
+            a_neg_sum2[xi] += a * a
+
+            d = _simul_panel.default_choice[i]
+            d_count[xi] += d
+        elseif a > 0.0
+            a_pos_count[xi] += 1
+            a_pos_sum[xi] += a
+            a_pos_sum2[xi] += a * a
+        end
+
+        ac = _simul_panel.asset_choice[i]
+        if ac < 0.0
+            ac_neg_count[xi] += 1
+            ac_neg_sum[xi] += -ac
+            ac_neg_sum2[xi] += ac * ac
+
+            ir = _simul_panel.interest_rate[i]
+            ir_count[xi] += 1
+            ir_sum[xi] += ir
+        elseif ac > 0.0
+            ac_pos_count[xi] += 1
+            ac_pos_sum[xi] += ac
+            ac_pos_sum2[xi] += ac * ac
+        end
+    end
+
+    x_dist = x_count ./ n * 100
+    w_μ_x = w_sum ./ x_count
+    w_σ2_x = (w_sum2 .- x_count .* w_μ_x .* w_μ_x) ./ (x_count .- 1)
+    c_μ_x = c_sum ./ x_count
+    c_σ2_x = (c_sum2 .- x_count .* c_μ_x .* c_μ_x) ./ (x_count .- 1)
+    share_of_filers_x = d_count ./ x_count .* 100
+    share_in_debts_x = a_neg_count ./ x_count .* 100
+    debt_to_earning_ratio_x = a_neg_sum ./ w_sum .* 100
+    avg_loan_rate_x = ir_sum ./ ir_count .* 100
+
+    return GroupVariables{T}(
+        x_dist,
+        w_μ_x,
+        w_σ2_x,
+        c_μ_x,
+        c_σ2_x,
+        share_of_filers_x,
+        share_in_debts_x,
+        debt_to_earning_ratio_x,
+        avg_loan_rate_x,
+    )
 end
 
 @inline _age_bin(a::Int) = a <= 0 ? 1 : a <= 100 ? ((a - 1) ÷ 10 + 1) : 11
 
-@inbounds @views function compute_group_moments(simul_panel::SimulatedPanel, parameters::NamedTuple;
-    burnin::Int=500, T::Type{<:Real}=Float64)
+@inbounds @views function compute_group_moments(simul_panel::SimulatedPanel, parameters::NamedTuple; 
+    burnin::Int=500, FloT::Type{<:AbstractFloat}=Float64, IntT::Type{<:Integer}=Int64)
 
     @unpack e1_size, e2_size, e3_size = parameters
 
-    num_periods = size(simul_panel.newborn)[1]
-    burnin_ = burnin + 1
+    _burnin = burnin + 1
+    _newborn = simul_panel.newborn[_burnin:end, :]
+    _age = simul_panel.age[_burnin:end, :]
+    _e1_state = simul_panel.e1_state[_burnin:end, :]
+    _e2_state = simul_panel.e2_state[_burnin:end, :]
+    _e3_state = simul_panel.e3_state[_burnin:end, :]
+    _earnings_state = simul_panel.earnings_state[_burnin:end, :]
+    _asset_state = simul_panel.asset_state[_burnin:end, :]
+    _good_history = simul_panel.good_history[_burnin:end, :]
+    _default_choice = simul_panel.default_choice[_burnin:end, :]
+    _asset_choice = simul_panel.asset_choice[_burnin:end, :]
+    _discounted_price = simul_panel.discounted_price[_burnin:end, :]
+    _interest_rate = simul_panel.interest_rate[_burnin:end, :]
+    _consumption = simul_panel.consumption[_burnin:end, :]
 
-    age_ = simul_panel.age[burnin_:num_periods, :]
-    e1_ = simul_panel.e1_state[burnin_:num_periods, :]
-    e2_ = simul_panel.e2_state[burnin_:num_periods, :]
-    e3_ = simul_panel.e3_state[burnin_:num_periods, :]
-    earnings_state_ = simul_panel.earnings_state[burnin_:num_periods, :]
-    asset_state_ = simul_panel.asset_state[burnin_:num_periods, :]
-    default_choice_ = simul_panel.default_choice[burnin_:num_periods, :]
-    asset_choice_ = simul_panel.asset_choice[burnin_:num_periods, :]
-    interest_rate_ = simul_panel.interest_rate[burnin_:num_periods, :]
-    consumption_ = simul_panel.consumption[burnin_:num_periods, :]
-
-    n = length(asset_state_)
-    ag_size = _age_bin(1124)
-
-    ag_count = zeros(Int, ag_size)
-    ag_sum = zeros(Int, ag_size)
-    ag_sum2 = zeros(Int, ag_size)
-
-    e1_count = zeros(Int, e1_size)
-    e2_count = zeros(Int, e2_size)
-    e3_count = zeros(Int, e3_size)
-
-    w_sum = zeros(T, ag_size)
-    w_sum2 = zeros(T, ag_size)
-
-    c_sum = zeros(T, ag_size)
-    c_sum2 = zeros(T, ag_size)
-
-    a_neg_count = zeros(Int, ag_size)
-    a_neg_sum = zeros(T, ag_size)
-    a_neg_sum2 = zeros(T, ag_size)
-
-    a_pos_count = zeros(Int, ag_size)
-    a_pos_sum = zeros(T, ag_size)
-    a_pos_sum2 = zeros(T, ag_size)
-
-    ac_neg_count = zeros(Int, ag_size)
-    ac_neg_sum = zeros(T, ag_size)
-    ac_neg_sum2 = zeros(T, ag_size)
-
-    ac_pos_count = zeros(Int, ag_size)
-    ac_pos_sum = zeros(T, ag_size)
-    ac_pos_sum2 = zeros(T, ag_size)
-
-    ir_count = zeros(Int, ag_size)
-    ir_sum = zeros(T, ag_size)
-
-    d_count = zeros(T, ag_size)
-
-    @inbounds for i in eachindex(asset_state_)
-
-        ag = age_[i]
-        agi = _age_bin(ag)
-        ag_count[agi] += 1
-        ag_sum[agi] += ag
-        ag_sum2[agi] += ag * ag
-
-        e1 = e1_[i]
-        e1_count[e1] += 1
-
-        e2 = e2_[i]
-        e2_count[e2] += 1
-
-        e3 = e3_[i]
-        e3_count[e3] += 1
-
-        w = earnings_state_[i]
-        w_sum[agi] += w
-        w_sum2[agi] += w * w
-
-        c = consumption_[i]
-        c_sum[agi] += c
-        c_sum2[agi] += c * c
-
-        a = asset_state_[i]
-        if a < 0.0
-            a_neg_count[agi] += 1
-            a_neg_sum[agi] += -a
-            a_neg_sum2[agi] += a * a
-
-            d = default_choice_[i]
-            d_count[agi] += d
-        elseif a > 0.0
-            a_pos_count[agi] += 1
-            a_pos_sum[agi] += a
-            a_pos_sum2[agi] += a * a
-        end
-
-        ac = asset_choice_[i]
-        if ac < 0.0
-            ac_neg_count[agi] += 1
-            ac_neg_sum[agi] += -ac
-            ac_neg_sum2[agi] += ac * ac
-
-            ir = interest_rate_[i]
-            ir_count[agi] += 1
-            ir_sum[agi] += ir
-        elseif ac > 0.0
-            ac_pos_count[agi] += 1
-            ac_pos_sum[agi] += ac
-            ac_pos_sum2[agi] += ac * ac
-        end
-    end
-
-    ag_dist = ag_count ./ n * 100
-    w_μ_ag = w_sum ./ ag_count
-    w_σ2_ag = (w_sum2 .- ag_count .* w_μ_ag .* w_μ_ag) ./ (ag_count .- 1)
-    c_μ_ag = c_sum ./ ag_count
-    c_σ2_ag = (c_sum2 .- ag_count .* c_μ_ag .* c_μ_ag) ./ (ag_count .- 1)
-
-    share_of_filers_ag = d_count ./ ag_count .* 100
-    share_in_debts_ag = a_neg_count ./ ag_count .* 100
-    debt_to_earning_ratio_ag = a_neg_sum ./ w_sum .* 100
-    avg_loan_rate_ag = ir_sum ./ ir_count .* 100
-
-    e1_dist = e1_count ./ n * 100
-    e2_dist = e2_count ./ n * 100
-    e3_dist = e3_count ./ n * 100
-
-    return GroupVariables{T}(
-        ag_dist,
-        w_μ_ag,
-        w_σ2_ag,
-        c_μ_ag,
-        c_σ2_ag,
-        share_of_filers_ag,
-        share_in_debts_ag,
-        debt_to_earning_ratio_ag,
-        avg_loan_rate_ag,
-        e1_dist,
-        e2_dist,
-        e3_dist,
+    _simul_panel = SimulatedPanel{FloT,IntT}(
+        _newborn, _age, _e1_state, _e2_state, _e3_state, _earnings_state, _asset_state,
+        _good_history, _default_choice, _asset_choice, _discounted_price, _interest_rate, _consumption
     )
+
+    ag_moments = _compute_group_moments(_simul_panel, _age_bin(1124), :age, _simul_panel.age)
+    e1_moments = _compute_group_moments(_simul_panel, e1_size, :e1_state, _simul_panel.e1_state)
+    e2_moments = _compute_group_moments(_simul_panel, e2_size, :e2_state, _simul_panel.e2_state)
+    e3_moments = _compute_group_moments(_simul_panel, e3_size, :e3_state, _simul_panel.e3_state)
+
+    return ag_moments, e1_moments, e2_moments, e3_moments
 end

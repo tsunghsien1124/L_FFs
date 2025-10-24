@@ -1522,130 +1522,149 @@ function optimal_multiplier_function(; Ph::Float64, κ::Float64, β::Float64, η
     end
 end
 
-mutable struct GroupVariables{T}
-    x_dist::Vector{T}
-    w_μ_x::Vector{T}
-    w_σ2_x::Vector{T}
-    c_μ_x::Vector{T}
-    c_σ2_x::Vector{T}
-    share_of_filers_x::Vector{T}
-    share_in_debts_x::Vector{T}
-    debt_to_earning_ratio_x::Vector{T}
-    avg_loan_rate_x::Vector{T}
+mutable struct MntVariables{FloT}
+    x_dist::Vector{FloT}
+    w_μ_x::Vector{FloT}
+    w_σ2_x::Vector{FloT}
+    c_μ_x::Vector{FloT}
+    c_σ2_x::Vector{FloT}
+    share_of_filers_x::Vector{FloT}
+    share_in_debts_x::Vector{FloT}
+    debt_to_earning_ratio_x::Vector{FloT}
+    avg_loan_rate_x::Vector{FloT}
 end
 
-function _compute_group_moments(_simul_panel::SimulatedPanel, x_size::Int, x_field_name::Symbol, x_field;
-    T::Type{<:Real}=Float64)
+struct Mnt{FloT<:AbstractFloat,IntT<:Integer}
+    x_count::Vector{IntT}
+    w_sum::Vector{FloT}
+    w_sum2::Vector{FloT}
+    c_sum::Vector{FloT}
+    c_sum2::Vector{FloT}
+    a_neg_count::Vector{IntT}
+    a_neg_sum::Vector{FloT}
+    ac_neg_count::Vector{IntT}
+    ac_neg_sum::Vector{FloT}
+    ir_count::Vector{IntT}
+    ir_sum::Vector{FloT}
+    d_count::Vector{FloT}
+end
 
-    n = length(_simul_panel.asset_state)
-    x_count = zeros(Int, x_size)
-    w_sum, w_sum2 = zeros(T, x_size), zeros(T, x_size)
-    c_sum, c_sum2 = zeros(T, x_size), zeros(T, x_size)
-    a_neg_count, a_neg_sum, a_neg_sum2 = zeros(Int, x_size), zeros(T, x_size), zeros(T, x_size)
-    a_pos_count, a_pos_sum, a_pos_sum2 = zeros(Int, x_size), zeros(T, x_size), zeros(T, x_size)
-    ac_neg_count, ac_neg_sum, ac_neg_sum2 = zeros(Int, x_size), zeros(T, x_size), zeros(T, x_size)
-    ac_pos_count, ac_pos_sum, ac_pos_sum2 = zeros(Int, x_size), zeros(T, x_size), zeros(T, x_size)
-    ir_count, ir_sum = zeros(Int, x_size), zeros(T, x_size)
-    d_count = zeros(T, x_size)
+make_mnt(::Type{FloT}, ::Type{IntT}, xsz::Int) where {FloT<:AbstractFloat,IntT<:Integer} =
+    Mnt{FloT,IntT}(
+        zeros(IntT, xsz),
+        zeros(FloT, xsz),
+        zeros(FloT, xsz),
+        zeros(FloT, xsz),
+        zeros(FloT, xsz),
+        zeros(IntT, xsz),
+        zeros(FloT, xsz),
+        zeros(IntT, xsz),
+        zeros(FloT, xsz),
+        zeros(IntT, xsz),
+        zeros(FloT, xsz),
+        zeros(FloT, xsz)
+    )
 
-    @inbounds @simd for i in eachindex(_simul_panel.asset_state)
+@inline function upd!(mnt::Mnt{FloT,IntT}, xi::Int, w::FloT, c::FloT, a::FloT, ac::FloT, ir::FloT, d::Int) where {FloT,IntT}
+    mnt.x_count[xi] += one(IntT)
+    logw = log(w)
+    mnt.w_sum[xi] += logw
+    mnt.w_sum2[xi] += logw * logw
+    logc = log(c)
+    mnt.c_sum[xi] += logc
+    mnt.c_sum2[xi] += logc * logc
+    if a < 0
+        mnt.a_neg_count[xi] += one(IntT)
+        mnt.a_neg_sum[xi] += -a
+        mnt.d_count[xi] += d
+    end
+    if ac < 0
+        mnt.ac_neg_count[xi] += one(IntT)
+        mnt.ac_neg_sum[xi] += -ac
+        mnt.ir_count[xi] += one(IntT)
+        mnt.ir_sum[xi] += ir
+    end
+end
 
-        x = x_field[i]
-        xi = x_field_name == :age ? _age_bin(x) : x
-        x_count[xi] += 1
+function finalize(mnt::Mnt{FloT,IntT}, n::Int) where {FloT,IntT}
 
-        w = _simul_panel.earnings_state[i]
-        w_sum[xi] += w
-        w_sum2[xi] += w * w
+    xsz = length(mnt.x_count)
 
-        c = _simul_panel.consumption[i]
-        c_sum[xi] += c
-        c_sum2[xi] += c * c
+    x_dist = zeros(FloT, xsz)
+    w_μ_x = zeros(FloT, xsz)
+    w_σ2_x = zeros(FloT, xsz)
+    c_μ_x = zeros(FloT, xsz)
+    c_σ2_x = zeros(FloT, xsz)
+    share_of_filers_x = zeros(FloT, xsz)
+    share_in_debts_x = zeros(FloT, xsz)
+    debt_to_earning_ratio_x = zeros(FloT, xsz)
+    avg_loan_rate_x = zeros(FloT, xsz)
 
-        a = _simul_panel.asset_state[i]
-        if a < 0.0
-            a_neg_count[xi] += 1
-            a_neg_sum[xi] += -a
-            a_neg_sum2[xi] += a * a
-
-            d = _simul_panel.default_choice[i]
-            d_count[xi] += d
-        elseif a > 0.0
-            a_pos_count[xi] += 1
-            a_pos_sum[xi] += a
-            a_pos_sum2[xi] += a * a
+    @inbounds for j in 1:xsz
+        cnt = mnt.x_count[j]
+        x_dist[j] = n > 0 ? FloT(100) * FloT(cnt) / FloT(n) : zero(FloT)
+        if cnt > 0
+            μw = mnt.w_sum[j] / FloT(cnt)
+            w_μ_x[j] = μw
+            μc = mnt.c_sum[j] / FloT(cnt)
+            c_μ_x[j] = μc
+            w_σ2_x[j] = cnt > 1 ? (mnt.w_sum2[j] - FloT(cnt) * μw * μw) / FloT(cnt - one(IntT)) : zero(FloT)
+            c_σ2_x[j] = cnt > 1 ? (mnt.c_sum2[j] - FloT(cnt) * μc * μc) / FloT(cnt - one(IntT)) : zero(FloT)
+            share_of_filers_x[j] = FloT(100) * mnt.d_count[j] / FloT(cnt)
+            share_in_debts_x[j] = FloT(100) * FloT(mnt.a_neg_count[j]) / FloT(cnt)
         end
-
-        ac = _simul_panel.asset_choice[i]
-        if ac < 0.0
-            ac_neg_count[xi] += 1
-            ac_neg_sum[xi] += -ac
-            ac_neg_sum2[xi] += ac * ac
-
-            ir = _simul_panel.interest_rate[i]
-            ir_count[xi] += 1
-            ir_sum[xi] += ir
-        elseif ac > 0.0
-            ac_pos_count[xi] += 1
-            ac_pos_sum[xi] += ac
-            ac_pos_sum2[xi] += ac * ac
-        end
+        debt_to_earning_ratio_x[j] = mnt.w_sum[j] != 0 ? FloT(100) * mnt.a_neg_sum[j] / mnt.w_sum[j] : zero(FloT)
+        avg_loan_rate_x[j] = mnt.ir_count[j] > 0 ? FloT(100) * mnt.ir_sum[j] / FloT(mnt.ir_count[j]) : zero(FloT)
     end
 
-    x_dist = x_count ./ n * 100
-    w_μ_x = w_sum ./ x_count
-    w_σ2_x = (w_sum2 .- x_count .* w_μ_x .* w_μ_x) ./ (x_count .- 1)
-    c_μ_x = c_sum ./ x_count
-    c_σ2_x = (c_sum2 .- x_count .* c_μ_x .* c_μ_x) ./ (x_count .- 1)
-    share_of_filers_x = d_count ./ x_count .* 100
-    share_in_debts_x = a_neg_count ./ x_count .* 100
-    debt_to_earning_ratio_x = a_neg_sum ./ w_sum .* 100
-    avg_loan_rate_x = ir_sum ./ ir_count .* 100
-
-    return GroupVariables{T}(
-        x_dist,
-        w_μ_x,
-        w_σ2_x,
-        c_μ_x,
-        c_σ2_x,
-        share_of_filers_x,
-        share_in_debts_x,
-        debt_to_earning_ratio_x,
-        avg_loan_rate_x,
+    return MntVariables{FloT}(
+        x_dist, w_μ_x, w_σ2_x, c_μ_x, c_σ2_x,
+        share_of_filers_x, share_in_debts_x,
+        debt_to_earning_ratio_x, avg_loan_rate_x
     )
 end
 
 @inline _age_bin(a::Int) = a <= 0 ? 1 : a <= 100 ? ((a - 1) ÷ 10 + 1) : 11
 
-@inbounds @views function compute_group_moments(simul_panel::SimulatedPanel, parameters::NamedTuple; 
+@inbounds @views function compute_group_moments(sim::SimulatedPanel, parameters;
     burnin::Int=500, FloT::Type{<:AbstractFloat}=Float64, IntT::Type{<:Integer}=Int64)
 
     @unpack e1_size, e2_size, e3_size = parameters
+    _b = burnin + 1
 
-    _burnin = burnin + 1
-    _newborn = simul_panel.newborn[_burnin:end, :]
-    _age = simul_panel.age[_burnin:end, :]
-    _e1_state = simul_panel.e1_state[_burnin:end, :]
-    _e2_state = simul_panel.e2_state[_burnin:end, :]
-    _e3_state = simul_panel.e3_state[_burnin:end, :]
-    _earnings_state = simul_panel.earnings_state[_burnin:end, :]
-    _asset_state = simul_panel.asset_state[_burnin:end, :]
-    _good_history = simul_panel.good_history[_burnin:end, :]
-    _default_choice = simul_panel.default_choice[_burnin:end, :]
-    _asset_choice = simul_panel.asset_choice[_burnin:end, :]
-    _discounted_price = simul_panel.discounted_price[_burnin:end, :]
-    _interest_rate = simul_panel.interest_rate[_burnin:end, :]
-    _consumption = simul_panel.consumption[_burnin:end, :]
+    age = sim.age[_b:end, :]
+    e1s = sim.e1_state[_b:end, :]
+    e2s = sim.e2_state[_b:end, :]
+    e3s = sim.e3_state[_b:end, :]
+    w = sim.earnings_state[_b:end, :]
+    c = sim.consumption[_b:end, :]
+    a = sim.asset_state[_b:end, :]
+    ac = sim.asset_choice[_b:end, :]
+    d = sim.default_choice[_b:end, :]
+    ir = sim.interest_rate[_b:end, :]
 
-    _simul_panel = SimulatedPanel{FloT,IntT}(
-        _newborn, _age, _e1_state, _e2_state, _e3_state, _earnings_state, _asset_state,
-        _good_history, _default_choice, _asset_choice, _discounted_price, _interest_rate, _consumption
-    )
+    mnt_ag = make_mnt(FloT, IntT, _age_bin(1124))
+    mnt_e1 = make_mnt(FloT, IntT, e1_size)
+    mnt_e2 = make_mnt(FloT, IntT, e2_size)
+    mnt_e3 = make_mnt(FloT, IntT, e3_size)
 
-    ag_moments = _compute_group_moments(_simul_panel, _age_bin(1124), :age, _simul_panel.age)
-    e1_moments = _compute_group_moments(_simul_panel, e1_size, :e1_state, _simul_panel.e1_state)
-    e2_moments = _compute_group_moments(_simul_panel, e2_size, :e2_state, _simul_panel.e2_state)
-    e3_moments = _compute_group_moments(_simul_panel, e3_size, :e3_state, _simul_panel.e3_state)
+    @inbounds for idx in eachindex(a)
+        wi = w[idx]
+        ci = c[idx]
+        ai = a[idx]
+        aci = ac[idx]
+        iri = ir[idx]
+        di = IntT(d[idx])
+        xiA = _age_bin(age[idx])
+        xi1 = e1s[idx]
+        xi2 = e2s[idx]
+        xi3 = e3s[idx]
+        upd!(mnt_ag, xiA, wi, ci, ai, aci, iri, di)
+        upd!(mnt_e1, xi1, wi, ci, ai, aci, iri, di)
+        upd!(mnt_e2, xi2, wi, ci, ai, aci, iri, di)
+        upd!(mnt_e3, xi3, wi, ci, ai, aci, iri, di)
+    end
 
-    return ag_moments, e1_moments, e2_moments, e3_moments
+    n = length(a)
+    return finalize(mnt_ag, n), finalize(mnt_e1, n), finalize(mnt_e2, n), finalize(mnt_e3, n)
 end

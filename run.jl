@@ -20,7 +20,7 @@ include("solving_stationary_equilibrium.jl")
 # crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
 λ_opt_old = 0.003805307419379075
 crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(λ_opt=λ_opt_old, Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
-ag_mnts_old, e1_mnts_old, e2_mnts_old, e3_mnts_old = compute_group_moments(simul_panel_old, parameters_old; burnin=500);
+mnts_ag_old, mnts_e1_old, mnts_e2_old, mnts_e3_old = compute_group_moments(simul_panel_old, parameters_old; burnin=500);
 
 #========#
 # BAPCPA #
@@ -28,14 +28,28 @@ ag_mnts_old, e1_mnts_old, e2_mnts_old, e3_mnts_old = compute_group_moments(simul
 # crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
 λ_opt_new = 0.009691772060120379
 crit_VP_new, parameters_new, variables_new, simul_panel_new, flag_new = optimal_multiplier_function(λ_opt=λ_opt_new, Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
-ag_mnts_new, e1_mnts_new, e2_mnts_new, e3_mnts_new = compute_group_moments(simul_panel_new, parameters_new; burnin=500);
+mnts_ag_new, mnts_e1_new, mnts_e2_new, mnts_e3_new = compute_group_moments(simul_panel_new, parameters_new; burnin=500);
 
 #=================#
 # BAPCPA (No FFs) #
 #=================#
 ι_λ_, w_λ_ = parameters_old.ι_λ, parameters_old.w_λ
 crit_VP_new_NFFs, parameters_new_NFFs, variables_new_NFFs, simul_panel_new_NFFs, flag_new_NFFs = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / Inf, ζ=0.0162, ι_λ_=ι_λ_, w_λ_=w_λ_);
-ag_mnts_new_NFFs, e1_mnts_new_NFFs, e2_mnts_new_NFFs, e3_mnts_new_NFFs = compute_group_moments(simul_panel_new_NFFs, parameters_new_NFFs; burnin=500);
+mnts_ag_new_NFFs, mnts_e1_new_NFFs, mnts_e2_new_NFFs, mnts_e3_new_NFFs = compute_group_moments(simul_panel_new_NFFs, parameters_new_NFFs; burnin=500);
+
+#=========================#
+# BAPCPA (No FFs) -- wage #
+#=========================#
+ι_λ_, w_λ_ = parameters_old.ι_λ, parameters_new.w_λ
+crit_VP_new_NFFs_w, parameters_new_NFFs_w, variables_new_NFFs_w, simul_panel_new_NFFs_w, flag_new_NFFs_w = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / Inf, ζ=0.0162, ι_λ_=ι_λ_, w_λ_=w_λ_);
+mnts_ag_new_NFFs_w, mnts_e1_new_NFFs_w, mnts_e2_new_NFFs_w, mnts_e3_new_NFFs_w = compute_group_moments(simul_panel_new_NFFs_w, parameters_new_NFFs_w; burnin=500);
+
+#======================================#
+# BAPCPA (No FFs) -- incentive premium #
+#======================================#
+ι_λ_, w_λ_ = parameters_new.ι_λ, parameters_old.w_λ
+crit_VP_new_NFFs_ι, parameters_new_NFFs_ι, variables_new_NFFs_ι, simul_panel_new_NFFs_ι, flag_new_NFFs_ι = optimal_multiplier_function(Ph=1.0 / 10.0, κ=991.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / Inf, ζ=0.0162, ι_λ_=ι_λ_, w_λ_=w_λ_);
+mnts_ag_new_NFFs_ι, mnts_e1_new_NFFs_ι, mnts_e2_new_NFFs_ι, mnts_e3_new_NFFs_ι = compute_group_moments(simul_panel_new_NFFs_ι, parameters_new_NFFs_ι; burnin=500);
 
 # variables = create_variables(parameters_new);
 # itp_cache = build_itp_cache(variables, parameters_new);

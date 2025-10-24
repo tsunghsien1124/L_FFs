@@ -2,9 +2,11 @@ using CairoMakie
 using LaTeXStrings
 
 pwd_ = pwd()
-pwd_parts = split(pwd_, '/')
+# pwd_parts = split(pwd_, '/')
+pwd_parts = split(pwd_, '\\')
 if pwd_parts[end] != "202510_NCKU"
-    cd(pwd_ * "/results/figures/202510_NCKU/")
+    # cd(pwd_ * "/results/figures/202510_NCKU/")
+    cd(pwd_ * "\\results\\figures\\202510_NCKU\\")
 end
 
 function save_fig(fig::Figure, filename::String, filetype::String)
@@ -55,7 +57,7 @@ save_fig(fig_q_hig_e2, "fig_q_hig_e2", "pdf");
 
 age_groups(n::Integer; start::Int=21, width::Int=10) = ["$(lo)-$(lo + width - 1)" for lo in start:width:start+width*(n-1)]
 
-function plot_lifecycle(v_g_old::GroupVariables, v_g_new::GroupVariables; field_name::Symbol, ag_size::Integer)
+function plot_lifecycle(v_g_old::MntVariables, v_g_new::MntVariables; field_name::Symbol, ag_size::Integer)
     ag_size = ag_size ≤ length(v_g_old.x_dist) ? ag_size : length(v_g_old.x_dist)
     ag_grp = age_groups(ag_size)
     y_old = getfield(v_g_old, field_name)[1:ag_size]
@@ -75,11 +77,11 @@ function plot_lifecycle(v_g_old::GroupVariables, v_g_new::GroupVariables; field_
     return fig
 end
 
-fig_ls_d = plot_lifecycle(ag_mnts_old, ag_mnts_new; field_name=:share_of_filers_x, ag_size=6);
+fig_ls_d = plot_lifecycle(mnts_ag_old, mnts_ag_new; field_name=:share_of_filers_x, ag_size=6);
 save_fig(fig_ls_d, "fig_ls_d", "pdf");
-fig_ls_a_neg = plot_lifecycle(ag_mnts_old, ag_mnts_new; field_name=:share_in_debts_x, ag_size=6);
+fig_ls_a_neg = plot_lifecycle(mnts_ag_old, mnts_ag_new; field_name=:share_in_debts_x, ag_size=6);
 save_fig(fig_ls_a_neg, "fig_ls_a_neg", "pdf");
-fig_ls_ir = plot_lifecycle(ag_mnts_old, ag_mnts_new; field_name=:avg_loan_rate_x, ag_size=6);
+fig_ls_ir = plot_lifecycle(mnts_ag_old, mnts_ag_new; field_name=:avg_loan_rate_x, ag_size=6);
 save_fig(fig_ls_ir, "fig_ls_ir", "pdf");
 
 function newborn_welfare(v_old::MutableVariables, v_new::MutableVariables, p_old::NamedTuple)
@@ -109,3 +111,9 @@ end
 
 welfare_CEV_newborn, welfare_CEV_newborn_e1 = newborn_welfare(variables_old, variables_new, parameters_old)
 welfare_CEV_newborn_NFFs, welfare_CEV_newborn_e1_NFFs = newborn_welfare(variables_old, variables_new_NFFs, parameters_old)
+# welfare_CEV_newborn_NFFs_w, welfare_CEV_newborn_e1_NFFs_w = newborn_welfare(variables_old, variables_new_NFFs_w, parameters_old)
+# welfare_CEV_newborn_NFFs_ι, welfare_CEV_newborn_e1_NFFs_ι = newborn_welfare(variables_old, variables_new_NFFs_ι, parameters_old)
+
+# mnts_e1_old.c_σ2_x ./ mnts_e1_old.w_σ2_x
+# mnts_e1_new.c_σ2_x ./ mnts_e1_new.w_σ2_x
+# mnts_e1_new_NFFs.c_σ2_x ./ mnts_e1_new_NFFs.w_σ2_x

@@ -1532,6 +1532,8 @@ mutable struct MntVariables{FloT}
     share_in_debts_x::Vector{FloT}
     debt_to_earning_ratio_x::Vector{FloT}
     avg_loan_rate_x::Vector{FloT}
+    share_in_savings_x::Vector{FloT}
+    saving_to_earning_ratio_x::Vector{FloT}
 end
 
 struct Mnt{FloT<:AbstractFloat,IntT<:Integer}
@@ -1542,6 +1544,8 @@ struct Mnt{FloT<:AbstractFloat,IntT<:Integer}
     c_sum2::Vector{FloT}
     a_neg_count::Vector{IntT}
     a_neg_sum::Vector{FloT}
+    a_pos_count::Vector{IntT}
+    a_pos_sum::Vector{FloT}
     ac_neg_count::Vector{IntT}
     ac_neg_sum::Vector{FloT}
     ir_count::Vector{IntT}
@@ -1562,6 +1566,8 @@ make_mnt(::Type{FloT}, ::Type{IntT}, xsz::Int) where {FloT<:AbstractFloat,IntT<:
         zeros(FloT, xsz),
         zeros(IntT, xsz),
         zeros(FloT, xsz),
+        zeros(IntT, xsz),
+        zeros(FloT, xsz),
         zeros(FloT, xsz)
     )
 
@@ -1573,12 +1579,15 @@ make_mnt(::Type{FloT}, ::Type{IntT}, xsz::Int) where {FloT<:AbstractFloat,IntT<:
     logc = log(c)
     mnt.c_sum[xi] += logc
     mnt.c_sum2[xi] += logc * logc
-    if a < 0
+    if a < 0.0
         mnt.a_neg_count[xi] += one(IntT)
         mnt.a_neg_sum[xi] += -a
         mnt.d_count[xi] += d
+    elseif a > 0.0
+        mnt.a_pos_count[xi] += one(IntT)
+        mnt.a_pos_sum[xi] += a
     end
-    if ac < 0
+    if ac < 0.0
         mnt.ac_neg_count[xi] += one(IntT)
         mnt.ac_neg_sum[xi] += -ac
         mnt.ir_count[xi] += one(IntT)
@@ -1599,6 +1608,8 @@ function finalize(mnt::Mnt{FloT,IntT}, n::Int) where {FloT,IntT}
     share_in_debts_x = zeros(FloT, xsz)
     debt_to_earning_ratio_x = zeros(FloT, xsz)
     avg_loan_rate_x = zeros(FloT, xsz)
+    share_in_savings_x = zeros(FloT, xsz)
+    saving_to_earning_ratio_x = zeros(FloT, xsz)
 
     @inbounds for j in 1:xsz
         cnt = mnt.x_count[j]
@@ -1612,15 +1623,18 @@ function finalize(mnt::Mnt{FloT,IntT}, n::Int) where {FloT,IntT}
             c_σ2_x[j] = cnt > 1 ? (mnt.c_sum2[j] - FloT(cnt) * μc * μc) / FloT(cnt - one(IntT)) : zero(FloT)
             share_of_filers_x[j] = FloT(100) * mnt.d_count[j] / FloT(cnt)
             share_in_debts_x[j] = FloT(100) * FloT(mnt.a_neg_count[j]) / FloT(cnt)
+            share_in_savings_x[j] = FloT(100) * FloT(mnt.a_pos_count[j]) / FloT(cnt)
         end
         debt_to_earning_ratio_x[j] = mnt.w_sum[j] != 0 ? FloT(100) * mnt.a_neg_sum[j] / mnt.w_sum[j] : zero(FloT)
+        saving_to_earning_ratio_x[j] = mnt.w_sum[j] != 0 ? FloT(100) * mnt.a_pos_sum[j] / mnt.w_sum[j] : zero(FloT)
         avg_loan_rate_x[j] = mnt.ir_count[j] > 0 ? FloT(100) * mnt.ir_sum[j] / FloT(mnt.ir_count[j]) : zero(FloT)
     end
 
     return MntVariables{FloT}(
         x_dist, w_μ_x, w_σ2_x, c_μ_x, c_σ2_x,
         share_of_filers_x, share_in_debts_x,
-        debt_to_earning_ratio_x, avg_loan_rate_x
+        debt_to_earning_ratio_x, avg_loan_rate_x,
+        share_in_savings_x, saving_to_earning_ratio_x
     )
 end
 
@@ -1648,6 +1662,14 @@ end
     mnt_e2 = make_mnt(FloT, IntT, e2_size)
     mnt_e3 = make_mnt(FloT, IntT, e3_size)
 
+    # mnt_ag_low_e1 = make_mnt(FloT, IntT, _age_bin(1124))
+    # mnt_ag_mid_e1 = make_mnt(FloT, IntT, _age_bin(1124))
+    # mnt_ag_hig_e1 = make_mnt(FloT, IntT, _age_bin(1124))
+    
+    # mnt_e1_low_e2 = make_mnt(FloT, IntT, e1_size)
+    # mnt_e1_mid_e2 = make_mnt(FloT, IntT, e1_size)
+    # mnt_e1_hig_e2 = make_mnt(FloT, IntT, e1_size)
+
     @inbounds for idx in eachindex(a)
         wi = w[idx]
         ci = c[idx]
@@ -1659,12 +1681,22 @@ end
         xi1 = e1s[idx]
         xi2 = e2s[idx]
         xi3 = e3s[idx]
+
         upd!(mnt_ag, xiA, wi, ci, ai, aci, iri, di)
         upd!(mnt_e1, xi1, wi, ci, ai, aci, iri, di)
         upd!(mnt_e2, xi2, wi, ci, ai, aci, iri, di)
         upd!(mnt_e3, xi3, wi, ci, ai, aci, iri, di)
+
+        # xi1 == 1 && upd!(mnt_ag_low_e1, xiA, wi, ci, ai, aci, iri, di)
+        # xi1 == 2 && upd!(mnt_ag_mid_e1, xiA, wi, ci, ai, aci, iri, di)
+        # xi1 == 3 && upd!(mnt_ag_hig_e1, xiA, wi, ci, ai, aci, iri, di)
+
+        # xi2 == 1 && upd!(mnt_e1_low_e2, xi1, wi, ci, ai, aci, iri, di)
+        # xi2 == 2 && upd!(mnt_e1_mid_e2, xi1, wi, ci, ai, aci, iri, di)
+        # xi2 == 3 && upd!(mnt_e1_hig_e2, xi1, wi, ci, ai, aci, iri, di)
     end
 
     n = length(a)
-    return finalize(mnt_ag, n), finalize(mnt_e1, n), finalize(mnt_e2, n), finalize(mnt_e3, n)
+    return finalize(mnt_ag, n), finalize(mnt_e1, n), finalize(mnt_e2, n), finalize(mnt_e3, n) 
+    # finalize(mnt_ag_low_e1, mnt_e1.x_count[1]), finalize(mnt_ag_mid_e1, mnt_e1.x_count[2]), finalize(mnt_ag_hig_e1, mnt_e1.x_count[3]), finalize(mnt_e1_low_e2, mnt_e2.x_count[1]), finalize(mnt_e1_mid_e2, mnt_e2.x_count[2]), finalize(mnt_e1_hig_e2, mnt_e2.x_count[3])
 end

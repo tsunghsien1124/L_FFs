@@ -21,6 +21,7 @@ include("solving_stationary_equilibrium.jl")
 λ_opt_old = 0.003805307419379075
 crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_multiplier_function(λ_opt=λ_opt_old, Ph=1.0 / 6.0, κ=715.0 / 33176.0, β=0.9550, η=0.2250, ψ=0.970, θ=1.0 / 3.95, ζ=0.0162);
 mnts_ag_old, mnts_e1_old, mnts_e2_old, mnts_e3_old = compute_group_moments(simul_panel_old, parameters_old; burnin=500);
+# mnts_ag_low_e1_old, mnts_ag_mid_e1_old, mnts_ag_hig_e1_old, mnts_e1_low_e2_old, mnts_e1_mid_e2_old, mnts_e1_hig_e2_old
 
 #========#
 # BAPCPA #

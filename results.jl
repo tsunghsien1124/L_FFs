@@ -2,11 +2,11 @@ using CairoMakie
 using LaTeXStrings
 
 pwd_ = pwd()
-# pwd_parts = split(pwd_, '/')
-pwd_parts = split(pwd_, '\\')
+pwd_parts = split(pwd_, '/')
+# pwd_parts = split(pwd_, '\\')
 if pwd_parts[end] != "202510_NCKU"
-    # cd(pwd_ * "/results/figures/202510_NCKU/")
-    cd(pwd_ * "\\results\\figures\\202510_NCKU\\")
+    cd(pwd_ * "/results/figures/202510_NCKU/")
+    # cd(pwd_ * "\\results\\figures\\202510_NCKU\\")
 end
 
 function save_fig(fig::Figure, filename::String, filetype::String)
@@ -106,14 +106,33 @@ function newborn_welfare(v_old::MutableVariables, v_new::MutableVariables, p_old
         welfare_CEV_newborn_e1[e1_i] = 100 * ((V_nb_new_sum_e1[e1_i] / V_nb_old_sum_e1[e1_i])^(1.0 / (1.0 - γ)) - 1.0)
     end
 
-    return welfare_CEV_newborn, welfare_CEV_newborn_e1
+    V_nb_old_sum_e12 = zeros(e2_size, e1_size)
+    V_nb_new_sum_e12 = zeros(e2_size, e1_size)
+    welfare_CEV_newborn_e12 = zeros(e2_size, e1_size)
+    for e2_i in 1:e2_size, e1_i in 1:e1_size
+        V_nb_old_sum_e12[e2_i, e1_i] = sum(V_nb_old[:, e2_i, e1_i] .* e3_G)
+        V_nb_new_sum_e12[e2_i, e1_i] = sum(V_nb_new[:, e2_i, e1_i] .* e3_G)
+        welfare_CEV_newborn_e12[e2_i, e1_i] = 100 * ((V_nb_new_sum_e12[e2_i, e1_i] / V_nb_old_sum_e12[e2_i, e1_i])^(1.0 / (1.0 - γ)) - 1.0)
+    end
+
+    return welfare_CEV_newborn, welfare_CEV_newborn_e1, welfare_CEV_newborn_e12
 end
 
-welfare_CEV_newborn, welfare_CEV_newborn_e1 = newborn_welfare(variables_old, variables_new, parameters_old)
-welfare_CEV_newborn_NFFs, welfare_CEV_newborn_e1_NFFs = newborn_welfare(variables_old, variables_new_NFFs, parameters_old)
-# welfare_CEV_newborn_NFFs_w, welfare_CEV_newborn_e1_NFFs_w = newborn_welfare(variables_old, variables_new_NFFs_w, parameters_old)
-# welfare_CEV_newborn_NFFs_ι, welfare_CEV_newborn_e1_NFFs_ι = newborn_welfare(variables_old, variables_new_NFFs_ι, parameters_old)
+welfare_CEV_newborn, welfare_CEV_newborn_e1, welfare_CEV_newborn_e12 = newborn_welfare(variables_old, variables_new, parameters_old)
+welfare_CEV_newborn_NFFs, welfare_CEV_newborn_e1_NFFs, welfare_CEV_newborn_e12_NFFs = newborn_welfare(variables_old, variables_new_NFFs, parameters_old)
+welfare_CEV_newborn_NFFs_w, welfare_CEV_newborn_e1_NFFs_w, welfare_CEV_newborn_e12_NFFs_w = newborn_welfare(variables_old, variables_new_NFFs_w, parameters_old)
+welfare_CEV_newborn_NFFs_ι, welfare_CEV_newborn_e1_NFFs_ι, welfare_CEV_newborn_e12_NFFs_ι = newborn_welfare(variables_old, variables_new_NFFs_ι, parameters_old)
 
 # mnts_e1_old.c_σ2_x ./ mnts_e1_old.w_σ2_x
 # mnts_e1_new.c_σ2_x ./ mnts_e1_new.w_σ2_x
 # mnts_e1_new_NFFs.c_σ2_x ./ mnts_e1_new_NFFs.w_σ2_x
+
+(variables_new.rbl_a .- variables_old.rbl_a) ./ variables_old.rbl_a .* 100 .* reshape(parameters_old.e2_G, (parameters_old.e2_size, 1))
+parameters_old.e2_G' * ((variables_new.rbl_a .- variables_old.rbl_a) ./ variables_old.rbl_a .* 100)
+parameters_old.e2_G' * ((variables_new_NFFs.rbl_a .- variables_old.rbl_a) ./ variables_old.rbl_a .* 100)
+
+(exp.(mnts_ag_new.c_μ_x) .- exp.(mnts_ag_old.c_μ_x)) ./ exp.(mnts_ag_old.c_μ_x) .* 100
+
+(mnts_ag_new.c_μ_x .- mnts_ag_old.c_μ_x) .* 100
+
+(mnts_ag_new.c_σ2_x .- mnts_ag_old.c_σ2_x) ./ mnts_ag_old.c_σ2_x .* 100

@@ -16,23 +16,37 @@ end
 function plot_q_e1(v_old::MutableVariables, v_new::MutableVariables, p_old::NamedTuple; e1_i::Integer)
     colors = Makie.wong_colors()[1:p_old.e2_size]
     labels = [L"Low $e_2$", L"Mid $e_2$", L"High $e_2$"]
-    fig = Figure(fontsize=32, size=(800, 600))
-    ax = Axis(fig[1, 1], xlabel=L"a'", ylabel=L"q(a',\overline{e_1},e_2)")
-    ylims!(ax, -0.05, 1.05)
-    for e2_i in 1:p_old.e2_size
-        lines!(ax, p_old.a_grid_neg, v_old.q[1:p_old.a_size_neg, e2_i, e1_i], color=colors[e2_i], label=labels[e2_i], linestyle=nothing, linewidth=4)
-        lines!(ax, p_old.a_grid_neg, v_new.q[1:p_old.a_size_neg, e2_i, e1_i], color=colors[e2_i], linestyle=:dash, linewidth=4)
+
+    fig_q = Figure(fontsize=32, size=(800, 600))
+    ax_q = Axis(fig_q[1, 1], xlabel=L"a'", ylabel=L"q(a',\overline{e_1},e_2)")
+    ylims!(ax_q, -0.05, 1.05)
+    for e2_i in p_old.e2_size:-1:1
+        lines!(ax_q, p_old.a_grid_neg, v_old.q[1:p_old.a_size_neg, e2_i, e1_i], color=colors[e2_i], label=labels[e2_i], linestyle=nothing, linewidth=4)
+        lines!(ax_q, p_old.a_grid_neg, v_new.q[1:p_old.a_size_neg, e2_i, e1_i], color=colors[e2_i], linestyle=:dash, linewidth=4)
     end
-    axislegend(ax; position=:lt, nbanks=1, patchsize=(40, 20))
-    return fig
+    axislegend(ax_q; position=:lt, nbanks=1, patchsize=(40, 20))
+
+    fig_qa = Figure(fontsize=32, size=(800, 600))
+    ax_qa = Axis(fig_qa[1, 1], xlabel=L"a'", ylabel=L"q(a',\overline{e_1},e_2) \cdot a'")
+    for e2_i in p_old.e2_size:-1:1
+        lines!(ax_qa, p_old.a_grid_neg, p_old.a_grid_neg .* v_old.q[1:p_old.a_size_neg, e2_i, e1_i], color=colors[e2_i], label=labels[e2_i], linestyle=nothing, linewidth=4)
+        lines!(ax_qa, p_old.a_grid_neg, p_old.a_grid_neg .* v_new.q[1:p_old.a_size_neg, e2_i, e1_i], color=colors[e2_i], linestyle=:dash, linewidth=4)
+    end
+    # ylims!(ax_qa, -1.55, -0.05)
+    axislegend(ax_qa; position=:lt, nbanks=1, patchsize=(40, 20))
+
+    return fig_q, fig_qa
 end
 
-fig_q_low_e1 = plot_q_e1(variables_old, variables_new, parameters_old; e1_i=1);
+fig_q_low_e1, fig_qa_low_e1 = plot_q_e1(variables_old, variables_new, parameters_old; e1_i=1);
 save_fig(fig_q_low_e1, "fig_q_low_e1", "pdf");
-fig_q_mid_e1 = plot_q_e1(variables_old, variables_new, parameters_old; e1_i=2);
+save_fig(fig_qa_low_e1, "fig_qa_low_e1", "pdf");
+fig_q_mid_e1, fig_qa_mid_e1 = plot_q_e1(variables_old, variables_new, parameters_old; e1_i=2);
 save_fig(fig_q_mid_e1, "fig_q_mid_e1", "pdf");
-fig_q_hig_e1 = plot_q_e1(variables_old, variables_new, parameters_old; e1_i=3);
+save_fig(fig_qa_mid_e1, "fig_qa_mid_e1", "pdf");
+fig_q_hig_e1, fig_qa_hig_e1 = plot_q_e1(variables_old, variables_new, parameters_old; e1_i=3);
 save_fig(fig_q_hig_e1, "fig_q_hig_e1", "pdf");
+save_fig(fig_qa_hig_e1, "fig_qa_hig_e1", "pdf");
 
 function plot_q_e2(v_old::MutableVariables, v_new::MutableVariables, p_old::NamedTuple; e2_i::Integer)
     colors = Makie.wong_colors()[1:p_old.e1_size]
@@ -128,7 +142,7 @@ welfare_CEV_newborn_NFFs_ι, welfare_CEV_newborn_e1_NFFs_ι, welfare_CEV_newborn
 # mnts_e1_new_NFFs.c_σ2_x ./ mnts_e1_new_NFFs.w_σ2_x
 
 (variables_new.rbl_a .- variables_old.rbl_a) ./ variables_old.rbl_a .* 100 .* reshape(parameters_old.e2_G, (parameters_old.e2_size, 1))
-parameters_old.e2_G' * ((variables_new.rbl_a .- variables_old.rbl_a) ./ variables_old.rbl_a .* 100)
+floor.(parameters_old.e2_G' * ((variables_new.rbl_a .- variables_old.rbl_a) ./ variables_old.rbl_a .* 100), digits=2)
 parameters_old.e2_G' * ((variables_new_NFFs.rbl_a .- variables_old.rbl_a) ./ variables_old.rbl_a .* 100)
 
 (exp.(mnts_ag_new.c_μ_x) .- exp.(mnts_ag_old.c_μ_x)) ./ exp.(mnts_ag_old.c_μ_x) .* 100

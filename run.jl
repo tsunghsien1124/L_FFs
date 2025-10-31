@@ -23,6 +23,17 @@ crit_VP_old, parameters_old, variables_old, simul_panel_old, flag_old = optimal_
 mnts_ag_old, mnts_e1_old, mnts_e2_old, mnts_e3_old = compute_group_moments(simul_panel_old, parameters_old; burnin=500);
 # mnts_ag_low_e1_old, mnts_ag_mid_e1_old, mnts_ag_hig_e1_old, mnts_e1_low_e2_old, mnts_e1_mid_e2_old, mnts_e1_hig_e2_old
 
+a_grid_neg_μ, a_size_neg_μ, a_grid_pos_μ, a_size_pos_μ, a_grid_μ, a_size_μ, qa_grid_μ = density_agrid(variables_old, simul_panel_old, parameters_old; a_size_neg_μ = 5001, a_size_pos_μ = 5001);
+μ_old_1 = panel_to_density(simul_panel_old, a_grid_μ; burnin=500);
+qμ_old_1 = μ_old_1 .* reshape(qa_grid_μ, (a_size_μ, 1, parameters_old.e2_size, parameters_old.e1_size, 1));
+variables_old.aggregate_variables.L + sum(qμ_old_1[1:a_size_neg_μ, :, :, :, :])
+variables_old.aggregate_variables.D - sum(qμ_old_1[(a_size_neg_μ+1):end, :, :, :, :])
+
+# μ_old_1 = panel_to_density(simul_panel_old, parameters_old.a_grid; burnin=500);
+# qμ_old_1 = μ_old_1 .* reshape(variables_old.q, (parameters_old.a_size, 1, parameters_old.e2_size, parameters_old.e1_size, 1));
+# variables_old.aggregate_variables.L + sum(qμ_old_1[1:parameters_old.a_size_neg, :, :, :, :] .* reshape(parameters_old.a_grid_neg, (parameters_old.a_size_neg, 1, 1, 1, 1)))
+# variables_old.aggregate_variables.D - sum(qμ_old_1[parameters_old.a_ind_zero:end, :, :, :, :] .* reshape(parameters_old.a_grid_pos, (parameters_old.a_size_pos, 1, 1, 1, 1)))
+
 #========#
 # BAPCPA #
 #========#

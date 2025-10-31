@@ -1,60 +1,96 @@
 #===========================#
 # Solve transition dynamics #
 #===========================#
-mutable struct Mutable_Aggregate_Prices_T
-    """
-    construct a type for mutable aggregate prices of periods T
-    """
-    λ::Vector{Float64}
-    ξ_λ::Vector{Float64}
-    Λ_λ::Vector{Float64}
-    leverage_ratio_λ::Vector{Float64}
-    KL_to_D_ratio_λ::Vector{Float64}
-    ι_λ::Vector{Float64}
-    r_k_λ::Vector{Float64}
-    K_p_λ::Vector{Float64}
-    w_λ::Vector{Float64}
+mutable struct MutableAggregatePricesTime{T,
+    A1<:AbstractArray{T,1}}
+    λ::A1
+    ξ_λ::A1
+    Λ_λ::A1
+    LR_λ::A1
+    AD_λ::A1
+    ι_λ::A1
+    r_k_λ::A1
+    K_p_λ::A1
+    w_λ::A1
 end
 
-mutable struct Mutable_Aggregate_Variables_T
-    """
-    construct a type for mutable aggregate variables of periods T
-    """
-    K_p::Vector{Float64}
-    L_p::Vector{Float64}
-    D_p::Vector{Float64}
-    N::Vector{Float64}
-    leverage_ratio::Vector{Float64}
-    KL_to_D_ratio::Vector{Float64}
-    debt_to_earning_ratio::Vector{Float64}
-    share_of_filers::Vector{Float64}
-    share_of_involuntary_filers::Vector{Float64}
-    share_in_debts::Vector{Float64}
-    avg_loan_rate::Vector{Float64}
-    avg_loan_rate_pw::Vector{Float64}
+# mutable struct Mutable_Aggregate_Variables_T
+#     """
+#     construct a type for mutable aggregate variables of periods T
+#     """
+#     K_p::Vector{Float64}
+#     L_p::Vector{Float64}
+#     D_p::Vector{Float64}
+#     N::Vector{Float64}
+#     leverage_ratio::Vector{Float64}
+#     KL_to_D_ratio::Vector{Float64}
+#     debt_to_earning_ratio::Vector{Float64}
+#     share_of_filers::Vector{Float64}
+#     share_of_involuntary_filers::Vector{Float64}
+#     share_in_debts::Vector{Float64}
+#     avg_loan_rate::Vector{Float64}
+#     avg_loan_rate_pw::Vector{Float64}
+# end
+
+# mutable struct Mutable_Variables_T
+#     """
+#     construct a type for mutable variables of periods T
+#     """
+#     aggregate_prices::Mutable_Aggregate_Prices_T
+#     aggregate_variables::Mutable_Aggregate_Variables_T
+#     R::Array{Float64,4}
+#     q::Array{Float64,4}
+#     rbl::Array{Float64,4}
+#     V::Array{Float64,6}
+#     E_V::Array{Float64,4}
+#     V_d::Array{Float64,4}
+#     u_c_d::Array{Float64,4}
+#     V_nd::Array{Float64,6}
+#     V_pos::Array{Float64,6}
+#     E_V_pos::Array{Float64,4}
+#     policy_a::Array{Float64,6}
+#     policy_d::Array{Float64,6}
+#     policy_a_pos::Array{Float64,6}
+#     policy_d_pos::Array{Float64,6}
+#     μ::Array{Float64,7}
+# end
+
+mutable struct MutableAggregateVariablesTime{T,
+    A1<:AbstractArray{T,1}}
+    K::A1
+    L::A1
+    A::A1
+    D::A1
+    N::A1
+    LR::A1
+    AD::A1
+    profit::A1
+    ω::A1
+    share_of_filers::A1
+    share_in_debts::A1
+    debt_to_earning_ratio::A1
+    avg_loan_rate::A1
 end
 
-mutable struct Mutable_Variables_T
-    """
-    construct a type for mutable variables of periods T
-    """
-    aggregate_prices::Mutable_Aggregate_Prices_T
-    aggregate_variables::Mutable_Aggregate_Variables_T
-    R::Array{Float64,4}
-    q::Array{Float64,4}
-    rbl::Array{Float64,4}
-    V::Array{Float64,6}
-    E_V::Array{Float64,4}
-    V_d::Array{Float64,4}
-    u_c_d::Array{Float64,4}
-    V_nd::Array{Float64,6}
-    V_pos::Array{Float64,6}
-    E_V_pos::Array{Float64,4}
-    policy_a::Array{Float64,6}
-    policy_d::Array{Float64,6}
-    policy_a_pos::Array{Float64,6}
-    policy_d_pos::Array{Float64,6}
-    μ::Array{Float64,7}
+mutable struct MutableVariablesTime{T,
+    A2<:AbstractArray{T,3},
+    A3<:AbstractArray{T,4},
+    A4<:AbstractArray{T,5}}
+    aggregate_variables::MutableAggregateVariablesTime{T}
+    R::A3
+    q::A3
+    rbl_a::A2
+    rbl_qa::A2
+    V::A4
+    V_d::A3
+    V_nd::A4
+    V_pos::A4
+    EV::A3
+    EV_pos::A3
+    EV_Ph::A3
+    policy_a::A4
+    policy_d::A4
+    policy_a_pos::A4
 end
 
 function aggregate_price_update(leverage_ratio_λ::Vector{Float64}, z_path::Vector{Float64}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple)
@@ -264,6 +300,66 @@ function variables_T_function(variables_old::Mutable_Variables, variables_new::M
     # return outputs
     variables_T = Mutable_Variables_T(aggregate_prices, aggregate_variables, R, q, rbl, V, V_d, V_nd, V_pos, policy_a, policy_d, policy_pos_a, policy_pos_d, threshold_a, threshold_e_2, μ)
     return variables_T
+end
+
+
+@views @inbounds function create_variables_time(variables_old::MutableVariables, parameters_old::NamedTuple, variables_new::MutableVariables, parameters_new::NamedTuple; 
+    T_size::Integer = 80, T_degree::Real = 1.0, T::Type{<:Real}=Float64)
+
+    vo, po = variables_old, parameters_old
+    vn, pn = variables_new, parameters_new
+
+    @unpack a_size, a_size_neg, a_size_pos, a_grid_neg = po
+    @unpack e1_size, e1_grid, e2_size, e3_size = po
+    @unpack q_bar, R_bar, κ, η, w_λ, loop_e2_e1 = po
+
+    T_size = T_size + 2
+
+    LR_λ = vn.aggregate_variables.LR .+ ((range(T_size - 1, stop = 0.0, length = T_size) / (T_size - 1)) .^ T_degree) .* (vo.aggregate_variables.LR - vn.aggregate_variables.LR)
+
+    λ, ξ_λ, Λ_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ = aggregate_price_update(leverage_ratio_λ, z_path, variables_old, variables_new, parameters_new)
+
+    aggregate_prices = Mutable_Aggregate_Prices_T(λ, ξ_λ, Λ_λ, leverage_ratio_λ, KL_to_D_ratio_λ, ι_λ, r_k_λ, K_p_λ, w_λ, z_path)
+
+    av = zeros(T, T_size)
+    aggregate_variables = MutableAggregateVariables{T}(
+        av, av, av, av, av,
+        av, av, av, av, av,
+        av, av, av)
+
+    R = Array{T}(undef, a_size_neg, e2_size, e1_size, T_size)
+    q = fill(T(q_bar), a_size, e2_size, e1_size, T_size)
+
+    rbl_a = Array{T}(undef, e2_size, e1_size, T_size)
+    rbl_qa = Array{T}(undef, e2_size, e1_size, T_size)
+    @batch for idx in loop_e2_e1
+        e2_i, e1_i = idx.I
+        q_grid_neg = q[1:a_size_neg, e2_i, e1_i, end]
+        rbl_a_, rbl_qa_, _ = find_min_qa(a_grid_neg, q_grid_neg)
+        rbl_a[e2_i, e1_i, end] = rbl_a_
+        rbl_qa[e2_i, e1_i, end] = rbl_qa_
+    end
+
+    V = zeros(T, a_size, e3_size, e2_size, e1_size, T_size)
+    V_d = Array{T}(undef, e3_size, e2_size, e1_size, T_size)
+    V_nd = Array{T}(undef, a_size, e3_size, e2_size, e1_size, T_size)
+    V_pos = zeros(T, a_size_pos, e3_size, e2_size, e1_size, T_size)
+
+    EV = zeros(T, a_size, e2_size, e1_size, T_size)
+    EV_pos = zeros(T, a_size_pos, e2_size, e1_size, T_size)
+    EV_Ph = zeros(T, a_size_pos, e2_size, e1_size, T_size)
+
+    policy_a = Array{T}(undef, a_size, e3_size, e2_size, e1_size, T_size)
+    policy_d = Array{T}(undef, a_size, e3_size, e2_size, e1_size, T_size)
+    policy_a_pos = Array{T}(undef, a_size_pos, e3_size, e2_size, e1_size, T_size)
+
+    return MutableVariablesTime{T,
+        typeof(rbl_a),typeof(R),typeof(V)}(
+        aggregate_variables,
+        R, q, rbl_a, rbl_qa,
+        V, V_d, V_nd, V_pos, EV, EV_pos, EV_Ph,
+        policy_a, policy_d, policy_a_pos,
+    )
 end
 
 function variables_T_function(initial_transtion_path::Vector{Float64}, variables_old::Mutable_Variables, variables_new::Mutable_Variables, parameters_new::NamedTuple; T_size::Integer = 80, T_degree::Real = 1.0, z_path::Vector{Float64} = ones(T_size+2))

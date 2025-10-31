@@ -1640,7 +1640,7 @@ end
 
 @inline _age_bin(a::Int) = a <= 0 ? 1 : a <= 100 ? ((a - 1) ÷ 10 + 1) : 11
 
-@inbounds @views function compute_group_moments(sim::SimulatedPanel, parameters;
+@inbounds @views function compute_group_moments(sim::SimulatedPanel, parameters::NamedTuple;
     burnin::Int=500, FloT::Type{<:AbstractFloat}=Float64, IntT::Type{<:Integer}=Int64)
 
     @unpack e1_size, e2_size, e3_size = parameters
@@ -1665,7 +1665,7 @@ end
     # mnt_ag_low_e1 = make_mnt(FloT, IntT, _age_bin(1124))
     # mnt_ag_mid_e1 = make_mnt(FloT, IntT, _age_bin(1124))
     # mnt_ag_hig_e1 = make_mnt(FloT, IntT, _age_bin(1124))
-    
+
     # mnt_e1_low_e2 = make_mnt(FloT, IntT, e1_size)
     # mnt_e1_mid_e2 = make_mnt(FloT, IntT, e1_size)
     # mnt_e1_hig_e2 = make_mnt(FloT, IntT, e1_size)
@@ -1697,6 +1697,110 @@ end
     end
 
     n = length(a)
-    return finalize(mnt_ag, n), finalize(mnt_e1, n), finalize(mnt_e2, n), finalize(mnt_e3, n) 
+    return finalize(mnt_ag, n), finalize(mnt_e1, n), finalize(mnt_e2, n), finalize(mnt_e3, n)
     # finalize(mnt_ag_low_e1, mnt_e1.x_count[1]), finalize(mnt_ag_mid_e1, mnt_e1.x_count[2]), finalize(mnt_ag_hig_e1, mnt_e1.x_count[3]), finalize(mnt_e1_low_e2, mnt_e2.x_count[1]), finalize(mnt_e1_mid_e2, mnt_e2.x_count[2]), finalize(mnt_e1_hig_e2, mnt_e2.x_count[3])
+end
+
+@inbounds @views function density_agrid(
+    variables::MutableVariables,
+    panel::SimulatedPanel{TF,TI},
+    parameters::NamedTuple;
+    a_size_neg_μ::Int=61,
+    a_size_pos_μ::Int=241,
+    a_span_μ::Float64=1.5,
+) where {TF<:AbstractFloat,TI<:Integer}
+
+    amin = minimum(panel.asset_state) * a_span_μ
+    amax = maximum(panel.asset_state) * a_span_μ
+    a_grid_neg_μ = collect(range(start=amin, stop=0.0, length=a_size_neg_μ))
+    a_grid_neg_μ = a_grid_neg_μ[1:(end-1)]
+    a_size_neg_μ = a_size_neg_μ - 1
+    a_grid_pos_μ = collect(range(start=0.0, stop=amax, length=a_size_pos_μ))
+    a_grid_μ = vcat(a_grid_neg_μ, a_grid_pos_μ)
+    a_size_μ = a_size_neg_μ + a_size_pos_μ
+
+    @unpack a_grid, e1_size, e2_size = parameters
+    qa_grid_μ = zeros(a_size_μ, e2_size, e1_size)
+    for e2_i in 1:e2_size, e1_i in 1:e1_size
+        q_ = variables.q[:, e2_i, e1_i]
+        q_itp_ = simul_build_itp(a_grid, q_)
+        qa_grid_μ[:, e2_i, e1_i] = q_itp_.(a_grid_μ) .* a_grid_μ
+    end
+
+    return a_grid_neg_μ, a_size_neg_μ, a_grid_pos_μ, a_size_pos_μ, a_grid_μ, a_size_μ, qa_grid_μ
+end
+
+@inbounds @views function panel_to_density(
+    panel::SimulatedPanel{TF,TI},
+    agrid::AbstractVector{TF};
+    burnin::Int=500,
+    tstep::Int=1,
+    nstep::Int=1,
+    Tμ=Float64,
+) where {TF<:AbstractFloat,TI<:Integer}
+
+    T, N = size(panel.asset_state)
+    Na = length(agrid)
+
+    Ne1 = maximum(panel.e1_state)
+    Ne2 = maximum(panel.e2_state)
+    Ne3 = maximum(panel.e3_state)
+    Nh = 2  # 1 = good, 2 = bad
+
+    # ranges we actually loop over
+    t_rng = (burnin+1):tstep:T
+    i_rng = 1:nstep:N
+
+    # total obs used
+    obs = length(t_rng) * length(i_rng)
+    wgt = Tμ(1) / Tμ(obs)
+
+    # per-thread μ
+    nth = Threads.nthreads()
+    μth = [zeros(Tμ, Na, Ne3, Ne2, Ne1, Nh) for _ in 1:nth]
+
+    prog_bar = Progress(length(t_rng); dt=0.1, desc="Density transformation progress in T:", barglyphs=BarGlyphs("[=> ]"))
+    Threads.@threads for t in t_rng
+        tid = Threads.threadid()
+        μloc = μth[tid]
+
+        a_t = panel.asset_state[t, :]
+        e1_t = panel.e1_state[t, :]
+        e2_t = panel.e2_state[t, :]
+        e3_t = panel.e3_state[t, :]
+        h_t = panel.good_history[t, :]
+
+        @inbounds for i in i_rng
+            a = a_t[i]
+            e1 = e1_t[i]
+            e2 = e2_t[i]
+            e3 = e3_t[i]
+            h = h_t[i] ? 1 : 2
+
+            j = searchsortedlast(agrid, a)
+
+            if j >= Na
+                μloc[Na, e3, e2, e1, h] += wgt
+            elseif j == 0
+                μloc[1, e3, e2, e1, h] += wgt
+            else
+                jL = j
+                jH = j + 1
+                aL = agrid[jL]
+                aH = agrid[jH]
+                ω = (a - aL) / (aH - aL)
+                μloc[jL, e3, e2, e1, h] += wgt * (1 - ω)
+                μloc[jH, e3, e2, e1, h] += wgt * ω
+            end
+        end
+        next!(prog_bar)
+    end
+    finish!(prog_bar)
+
+    μ = μth[1]
+    for k in 2:nth
+        @. μ += μth[k]
+    end
+
+    return μ
 end

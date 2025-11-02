@@ -150,3 +150,9 @@ parameters_old.e2_G' * ((variables_new_NFFs.rbl_a .- variables_old.rbl_a) ./ var
 (mnts_ag_new.c_μ_x .- mnts_ag_old.c_μ_x) .* 100
 
 (mnts_ag_new.c_σ2_x .- mnts_ag_old.c_σ2_x) ./ mnts_ag_old.c_σ2_x .* 100
+
+(mnts_e1_new.c_σ2_x .- mnts_e1_old.c_σ2_x) ./ mnts_e1_old.c_σ2_x .* 100
+
+(variables_new.aggregate_variables.C2 / variables_old.aggregate_variables.C2 - 1) * 100
+
+(variables_new.aggregate_variables.C - variables_old.aggregate_variables.C) * 100

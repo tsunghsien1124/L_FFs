@@ -346,6 +346,8 @@ end
 end
 
 mutable struct MutableAggregateVariables{T}
+    C::T
+    C2::T
     K::T
     L::T
     A::T
@@ -406,7 +408,7 @@ end
     aggregate_variables = MutableAggregateVariables{T}(
         zero(T), zero(T), zero(T), zero(T), zero(T),
         zero(T), zero(T), zero(T), zero(T), zero(T),
-        zero(T), zero(T), zero(T))
+        zero(T), zero(T), zero(T), zero(T), zero(T))
 
     R = Array{T}(undef, a_size_neg, e2_size, e1_size)
     q = fill(T(q_bar), a_size, e2_size, e1_size)
@@ -1347,10 +1349,13 @@ end
     asset_choice_ = simul_panel.asset_choice[burnin_:num_periods, :]
     discounted_price_ = simul_panel.discounted_price[burnin_:num_periods, :]
     interest_rate_ = simul_panel.interest_rate[burnin_:num_periods, :]
+    consumption_ = simul_panel.consumption[burnin_:num_periods, :]
 
     n = length(asset_state_)
 
     w_sum = 0.0
+    c_sum = 0.0
+    c_sum2 = 0.0
     a_neg_count = 0.0
     a_neg_sum = 0.0
     a_pos_count = 0.0
@@ -1364,13 +1369,18 @@ end
     d_count = 0.0
 
     for i in eachindex(asset_state_)
-
+        
         w = earnings_state_[i]
         a = asset_state_[i]
         d = default_choice_[i]
         ac = asset_choice_[i]
         q = discounted_price_[i]
         ir = interest_rate_[i]
+        c = consumption_[i]
+
+        logc = log(c)
+        c_sum += logc
+        c_sum2 += logc * logc
 
         w_sum += w
 
@@ -1395,6 +1405,8 @@ end
     end
 
     agg = variables.aggregate_variables
+    agg.C = c_sum / n
+    agg.C2 = (c_sum2 - n * agg.C * agg.C) / (n - 1.0)
     agg.K = K_λ
     agg.L = ac_neg_sum / n
     agg.D = ac_pos_sum / n
